@@ -1,0 +1,651 @@
+//! One continuous reader, one serialized writer, ID-correlated command futures.
+use crate::{Error, Result, codec, protocol::*, transport::Transport};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot, watch},
+    task::{JoinHandle, JoinSet},
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiPolicy {
+    Cancel,
+    Manual,
+}
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub max_record_bytes: usize,
+    pub max_pending_commands: usize,
+    pub max_writer_records: usize,
+    pub max_writer_bytes: usize,
+    pub max_event_count: usize,
+    /// Sum of queued events' original UTF-8 JSON record bytes, excluding LF/CR.
+    pub max_event_bytes: usize,
+    pub command_timeout: Duration,
+    pub close_timeout: Duration,
+    pub ui_policy: UiPolicy,
+}
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            max_record_bytes: 4 * 1024 * 1024,
+            max_pending_commands: 128,
+            max_writer_records: 128,
+            max_writer_bytes: 8 * 1024 * 1024,
+            max_event_count: 1024,
+            max_event_bytes: 16 * 1024 * 1024,
+            command_timeout: Duration::from_secs(30),
+            close_timeout: Duration::from_secs(5),
+            ui_policy: UiPolicy::Cancel,
+        }
+    }
+}
+impl Config {
+    fn validate(&self) -> Result<()> {
+        for n in [
+            self.max_record_bytes,
+            self.max_pending_commands,
+            self.max_writer_records,
+            self.max_writer_bytes,
+            self.max_event_count,
+            self.max_event_bytes,
+        ] {
+            if n == 0 || n > u32::MAX as usize || n > Semaphore::MAX_PERMITS {
+                return Err(Error::Capacity("invalid configuration"));
+            }
+        }
+        Ok(())
+    }
+}
+struct Pending {
+    command: &'static str,
+    response: oneshot::Sender<Result<Response>>,
+}
+struct State {
+    pending: HashMap<String, Pending>,
+    terminal: Option<Error>,
+    closing: bool,
+}
+struct Shared {
+    state: Mutex<State>,
+    terminal: watch::Sender<Option<Error>>,
+    config: Config,
+}
+impl Shared {
+    fn finish(&self, error: Error) {
+        let mut s = self.state.lock().unwrap();
+        if s.terminal.is_some() {
+            return;
+        }
+        s.terminal = Some(error.clone());
+        for (_, p) in s.pending.drain() {
+            let _ = p.response.send(Err(error.clone()));
+        }
+        self.terminal.send_replace(Some(error));
+    }
+    fn reason(&self) -> Error {
+        self.state
+            .lock()
+            .unwrap()
+            .terminal
+            .clone()
+            .unwrap_or(Error::Closed)
+    }
+}
+struct Outbound {
+    bytes: Vec<u8>,
+    _budget: OwnedSemaphorePermit,
+    sent: oneshot::Sender<Result<()>>,
+}
+enum WriteMessage {
+    Record(Outbound),
+    Close,
+}
+struct BufferedEvent {
+    event: Event,
+    _budget: OwnedSemaphorePermit,
+}
+/// Clone drops are inert. Dropping a command future never withdraws a queued record.
+#[derive(Clone)]
+pub struct PiClient {
+    shared: Arc<Shared>,
+    writer: mpsc::Sender<WriteMessage>,
+    budget: Arc<Semaphore>,
+    ids: Arc<AtomicU64>,
+}
+/// Single consumer, ordered across all session events. Not a per-prompt stream.
+pub struct PiEvents {
+    rx: mpsc::Receiver<BufferedEvent>,
+    terminal: watch::Receiver<Option<Error>>,
+    error_delivered: bool,
+}
+impl PiEvents {
+    pub async fn recv(&mut self) -> Option<Result<Event>> {
+        if let Some(e) = self.rx.recv().await {
+            return Some(Ok(e.event));
+        }
+        if !self.error_delivered {
+            self.error_delivered = true;
+            if let Some(e) = self.terminal.borrow().clone() {
+                return Some(Err(e));
+            }
+        }
+        None
+    }
+}
+/// Sole background-task owner. Drop closes the connection and aborts all I/O tasks.
+/// A remote transport is dropped, not remotely terminated.
+pub struct PiConnection {
+    client: PiClient,
+    task: Option<JoinHandle<()>>,
+    terminal: watch::Receiver<Option<Error>>,
+}
+impl PiConnection {
+    /// Begins reading immediately, with the event buffer installed before return.
+    pub fn connect(transport: Transport, config: Config) -> Result<(PiClient, PiEvents, Self)> {
+        config.validate()?;
+        let (terminal, terminal_rx) = watch::channel(None);
+        let shared = Arc::new(Shared {
+            state: Mutex::new(State {
+                pending: HashMap::new(),
+                terminal: None,
+                closing: false,
+            }),
+            terminal,
+            config: config.clone(),
+        });
+        let (writer, writer_rx) = mpsc::channel(config.max_writer_records);
+        let client = PiClient {
+            shared: shared.clone(),
+            writer,
+            budget: Arc::new(Semaphore::new(config.max_writer_bytes)),
+            ids: Arc::new(AtomicU64::new(1)),
+        };
+        let (events, event_rx) = mpsc::channel(config.max_event_count);
+        let event_budget = Arc::new(Semaphore::new(config.max_event_bytes));
+        let read_client = client.clone();
+        let mut stop = terminal_rx.clone();
+        let task = tokio::spawn(async move {
+            let mut tasks = JoinSet::new();
+            tasks.spawn(read_loop(
+                transport.reader,
+                transport.exit,
+                read_client,
+                events,
+                event_budget,
+            ));
+            tasks.spawn(write_loop(transport.writer, writer_rx));
+            let result = tokio::select! {
+                r=tasks.join_next()=>match r { Some(Ok(r))=>r, _=>Err(Error::Transport("I/O task failed".into())) },
+                _=stop.changed()=>Ok(())
+            };
+            if let Err(e) = result {
+                shared.finish(e);
+            }
+            tasks.abort_all();
+            while tasks.join_next().await.is_some() {}
+        });
+        let events = PiEvents {
+            rx: event_rx,
+            terminal: terminal_rx.clone(),
+            error_delivered: false,
+        };
+        let owner = Self {
+            client: client.clone(),
+            task: Some(task),
+            terminal: terminal_rx,
+        };
+        Ok((client, events, owner))
+    }
+    pub fn terminal_reason(&self) -> Option<Error> {
+        self.terminal.borrow().clone()
+    }
+    pub async fn wait_terminal(&mut self) -> Error {
+        loop {
+            if let Some(e) = self.terminal.borrow().clone() {
+                return e;
+            }
+            if self.terminal.changed().await.is_err() {
+                return Error::Closed;
+            }
+        }
+    }
+    /// Excludes all submissions, drains already queued writes, shuts down stdin,
+    /// and keeps reading until EOF or deadline. Does not issue abort/clear_queue.
+    pub async fn close(&mut self) -> Error {
+        {
+            let mut s = self.client.shared.state.lock().unwrap();
+            s.closing = true;
+        }
+        let deadline = self.client.shared.config.close_timeout;
+        let writer = self.client.writer.clone();
+        let result = tokio::time::timeout(deadline, async {
+            let _ = writer.send(WriteMessage::Close).await;
+            self.wait_terminal().await
+        })
+        .await;
+        let reason = match result {
+            Ok(e) => e,
+            Err(_) => {
+                self.client.shared.finish(Error::CloseTimeout);
+                Error::CloseTimeout
+            }
+        };
+        if let Some(t) = self.task.take() {
+            let _ = t.await;
+        }
+        reason
+    }
+    #[cfg(feature = "subprocess")]
+    pub(crate) fn fail(&self, reason: Error) {
+        self.client.shared.finish(reason);
+    }
+    #[cfg(feature = "subprocess")]
+    pub(crate) fn terminal_receiver(&self) -> watch::Receiver<Option<Error>> {
+        self.terminal.clone()
+    }
+}
+impl Drop for PiConnection {
+    fn drop(&mut self) {
+        self.client.shared.finish(Error::Closed);
+        if let Some(t) = self.task.take() {
+            t.abort();
+        }
+    }
+}
+struct PendingGuard {
+    shared: Arc<Shared>,
+    id: String,
+}
+impl Drop for PendingGuard {
+    fn drop(&mut self) {
+        self.shared.state.lock().unwrap().pending.remove(&self.id);
+    }
+}
+impl PiClient {
+    fn enqueue_locked(&self, bytes: Vec<u8>) -> Result<oneshot::Receiver<Result<()>>> {
+        let permit = self
+            .budget
+            .clone()
+            .try_acquire_many_owned(
+                bytes
+                    .len()
+                    .try_into()
+                    .map_err(|_| Error::Capacity("writer bytes"))?,
+            )
+            .map_err(|_| Error::Capacity("writer bytes"))?;
+        let (sent, rx) = oneshot::channel();
+        self.writer
+            .try_send(WriteMessage::Record(Outbound {
+                bytes,
+                _budget: permit,
+                sent,
+            }))
+            .map_err(|e| match e {
+                mpsc::error::TrySendError::Full(_) => Error::Capacity("writer records"),
+                mpsc::error::TrySendError::Closed(_) => Error::Closed,
+            })?;
+        Ok(rx)
+    }
+    /// No automatic retries. Capacity failure means not submitted. A timeout
+    /// after local enqueue has an uncertain send/execution outcome.
+    pub async fn command(&self, command: Command) -> Result<Response> {
+        self.command_with_timeout(command, self.shared.config.command_timeout)
+            .await
+    }
+    pub async fn command_with_timeout(
+        &self,
+        command: Command,
+        timeout: Duration,
+    ) -> Result<Response> {
+        let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
+        let name = command.name();
+        let mut v = serde_json::to_value(command)
+            .map_err(|_| Error::Protocol("cannot encode command".into()))?;
+        v["id"] = id.clone().into();
+        let bytes = codec::encode(&v, self.shared.config.max_record_bytes)?;
+        let (response, rx) = oneshot::channel();
+        let sent = {
+            let mut s = self.shared.state.lock().unwrap();
+            if let Some(e) = &s.terminal {
+                return Err(e.clone());
+            }
+            if s.closing {
+                return Err(Error::Closed);
+            }
+            if s.pending.len() >= self.shared.config.max_pending_commands {
+                return Err(Error::Capacity("pending commands"));
+            }
+            let sent = self.enqueue_locked(bytes)?;
+            s.pending.insert(
+                id.clone(),
+                Pending {
+                    command: name,
+                    response,
+                },
+            );
+            sent
+        };
+        let _guard = PendingGuard {
+            shared: self.shared.clone(),
+            id,
+        };
+        tokio::time::timeout(timeout, async {
+            sent.await.map_err(|_| self.shared.reason())??;
+            rx.await.map_err(|_| self.shared.reason())?
+        })
+        .await
+        .map_err(|_| Error::Timeout)?
+    }
+    pub async fn typed<T: DeserializeOwned>(&self, command: Command) -> Result<T> {
+        self.command(command).await?.decode()
+    }
+    /// UI responses are write-only, never registered as pending commands.
+    pub async fn respond_ui(&self, request: &UiRequest, answer: UiAnswer) -> Result<()> {
+        let record = answer.record(request)?;
+        let sent = self.send_one_way(record)?;
+        tokio::time::timeout(self.shared.config.command_timeout, async {
+            sent.await.map_err(|_| self.shared.reason())?
+        })
+        .await
+        .map_err(|_| Error::Timeout)?
+    }
+    fn send_one_way(&self, value: Value) -> Result<oneshot::Receiver<Result<()>>> {
+        let bytes = codec::encode(&value, self.shared.config.max_record_bytes)?;
+        let s = self.shared.state.lock().unwrap();
+        if let Some(e) = &s.terminal {
+            return Err(e.clone());
+        }
+        if s.closing {
+            return Err(Error::Closed);
+        }
+        self.enqueue_locked(bytes)
+    }
+    pub async fn prompt(&self, message: impl Into<String>) -> Result<PromptDisposition> {
+        Ok(self
+            .typed::<Disposition<PromptDisposition>>(Command::Prompt {
+                message: message.into(),
+                images: None,
+                streaming_behavior: None,
+            })
+            .await?
+            .disposition)
+    }
+    pub async fn prompt_with(
+        &self,
+        message: impl Into<String>,
+        images: Option<Vec<ImageContent>>,
+        streaming_behavior: Option<StreamingBehavior>,
+    ) -> Result<PromptDisposition> {
+        Ok(self
+            .typed::<Disposition<PromptDisposition>>(Command::Prompt {
+                message: message.into(),
+                images,
+                streaming_behavior,
+            })
+            .await?
+            .disposition)
+    }
+    pub async fn steer(
+        &self,
+        message: impl Into<String>,
+        images: Option<Vec<ImageContent>>,
+    ) -> Result<QueuedInputDisposition> {
+        Ok(self
+            .typed::<Disposition<QueuedInputDisposition>>(Command::Steer {
+                message: message.into(),
+                images,
+            })
+            .await?
+            .disposition)
+    }
+    pub async fn follow_up(
+        &self,
+        message: impl Into<String>,
+        images: Option<Vec<ImageContent>>,
+    ) -> Result<QueuedInputDisposition> {
+        Ok(self
+            .typed::<Disposition<QueuedInputDisposition>>(Command::FollowUp {
+                message: message.into(),
+                images,
+            })
+            .await?
+            .disposition)
+    }
+    pub async fn abort(&self) -> Result<()> {
+        self.command(Command::Abort).await.map(|_| ())
+    }
+    pub async fn clear_queue(&self) -> Result<Queue> {
+        self.typed(Command::ClearQueue).await
+    }
+    pub async fn get_state(&self) -> Result<SessionState> {
+        self.typed(Command::GetState).await
+    }
+    pub async fn new_session(&self, parent_session: Option<String>) -> Result<SessionChange> {
+        self.typed(Command::NewSession { parent_session }).await
+    }
+    pub async fn switch_session(&self, session_path: impl Into<String>) -> Result<SessionChange> {
+        self.typed(Command::SwitchSession {
+            session_path: session_path.into(),
+        })
+        .await
+    }
+    pub async fn fork(&self, entry_id: impl Into<String>) -> Result<ForkResult> {
+        self.typed(Command::Fork {
+            entry_id: entry_id.into(),
+        })
+        .await
+    }
+    pub async fn clone_session(&self) -> Result<SessionChange> {
+        self.typed(Command::Clone).await
+    }
+    pub async fn get_messages(&self) -> Result<Messages> {
+        self.typed(Command::GetMessages).await
+    }
+    pub async fn get_entries(&self, since: Option<String>) -> Result<Entries> {
+        self.typed(Command::GetEntries { since }).await
+    }
+    pub async fn get_tree(&self) -> Result<Tree> {
+        self.typed(Command::GetTree).await
+    }
+    pub async fn get_commands(&self) -> Result<Commands> {
+        self.typed(Command::GetCommands).await
+    }
+    pub async fn get_session_stats(&self) -> Result<SessionStats> {
+        self.typed(Command::GetSessionStats).await
+    }
+    pub async fn bash(
+        &self,
+        command: impl Into<String>,
+        exclude_from_context: Option<bool>,
+    ) -> Result<BashResult> {
+        self.typed(Command::Bash {
+            command: command.into(),
+            exclude_from_context,
+        })
+        .await
+    }
+    pub async fn compact(&self, custom_instructions: Option<String>) -> Result<CompactionResult> {
+        self.typed(Command::Compact {
+            custom_instructions,
+        })
+        .await
+    }
+    pub async fn set_model(
+        &self,
+        provider: impl Into<String>,
+        model_id: impl Into<String>,
+    ) -> Result<Value> {
+        self.typed(Command::SetModel {
+            provider: provider.into(),
+            model_id: model_id.into(),
+        })
+        .await
+    }
+    pub async fn cycle_model(&self) -> Result<Option<ModelCycle>> {
+        self.typed(Command::CycleModel).await
+    }
+    pub async fn get_available_models(&self) -> Result<Models> {
+        self.typed(Command::GetAvailableModels).await
+    }
+    pub async fn set_thinking_level(&self, level: ThinkingLevel) -> Result<()> {
+        self.command(Command::SetThinkingLevel { level })
+            .await
+            .map(|_| ())
+    }
+    pub async fn cycle_thinking_level(&self) -> Result<Option<Level>> {
+        self.typed(Command::CycleThinkingLevel).await
+    }
+    pub async fn get_available_thinking_levels(&self) -> Result<Levels> {
+        self.typed(Command::GetAvailableThinkingLevels).await
+    }
+    pub async fn set_steering_mode(&self, mode: QueueMode) -> Result<()> {
+        self.command(Command::SetSteeringMode { mode })
+            .await
+            .map(|_| ())
+    }
+    pub async fn set_follow_up_mode(&self, mode: QueueMode) -> Result<()> {
+        self.command(Command::SetFollowUpMode { mode })
+            .await
+            .map(|_| ())
+    }
+    pub async fn set_auto_compaction(&self, enabled: bool) -> Result<()> {
+        self.command(Command::SetAutoCompaction { enabled })
+            .await
+            .map(|_| ())
+    }
+    pub async fn set_auto_retry(&self, enabled: bool) -> Result<()> {
+        self.command(Command::SetAutoRetry { enabled })
+            .await
+            .map(|_| ())
+    }
+    pub async fn abort_retry(&self) -> Result<()> {
+        self.command(Command::AbortRetry).await.map(|_| ())
+    }
+    pub async fn abort_bash(&self) -> Result<()> {
+        self.command(Command::AbortBash).await.map(|_| ())
+    }
+    pub async fn export_html(&self, output_path: Option<String>) -> Result<ExportPath> {
+        self.typed(Command::ExportHtml { output_path }).await
+    }
+    pub async fn get_fork_messages(&self) -> Result<ForkMessages> {
+        self.typed(Command::GetForkMessages).await
+    }
+    pub async fn get_last_assistant_text(&self) -> Result<LastAssistantText> {
+        self.typed(Command::GetLastAssistantText).await
+    }
+    pub async fn set_session_name(&self, name: impl Into<String>) -> Result<()> {
+        self.command(Command::SetSessionName { name: name.into() })
+            .await
+            .map(|_| ())
+    }
+}
+async fn write_loop(
+    mut writer: crate::transport::Writer,
+    mut rx: mpsc::Receiver<WriteMessage>,
+) -> Result<()> {
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            WriteMessage::Record(out) => {
+                let r = async {
+                    writer.write_all(&out.bytes).await?;
+                    writer.flush().await
+                }
+                .await
+                .map_err(|e: std::io::Error| Error::Transport(e.to_string()));
+                let _ = out.sent.send(r.clone());
+                r?;
+            }
+            WriteMessage::Close => {
+                writer
+                    .shutdown()
+                    .await
+                    .map_err(|e| Error::Transport(e.to_string()))?;
+                drop(writer);
+                std::future::pending::<()>().await;
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
+}
+async fn read_loop(
+    reader: crate::transport::Reader,
+    mut exit: Option<watch::Receiver<Option<Error>>>,
+    client: PiClient,
+    events: mpsc::Sender<BufferedEvent>,
+    budget: Arc<Semaphore>,
+) -> Result<()> {
+    let mut reader = codec::JsonlReader::new(reader, client.shared.config.max_record_bytes);
+    loop {
+        let Some((value, size)) = reader.next().await? else {
+            if let Some(rx) = exit.as_mut() {
+                loop {
+                    if let Some(e) = rx.borrow().clone() {
+                        return Err(e);
+                    }
+                    if rx.changed().await.is_err() {
+                        break;
+                    }
+                }
+            }
+            return Err(if client.shared.state.lock().unwrap().closing {
+                Error::Closed
+            } else {
+                Error::Eof
+            });
+        };
+        let event = match decode_record(value)? {
+            Record::Response(r) => {
+                if let Some(id) = &r.id {
+                    let pending = client.shared.state.lock().unwrap().pending.remove(id);
+                    if let Some(p) = pending {
+                        if p.command != r.command {
+                            let e = Error::Protocol("response command does not match ID".into());
+                            let _ = p.response.send(Err(e.clone()));
+                            return Err(e);
+                        }
+                        let result = if r.success {
+                            Ok(r)
+                        } else {
+                            Err(Error::Rejected {
+                                command: r.command,
+                                message: r.error.unwrap_or_default(),
+                            })
+                        };
+                        let _ = p.response.send(result);
+                    }
+                    // Timed-out/cancelled futures and unsolicited IDs are ignored.
+                    continue;
+                }
+                Event::UncorrelatedResponse(r)
+            }
+            Record::Event(e) => e,
+        };
+        if let Event::Ui(u) = &event {
+            if u.method.is_dialog() && client.shared.config.ui_policy == UiPolicy::Cancel {
+                // Enqueue without awaiting the writer, so the reader remains continuous.
+                client.send_one_way(UiAnswer::Cancel.record(u)?)?;
+            }
+        }
+        let permit = budget
+            .clone()
+            .try_acquire_many_owned(size as u32)
+            .map_err(|_| Error::EventOverflow)?;
+        events
+            .try_send(BufferedEvent {
+                event,
+                _budget: permit,
+            })
+            .map_err(|_| Error::EventOverflow)?;
+    }
+}
