@@ -84,6 +84,29 @@ The final script observed **46/51/35/40 integration tests**, plus **2 unit tests
 
 ### Post-completion feedback-loop observation
 
+#### Whole-result rerun after finalized requirement mapping
+
+At 2026-10-02 **13:50 UTC**, the complete delivered result at local commit `ff62407` was checked again, not just the new race tests. `bash scripts/verify.sh` returned **exit 0**. Session scratch log: `pi-rpc-whole-result-reverification.log`. All mapped executable checks ran after the requirement-to-test mapping was finalized. The unchanged external harness was also rerun and passed its 3000 four-thread iterations in **0.11 s**. The working tree was clean before recording these observations.
+
+| Requirement / changed public output | Check actually run over complete result | Observed outcome |
+|---|---|---|
+| `PiEvents::recv`: terminal error reaches consumer before owner wait | `event_consumer_gets_exactly_one_terminal_before_waiting_for_owner_3000_runs` in all four configurations, unchanged external `terminal_error_always_reaches_event_consumer` | Both passed every iteration, no premature `None` |
+| Buffered events stay ordered, one terminal error, then `None` | `buffered_event_precedes_exactly_one_terminal_error_1000_runs`, `owner_drop_wakes_waiting_events_and_preserves_buffered_event_order` | Passed in all four configurations |
+| Delayed terminal publication and cancelled recv retain delivery | `closed_event_channel_waits_for_publication_and_cancelled_recv_keeps_error` | Passed in all four configurations |
+| Missing terminal authority does not hang or repeat an error | `terminal_authority_disappearing_after_event_close_returns_closed_once` | Passed in all four configurations |
+| EOF and reader panic wake event consumer with live owner | `event_first_eof_and_panicking_reader_do_not_hang_with_live_owner` | Passed with bounded receives in all four configurations |
+| Bounded transport, explicit overflow and released budgets | Count/byte overflow, stalled-writer bounds and event-budget-release tests in `tests/client.rs` | All passed in all four configurations, no silent-drop acceptance |
+| Matching caller/owner reasons and remaining RPC lifecycle | All 26 client integration tests, including 100-run wrong-command/same-ID race, cancellation, timeout, close, UI and stop-race tests | All passed in each configuration |
+| Pinned protocol surface and required fields | All 9 protocol tests, exhaustively covering 33 commands/success schemas, 24 event kinds, 12 deltas, nullable and open tool payload validation | All passed in each configuration |
+| Default subprocess lifecycle and process races | All 11 subprocess tests, real fake-executable pipes, descendant-held stdout, living-child EOF, cleanup and version probes | Passed in default and all-features; intentionally absent without subprocess feature |
+| Optional native v3 session-file API | All 5 native session tests covering 11 entry kinds, branching, required-nullable fields, legacy rejection and bounds | Passed in all-features and session-only; intentionally absent without session_file |
+| Public examples and README code | Injected example in no-default/all, native example in session-only/all, local example in default/all, three README doctests per configuration | Every invocation exited 0; both fake-backed local runs printed `streaming=false pending=0` and process exit code `Some(0)` |
+| README/compatibility terminal semantics and generated public docs | README doctests, `RUSTDOCFLAGS='-D warnings' cargo doc` for all-features/no-default, terminal behavior checks above | All passed; generated `target/doc/pi_rpc/index.html`; prose claims match observed terminal checks |
+| Complete feature/build/lint matrix | Four `check --all-targets`, four `test`, four `clippy --all-targets -- -D warnings`, crate and fake-fixture fmt | All passed, zero warnings/failures; 46/51/35/40 integration + 2 unit + 3 doctests per configuration |
+| Preserve user constraints and local delivery | Manifest inspected, Git diff/status checks and local history | `publish=false`, no license invented; clean tree at `ff62407`, no remote action or live/paid Pi request |
+
+This rerun includes the earlier protocol, transport, subprocess, native-session, examples and documentation outputs as well as the latest receiver repair. It verifies the requested local fake/mock acceptance workflow. It does not extend evidence to live model requests, vendor deployment, other OSes or the unexercised Rust 1.85 minimum, whose limitations remain below.
+
 At 2026-10-02 13:42 UTC, the delivered `bash scripts/verify.sh` was executed again and returned **exit 0**. All four feature-matrix test counts remained 42/47/31/36 integration tests plus three doctests each, with zero failures. Both local-example invocations again observed `streaming=false pending=0` and `ProcessExit(Some(0))`, rather than relying on source inspection.
 
 The six independent-review regression tests were then run individually through the public crate and each passed: descendant-held stdout resolved exit and pending command (0.41 s including fake compilation), stdout closed by a living child resolved EOF and reaping (0.42 s including fake compilation), wrong-command/same-ID delivered matching Protocol reasons over 100 multithread iterations (0.01 s), required-nullable RPC/native fields rejected absence but accepted null, missing open tool payload fields/nested malformed deltas were rejected, and native file parsing rejected absent parentId/replacement. `git diff --check` passed and the working tree was clean before recording this observation. The SDK's executable acceptance checks therefore continue to satisfy the requested mock/fake-process workflow after the review fixes. Paid live model behavior remains deliberately untested.
