@@ -1,0 +1,127 @@
+//! Standalone std-only fake Pi. Compiled by subprocess integration tests.
+use std::{
+    io::{self, BufRead, Write},
+    time::Duration,
+};
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let name = std::path::Path::new(&args[0])
+        .file_name()
+        .unwrap()
+        .to_string_lossy();
+    if args.iter().any(|a| a == "--version") {
+        if name.contains("probe-hang") {
+            std::thread::sleep(Duration::from_secs(60));
+        }
+        if name.contains("probe-large") {
+            println!("{}", "x".repeat(100_000));
+            return;
+        }
+        println!(
+            "{}",
+            if name.contains("wrong-version") {
+                "0.99.1"
+            } else {
+                "0.99.2"
+            }
+        );
+        return;
+    }
+    assert!(args.windows(2).any(|w| w == ["--mode", "rpc"]));
+    let mode = args
+        .windows(2)
+        .find(|w| w[0] == "--fake-mode")
+        .map(|w| w[1].as_str())
+        .unwrap_or("normal");
+    if mode == "hold-stdout" {
+        std::thread::sleep(Duration::from_secs(1));
+        return;
+    }
+    let mut out = io::stdout().lock();
+    writeln!(
+        out,
+        "{{\"type\":\"fake_ready\",\"pid\":{}}}",
+        std::process::id()
+    )
+    .unwrap();
+    out.flush().unwrap();
+    if mode == "descendant-exit" {
+        // Hold stdout open independently after the direct child has exited.
+        let _descendant = std::process::Command::new(&args[0])
+            .args(["--fake-mode", "hold-stdout", "--mode", "rpc"])
+            .stdin(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let _ = io::stdin().lock().lines().next();
+        std::process::exit(9);
+    }
+    if mode == "closed-stdout" {
+        // A shell can close fd1 portably without unsafe FFI in the fixture.
+        // exec keeps the same direct-child PID and then holds the process alive.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let error = std::process::Command::new("/bin/sh")
+                .args(["-c", "exec 1>&-; exec sleep 60"])
+                .exec();
+            panic!("exec failed: {error}");
+        }
+    }
+    match mode {
+        "exit" => std::process::exit(7),
+        "partial" => {
+            write!(out, "{{\"type\":").unwrap();
+            out.flush().unwrap();
+            return;
+        }
+        "flood" => {
+            for _ in 0..100 {
+                if writeln!(out, "{{\"type\":\"agent_start\"}}").is_err() {
+                    return;
+                }
+            }
+            out.flush().unwrap();
+        }
+        "stderr" => {
+            let mut err = io::stderr().lock();
+            for _ in 0..1000 {
+                err.write_all(b"DIAGNOSTIC_ONLY\n").unwrap();
+            }
+            err.flush().unwrap();
+        }
+        _ => {}
+    }
+    if mode == "hang" {
+        std::thread::sleep(Duration::from_secs(60));
+        return;
+    }
+    for line in io::stdin().lock().lines() {
+        let line = line.unwrap();
+        fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+            let prefix = format!("\"{key}\":\"");
+            let start = line.find(&prefix)? + prefix.len();
+            Some(&line[start..start + line[start..].find('"')?])
+        }
+        let id = field(&line, "id").unwrap();
+        let kind = field(&line, "type").unwrap();
+        let data = match kind {
+            "get_state" => {
+                ",\"data\":{\"thinkingLevel\":\"off\",\"isStreaming\":false,\"isCompacting\":false,\"steeringMode\":\"all\",\"followUpMode\":\"all\",\"sessionId\":\"fake\",\"autoCompactionEnabled\":true,\"messageCount\":0,\"pendingMessageCount\":0}"
+            }
+            "get_messages" => ",\"data\":{\"messages\":[]}",
+            "prompt" => ",\"data\":{\"disposition\":\"handled\"}",
+            "clear_queue" => ",\"data\":{\"steering\":[],\"followUp\":[]}",
+            _ => "",
+        };
+        // Small fragmented writes deliberately exercise the byte reader.
+        let response = format!(
+            "{{\"type\":\"response\",\"id\":\"{id}\",\"command\":\"{kind}\",\"success\":true{data}}}\n"
+        );
+        for fragment in response.as_bytes().chunks(3) {
+            if out.write_all(fragment).is_err() {
+                return;
+            }
+            out.flush().unwrap();
+        }
+    }
+}

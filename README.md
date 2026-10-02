@@ -4,7 +4,7 @@ Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 0.99.2**, offic
 
 ## Features and ownership
 
-- `protocol`: all 32 normal commands, success-data types, 25 session/RPC event kinds, streaming deltas, nine extension UI methods, native messages and entries.
+- `protocol`: all 33 normal commands, success-data types, 24 session/RPC event kinds, streaming deltas, nine extension UI methods, native messages and entries.
 - `codec`: strict LF JSONL, CRLF decoding, fragmented/coalesced byte streams, bounded records. Unicode U+2028/U+2029 inside strings do not split records. Nonempty unterminated EOF is an error.
 - `transport`: inject any ordered `AsyncRead + AsyncWrite` pair without an SDK dependency. The remote host **declares** its Pi version. There is no RPC version handshake.
 - `client`: cloneable command handle, ID-correlated responses, one continuous reader, one serialized writer, one single-consumer ordered event stream.
@@ -12,6 +12,8 @@ Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 0.99.2**, offic
 - `session_file` (optional): build/parse native v3 session JSONL and inspect raw branches. Not a vendor history converter or model-context replay engine.
 
 Requires a live Tokio runtime. Owners should be explicitly closed/terminated before shutting down that runtime. Dropping a `PiClient` clone is inert. Dropping `PiConnection` aborts its I/O tasks and drops the transport, with remaining clients receiving `Closed`. Dropping `PiProcess` also signals child termination, and its supervisor reaps the child. Explicit termination waits for cleanup. This manages the direct child, not arbitrary detached descendant process trees.
+
+Local child exit is monitored independently of stdout EOF. After observing exit the reader drains available records for at most 50 ms, then reports `ProcessExit`, even when a descendant holds stdout open. Stdout EOF allows up to 100 ms for the child-exit status to arrive. If the child remains alive, unexpected EOF reports `Eof` and supervision kills/reaps it. Orderly caller-initiated close remains distinct. Malformed buffered protocol records still report `Protocol`; output arriving after the bounded exit drain is not guaranteed to be delivered.
 
 ## Injected transport
 
@@ -58,6 +60,8 @@ consumer.await.expect("event task");
 ```
 
 The executable is probed with `--version` before `--mode rpc`; only trimmed `0.99.2` is accepted. Startup timeout and probe output are bounded. The executable inherits the environment. This crate never reads or edits Pi/global configuration or credentials, but Pi itself may use its configured environment/resources. CLI options, isolation and access policy belong to the host. No PTY is ever allocated.
+
+`examples/local.rs` accepts an optional executable path argument, enabling the same example to run against the test fake rather than a configured Pi installation.
 
 Stderr is continuously drained to a bounded byte ring (default 64 KiB, zero disables retention). `process.diagnostics().snapshot()` is explicit opt-in and may expose sensitive Pi diagnostics. There is no default logging of diagnostics, prompts, messages, history or credentials.
 
@@ -106,6 +110,8 @@ An outer gateway **PiAdapter** owns Conversation/SSE correlation, input vs resum
 There is **no `import_history` RPC**. With `session_file`, `SessionFile` builds/parses native Pi v3 records, keeps native roles, system sections/tools, opaque provider metadata, usage, compaction and branch checkpoints, custom entries and context edits. v1/v2 are explicitly rejected, rather than pretending to implement Pi's migration. Input file bytes, record bytes and entry count are bounded. Tree IDs/parent links and branch-relative compaction/context-edit references are validated. `branch` returns raw entries, not reconstructed model context. Unknown persisted entry types are rejected in this version; arbitrary custom entry data and custom message roles remain open.
 
 Only caller-supplied bytes are parsed; there is no automatic session discovery, OpenAI/Anthropic conversion or history-as-prompt. Delivering bytes to a remote sandbox, selecting `--session`, and filesystem permissions/atomic writes are the host's job. See `examples/native_session.rs`.
+
+Required-but-nullable fields distinguish absence from explicit null: cycle response `data`, last-assistant `text`, entries/tree `leafId`, native `parentId` and context-edit `replacement`. Tool `args`, `partialResult` and `result` accept arbitrary JSON including null, but missing properties are protocol errors. Native timestamps are carried verbatim and checked for presence, not calendrical correctness. The caller owns timestamp generation and valid Pi-native identifiers.
 
 ## Development
 

@@ -203,10 +203,8 @@ impl SessionFile {
                         ));
                     }
                 }
-                EntryData::Label { target_id, .. } => {
-                    if !seen.contains(target_id.as_str()) {
-                        return Err(Error::Protocol("label target missing".into()));
-                    }
+                EntryData::Label { target_id, .. } if !seen.contains(target_id.as_str()) => {
+                    return Err(Error::Protocol("label target missing".into()));
                 }
                 _ => {}
             }

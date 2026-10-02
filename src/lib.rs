@@ -1,4 +1,5 @@
 //! Async, bounded Pi 0.99.2 RPC. See the README for lifecycle and gateway policy.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 pub mod client;
 pub mod codec;

@@ -5,6 +5,14 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 pub type Extra = Map<String, Value>;
+// deserialize_with (without default) makes absence invalid while allowing null.
+fn required_nullable<'de, D, T>(d: D) -> std::result::Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(d)
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -171,30 +179,55 @@ fn validate_message(role: &str, f: &Extra) -> std::result::Result<(), String> {
         field::<f64>(f, "timestamp")?;
     }
     match role {
-        "system" | "user" => field::<MessageContent>(f, "content")?,
+        "system" | "user" => {
+            field::<MessageContent>(f, "content")?;
+            validate_content(f, "content", role == "user", false, false)?;
+            if role == "system" {
+                if f.contains_key("sections") {
+                    field::<std::collections::HashMap<String, Option<String>>>(f, "sections")?;
+                }
+                for key in ["toolsAdded", "toolsRemoved"] {
+                    if f.contains_key(key) {
+                        field::<Vec<Extra>>(f, key)?;
+                    }
+                }
+            }
+        }
         "assistant" => {
             field::<Vec<ContentBlock>>(f, "content")?;
             for k in ["api", "provider", "model", "stopReason"] {
                 field::<String>(f, k)?;
             }
             field::<Usage>(f, "usage")?;
+            validate_content(f, "content", false, true, true)?;
+            if !matches!(
+                f["stopReason"].as_str(),
+                Some("pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred")
+            ) {
+                return Err("invalid stopReason".into());
+            }
         }
         "toolResult" => {
             field::<Vec<ContentBlock>>(f, "content")?;
             field::<String>(f, "toolCallId")?;
             field::<String>(f, "toolName")?;
             field::<bool>(f, "isError")?;
+            validate_content(f, "content", true, false, false)?;
         }
         "bashExecution" => {
             field::<String>(f, "command")?;
             field::<String>(f, "output")?;
             field::<bool>(f, "cancelled")?;
             field::<bool>(f, "truncated")?;
+            if f.contains_key("exitCode") {
+                field::<Option<i32>>(f, "exitCode")?;
+            }
         }
         "custom" => {
             field::<String>(f, "customType")?;
             field::<MessageContent>(f, "content")?;
             field::<bool>(f, "display")?;
+            validate_content(f, "content", true, false, false)?;
         }
         "branchSummary" => {
             field::<String>(f, "summary")?;
@@ -205,6 +238,29 @@ fn validate_message(role: &str, f: &Extra) -> std::result::Result<(), String> {
             field::<f64>(f, "tokensBefore")?;
         }
         _ => {}
+    }
+    Ok(())
+}
+fn validate_content(
+    f: &Extra,
+    key: &str,
+    image: bool,
+    thinking: bool,
+    tool: bool,
+) -> std::result::Result<(), String> {
+    if let Some(blocks) = f.get(key).and_then(Value::as_array) {
+        for block in blocks {
+            let allowed = match block.get("type").and_then(Value::as_str) {
+                Some("text") => true,
+                Some("image") => image,
+                Some("thinking") => thinking,
+                Some("toolCall") => tool,
+                _ => false,
+            };
+            if !allowed {
+                return Err("content block not allowed for native role".into());
+            }
+        }
     }
     Ok(())
 }
@@ -487,6 +543,7 @@ pub struct ForkMessages {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LastAssistantText {
+    #[serde(deserialize_with = "required_nullable")]
     pub text: Option<String>,
 }
 
@@ -563,12 +620,14 @@ impl Response {
 #[serde(rename_all = "camelCase")]
 pub struct Entries {
     pub entries: Vec<SessionEntry>,
+    #[serde(deserialize_with = "required_nullable")]
     pub leaf_id: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Tree {
     pub tree: Vec<SessionTreeNode>,
+    #[serde(deserialize_with = "required_nullable")]
     pub leaf_id: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -583,6 +642,7 @@ pub struct SessionTreeNode {
 #[serde(rename_all = "camelCase")]
 pub struct SessionEntry {
     pub id: String,
+    #[serde(deserialize_with = "required_nullable")]
     pub parent_id: Option<String>,
     pub timestamp: String,
     #[serde(flatten)]
@@ -643,6 +703,7 @@ pub enum EntryData {
     #[serde(rename_all = "camelCase")]
     ContextEdit {
         target_id: String,
+        #[serde(deserialize_with = "required_nullable")]
         replacement: Option<ContextReplacement>,
     },
     #[serde(rename_all = "camelCase")]
@@ -961,6 +1022,49 @@ pub fn decode_record(v: Value) -> Result<Record> {
         .ok_or_else(|| Error::Protocol("record must be an object with a string type".into()))?;
     let invalid = || Error::Protocol(format!("malformed known record: {kind}"));
     if kind == "response" {
+        let command = v.get("command").and_then(Value::as_str).unwrap_or("");
+        if v.get("success") == Some(&Value::Bool(true)) {
+            let has_data = matches!(
+                command,
+                "prompt"
+                    | "steer"
+                    | "follow_up"
+                    | "clear_queue"
+                    | "new_session"
+                    | "get_state"
+                    | "set_model"
+                    | "cycle_model"
+                    | "get_available_models"
+                    | "cycle_thinking_level"
+                    | "get_available_thinking_levels"
+                    | "compact"
+                    | "bash"
+                    | "get_session_stats"
+                    | "export_html"
+                    | "switch_session"
+                    | "fork"
+                    | "clone"
+                    | "get_fork_messages"
+                    | "get_entries"
+                    | "get_tree"
+                    | "get_last_assistant_text"
+                    | "get_messages"
+                    | "get_commands"
+            );
+            if has_data && v.get("data").is_none() {
+                return Err(invalid());
+            }
+            let required = match command {
+                "get_entries" | "get_tree" => Some("leafId"),
+                "get_last_assistant_text" => Some("text"),
+                _ => None,
+            };
+            if let Some(key) = required {
+                if v.get("data").and_then(|d| d.get(key)).is_none() {
+                    return Err(invalid());
+                }
+            }
+        }
         let r: Response = serde_json::from_value(v.clone()).map_err(|_| invalid())?;
         r.validate()?;
         return Ok(Record::Response(r));
@@ -996,7 +1100,38 @@ pub fn decode_record(v: Value) -> Result<Record> {
         "extension_error",
     ];
     if KNOWN.contains(&kind) {
-        let e = serde_json::from_value(v.clone()).map_err(|_| invalid())?;
+        let required: &[&str] = match kind {
+            "tool_execution_start" => &["args"],
+            "tool_execution_update" => &["args", "partialResult"],
+            "tool_execution_end" => &["result"],
+            _ => &[],
+        };
+        if required.iter().any(|key| v.get(key).is_none()) {
+            return Err(invalid());
+        }
+        let e: KnownEvent = serde_json::from_value(v.clone()).map_err(|_| invalid())?;
+        if let KnownEvent::MessageUpdate {
+            assistant_message_event,
+            ..
+        } = &e
+        {
+            let valid = match assistant_message_event {
+                AssistantEvent::ToolcallEnd { tool_call, .. } => {
+                    matches!(tool_call, ContentBlock::ToolCall { .. })
+                }
+                AssistantEvent::Done { reason, message } => {
+                    message.role == "assistant"
+                        && matches!(reason.as_str(), "stop" | "length" | "toolUse" | "deferred")
+                }
+                AssistantEvent::Error { reason, error } => {
+                    error.role == "assistant" && matches!(reason.as_str(), "aborted" | "error")
+                }
+                _ => true,
+            };
+            if !valid {
+                return Err(invalid());
+            }
+        }
         return Ok(Record::Event(Event::Known(e)));
     }
     Ok(Record::Event(Event::Unknown(v)))

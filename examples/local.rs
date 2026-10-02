@@ -2,6 +2,10 @@ use pi_rpc::{PiProcess, ProcessOptions};
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> pi_rpc::Result<()> {
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+        executable: std::env::args_os()
+            .nth(1)
+            .map(Into::into)
+            .unwrap_or_else(|| "pi".into()),
         args: vec!["--no-session".into()],
         ..Default::default()
     })

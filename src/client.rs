@@ -586,16 +586,43 @@ async fn read_loop(
     budget: Arc<Semaphore>,
 ) -> Result<()> {
     let mut reader = codec::JsonlReader::new(reader, client.shared.config.max_record_bytes);
+    // Child exit and pipe EOF are independent: descendants can retain stdout.
+    // After exit, drain ready records for at most 50ms, then fail even if a
+    // descendant keeps producing output. An EOF gets 100ms exit-race grace.
+    let mut exited: Option<(Error, tokio::time::Instant)> = None;
     loop {
-        let Some((value, size)) = reader.next().await? else {
+        let record = if let Some((reason, deadline)) = &exited {
+            tokio::select! { biased;
+                _=tokio::time::sleep_until(*deadline)=>return Err(reason.clone()),
+                record=reader.next()=>record?,
+            }
+        } else {
+            tokio::select! { biased;
+                reason=wait_exit(&mut exit)=> {
+                    exited=Some((reason,tokio::time::Instant::now()+Duration::from_millis(50)));
+                    continue;
+                }
+                record=reader.next()=>record?,
+            }
+        };
+        let Some((value, size)) = record else {
+            if let Some((reason, _)) = exited {
+                return Err(reason);
+            }
             if let Some(rx) = exit.as_mut() {
-                loop {
-                    if let Some(e) = rx.borrow().clone() {
-                        return Err(e);
+                let reason = tokio::time::timeout(Duration::from_millis(100), async {
+                    loop {
+                        if let Some(e) = rx.borrow().clone() {
+                            return Some(e);
+                        }
+                        if rx.changed().await.is_err() {
+                            return None;
+                        }
                     }
-                    if rx.changed().await.is_err() {
-                        break;
-                    }
+                })
+                .await;
+                if let Ok(Some(e)) = reason {
+                    return Err(e);
                 }
             }
             return Err(if client.shared.state.lock().unwrap().closing {
@@ -648,4 +675,17 @@ async fn read_loop(
             })
             .map_err(|_| Error::EventOverflow)?;
     }
+}
+async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
+    if let Some(rx) = exit {
+        loop {
+            if let Some(e) = rx.borrow().clone() {
+                return e;
+            }
+            if rx.changed().await.is_err() {
+                break;
+            }
+        }
+    }
+    std::future::pending().await
 }
