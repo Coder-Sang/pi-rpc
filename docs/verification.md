@@ -12,16 +12,18 @@ bash scripts/verify.sh
 
 **Actual result: exit 0**, after fixing macOS Bash 3.2's empty-array/nounset incompatibility in the first script attempt. The delivered script was itself executed successfully, not just inspected. Full output was captured in the session scratch file `pi-rpc-final-verification.log`. Earlier full matrix and example runs were also captured as `pi-rpc-feature-matrix.log` and `pi-rpc-examples-docs.log`.
 
+**Latest final run after the independent terminal-event race repair:** 2026-10-02 13:47 UTC, `bash scripts/verify.sh` again returned **exit 0**, with full output in `pi-rpc-terminal-race-final-matrix.log` in session scratch. The matrix below reflects this repaired code. The earlier successful runs were real observations but did not expose the event-consumer-before-owner race identified by the external harness.
+
 ## Feature matrix
 
 Each row ran the actual public crate and its integration tests, not copied source substitutes. `--all-targets` also compiles applicable examples and tests. Strict clippy had **zero warnings**, including no-default-features dead code.
 
 | Feature flags | `cargo check FLAGS --all-targets` | `cargo test FLAGS` | `cargo clippy FLAGS --all-targets -- -D warnings` |
 |---|---|---|---|
-| default (no flags) | PASS | 42 integration + 3 doctests, 0 failed | PASS |
-| `--all-features` | PASS | 47 integration + 3 doctests, 0 failed | PASS |
-| `--no-default-features` | PASS | 31 integration + 3 doctests, 0 failed | PASS |
-| `--no-default-features --features session_file` | PASS | 36 integration + 3 doctests, 0 failed | PASS |
+| default (no flags) | PASS | 46 integration + 2 unit + 3 doctests, 0 failed | PASS |
+| `--all-features` | PASS | 51 integration + 2 unit + 3 doctests, 0 failed | PASS |
+| `--no-default-features` | PASS | 35 integration + 2 unit + 3 doctests, 0 failed | PASS |
+| `--no-default-features --features session_file` | PASS | 40 integration + 2 unit + 3 doctests, 0 failed | PASS |
 
 Other commands actually run and passed:
 
@@ -44,7 +46,8 @@ Both local-example runs reported `streaming=false pending=0` and terminal `Proce
 
 ## Requirement-to-test coverage
 
-- **22 injected transport tests** (`tests/client.rs`): partial/coalesced CRLF and Unicode records, immediate reading before submission, out-of-order ID responses, abort during long execution, cancellation without withdrawal, timeout and ignored late response, no auto-retry, prompt dispositions, cancelled new/switch/fork/clone, nonterminal rejection, uncorrelated parse response, malformed known event failure, explicit reader transport error, wrong-command ID failure, independent count/byte overflow, event budget release, stalled writer count/byte bounds, owner vs clone drop, admitted-write drain/close, close deadline, record limits/unterminated EOF, default UI cancellation, manual no-ack UI and stop queue race.
+- **26 injected transport tests** (`tests/client.rs`): partial/coalesced CRLF and Unicode records, immediate reading before submission, out-of-order ID responses, abort during long execution, cancellation without withdrawal, timeout and ignored late response, no auto-retry, prompt dispositions, cancelled new/switch/fork/clone, nonterminal rejection, uncorrelated parse response, malformed known event failure, explicit reader transport error, wrong-command ID failure, independent count/byte overflow, event budget release, stalled writer count/byte bounds, owner vs clone drop, admitted-write drain/close, close deadline, record limits/unterminated EOF, default UI cancellation, manual no-ack UI and stop queue race. Four added event-first regressions cover 3000 immediately failing readers, 1000 buffered event then failure sequences, EOF/task panic, and owner drop after a cancelled receive.
+- **2 deterministic terminal publication unit tests** (`src/client.rs`): event channel deliberately closed while terminal publication is delayed, cancelled recv retains the error, and disappearing terminal authority returns Closed exactly once.
 - **9 protocol tests** (`tests/protocol.rs`): exhaustive **33** command round trips and all **33** success data schemas, all **24** known ordinary event kinds, **12** delta-only assistant variants, extensible native messages, UI answer checks, strict known shapes, required nullable fields and required open payload presence.
 - **5 native session tests** (`tests/session_file.rs`, optional): all **11** entry kinds, native messages/system tools and sections, opaque metadata, context replacement object/null, native parentId absence vs null, branch edits/retain-none compaction/multiple roots, cycles/orphans/duplicates, legacy rejection, CRLF and file/record/entry bounds.
 - **11 local process tests** (`tests/subprocess.rs`, default feature): real OS fake-executable pipes and fragmented replies, version mismatch/oversized/hung probes, continuously drained bounded stderr, process exit status, malformed final record, explicit terminate/reap, close deadline cleanup, event overflow cleanup, owner drop with surviving clients, descendant-held stdout after direct-child exit, and fd1 closed while direct child remains alive.
@@ -62,6 +65,22 @@ The wrong-command ID regression uses Tokio `multi_thread`, four workers and **10
 - Fixed the verification script for macOS Bash 3.2, then reran the full delivered script successfully.
 
 ## Remaining boundaries, not hidden blockers
+
+### Independent terminal-event race: reproduced, repaired, externally verified
+
+The safe test file `/Users/sang/Documents/Codex/2026-10-02/task-2/review-harness/src/lib.rs` was read without changing the external harness. On the unchanged crate, this exact command failed at **iteration 2**:
+
+```bash
+cargo test --offline --manifest-path /Users/sang/Documents/Codex/2026-10-02/task-2/review-harness/Cargo.toml
+```
+
+Observed failure: `events.recv()` returned `None`, while `owner.wait_terminal()` returned `Transport("review transport error")`. The reader dropped its event sender before the supervisor published the terminal watch. The earlier transport-failure test called owner.wait_terminal first, so it accidentally hid this interleaving. Previous feedback-loop closure claims were therefore too broad for terminal delivery.
+
+The fix makes `PiEvents::recv` drain the event channel and then **wait for the authoritative terminal reason**, marking the error delivered only when actually returning it. A cancelled wait does not consume the terminal error. Missing terminal authority defensively yields Closed once instead of hanging. No new queue, detached task or polling loop was introduced.
+
+The unchanged external command then passed **twice**, each running all **3000 iterations** on four Tokio workers (0.12 s and 0.11 s test execution). It was rerun after the full final matrix as well. In-crate stress adds **3000 immediate reader failures** consumed before waiting on the owner and **1000 buffered event then failure** connections, asserting precisely `buffered events -> one matching terminal error -> None`. Additional multithread tests cover reader-task panic, EOF and owner drop, with bounded receive deadlines. Two deterministic unit tests force delayed terminal publication, cancel the waiting recv and check terminal-authority disappearance. These observations directly test the previously failing acceptance order, rather than only inspecting the repair.
+
+The final script observed **46/51/35/40 integration tests**, plus **2 unit tests and 3 doctests in each feature configuration**, with zero failures. Every requested check --all-targets, test, clippy --all-targets -D warnings and fmt --check passed. Strict all-features/no-default docs and runnable injected/native_session examples passed. Local examples were only executed against `target/verification/fake-pi`, never a live Pi installation. No paid model requests were made. No existing source or harness work was removed. Git diff checks passed, license remains undecided, and publish=false is retained.
 
 ### Post-completion feedback-loop observation
 

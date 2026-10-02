@@ -129,17 +129,30 @@ pub struct PiEvents {
     error_delivered: bool,
 }
 impl PiEvents {
+    /// Drains buffered events, then waits for the supervisor's authoritative
+    /// terminal reason. Channel closure can precede terminal publication.
+    /// Cancelling this await does not consume the terminal error.
     pub async fn recv(&mut self) -> Option<Result<Event>> {
         if let Some(e) = self.rx.recv().await {
             return Some(Ok(e.event));
         }
-        if !self.error_delivered {
-            self.error_delivered = true;
-            if let Some(e) = self.terminal.borrow().clone() {
-                return Some(Err(e));
+        if self.error_delivered {
+            return None;
+        }
+        loop {
+            // Clone before awaiting so a watch read guard never blocks finish.
+            let reason = self.terminal.borrow().clone();
+            if let Some(reason) = reason {
+                self.error_delivered = true;
+                return Some(Err(reason));
+            }
+            if self.terminal.changed().await.is_err() {
+                // Defensive fallback if every authority disappears without a
+                // reason. Owner drop normally publishes Closed before aborting.
+                self.error_delivered = true;
+                return Some(Err(Error::Closed));
             }
         }
-        None
     }
 }
 /// Sole background-task owner. Drop closes the connection and aborts all I/O tasks.
@@ -688,4 +701,47 @@ async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
         }
     }
     std::future::pending().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn closed_event_channel_waits_for_publication_and_cancelled_recv_keeps_error() {
+        let (tx, rx) = mpsc::channel(1);
+        let (terminal, terminal_rx) = watch::channel(None);
+        let mut events = PiEvents {
+            rx,
+            terminal: terminal_rx,
+            error_delivered: false,
+        };
+        drop(tx); // Deterministically create the reader/supervisor publication gap.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), events.recv())
+                .await
+                .is_err()
+        );
+        terminal.send_replace(Some(Error::Transport("delayed terminal".into())));
+        assert_eq!(
+            events.recv().await,
+            Some(Err(Error::Transport("delayed terminal".into())))
+        );
+        assert_eq!(events.recv().await, None);
+    }
+
+    #[tokio::test]
+    async fn terminal_authority_disappearing_after_event_close_returns_closed_once() {
+        let (tx, rx) = mpsc::channel(1);
+        let (terminal, terminal_rx) = watch::channel(None);
+        let mut events = PiEvents {
+            rx,
+            terminal: terminal_rx,
+            error_delivered: false,
+        };
+        drop(tx);
+        drop(terminal);
+        assert_eq!(events.recv().await, Some(Err(Error::Closed)));
+        assert_eq!(events.recv().await, None);
+    }
 }

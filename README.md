@@ -75,6 +75,8 @@ Session events generally have **no command ID**. Only direct bash output can rep
 
 `Error` distinguishes Pi rejection, uncertain-outcome timeout, protocol errors, transport errors, process exit, capacity, event overflow, EOF, explicit close, close timeout and forced termination. Known malformed records fail the connection, never become `Unknown`. Unknown event types retain their complete JSON. Rejection text comes from Pi and is not automatically logged. The owner exposes `terminal_reason()` and `wait_terminal()`. Events drain accepted buffered records, then deliver the terminal error once, then return `None`.
 
+Event-channel closure can race ahead of the I/O supervisor's terminal publication. `PiEvents::recv` waits for the authoritative terminal watch after draining the channel, rather than returning premature `None`. This wait is cancellation-safe. Reader-task panic, transport EOF and owner drop all publish terminal reasons, so consumers do not need to call `wait_terminal` first. If the terminal authority itself disappears without publishing, the defensive fallback is one `Closed` error, then `None`.
+
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 
 ## Bounds and backpressure

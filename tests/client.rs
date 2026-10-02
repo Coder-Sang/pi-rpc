@@ -8,6 +8,133 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
 type PeerReader = JsonlReader<ReadHalf<DuplexStream>>;
+struct EventThenFailure {
+    buffered: bool,
+}
+impl tokio::io::AsyncRead for EventThenFailure {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        if self.buffered {
+            self.buffered = false;
+            buf.put_slice(b"{\"type\":\"agent_start\"}\n");
+            std::task::Poll::Ready(Ok(()))
+        } else {
+            std::task::Poll::Ready(Err(std::io::Error::other("event-first transport error")))
+        }
+    }
+}
+async fn bounded_event(events: &mut PiEvents) -> Option<pi_rpc::Result<Event>> {
+    tokio::time::timeout(Duration::from_secs(2), events.recv())
+        .await
+        .expect("terminal delivery must not hang")
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn event_consumer_gets_exactly_one_terminal_before_waiting_for_owner_3000_runs() {
+    for iteration in 0..3000 {
+        let (_, mut events, mut owner) = PiConnection::connect(
+            Transport::new(
+                EventThenFailure { buffered: false },
+                tokio::io::sink(),
+                PI_VERSION,
+            )
+            .unwrap(),
+            Config::default(),
+        )
+        .unwrap();
+        let expected = Error::Transport("event-first transport error".into());
+        // Crucially do not wait_terminal first: that hid the race in earlier tests.
+        assert_eq!(
+            bounded_event(&mut events).await,
+            Some(Err(expected.clone())),
+            "iteration {iteration}"
+        );
+        assert_eq!(terminal(&mut owner).await, expected);
+        assert_eq!(bounded_event(&mut events).await, None);
+        assert_eq!(bounded_event(&mut events).await, None);
+    }
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn buffered_event_precedes_exactly_one_terminal_error_1000_runs() {
+    for iteration in 0..1000 {
+        let (_, mut events, mut owner) = PiConnection::connect(
+            Transport::new(
+                EventThenFailure { buffered: true },
+                tokio::io::sink(),
+                PI_VERSION,
+            )
+            .unwrap(),
+            Config::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            bounded_event(&mut events).await,
+            Some(Ok(Event::Known(KnownEvent::AgentStart))),
+            "iteration {iteration}"
+        );
+        let expected = Error::Transport("event-first transport error".into());
+        assert_eq!(
+            bounded_event(&mut events).await,
+            Some(Err(expected.clone())),
+            "iteration {iteration}"
+        );
+        assert_eq!(terminal(&mut owner).await, expected);
+        assert_eq!(bounded_event(&mut events).await, None);
+    }
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn event_first_eof_and_panicking_reader_do_not_hang_with_live_owner() {
+    struct Panics;
+    impl tokio::io::AsyncRead for Panics {
+        fn poll_read(
+            self: std::pin::Pin<&mut Self>,
+            _: &mut std::task::Context<'_>,
+            _: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            panic!("intentional reader task panic");
+        }
+    }
+    for (transport, expected) in [
+        (
+            Transport::new(tokio::io::empty(), tokio::io::sink(), PI_VERSION).unwrap(),
+            Error::Eof,
+        ),
+        (
+            Transport::new(Panics, tokio::io::sink(), PI_VERSION).unwrap(),
+            Error::Transport("I/O task failed".into()),
+        ),
+    ] {
+        let (_, mut events, mut owner) =
+            PiConnection::connect(transport, Config::default()).unwrap();
+        assert_eq!(
+            bounded_event(&mut events).await,
+            Some(Err(expected.clone()))
+        );
+        assert_eq!(terminal(&mut owner).await, expected);
+        assert_eq!(bounded_event(&mut events).await, None);
+    }
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn owner_drop_wakes_waiting_events_and_preserves_buffered_event_order() {
+    let (client, mut events, owner, _reader, mut writer) = setup(Config::default());
+    send(&mut writer, json!({"type":"agent_start"})).await;
+    // Observe installation of the first event, then wait for another while owner lives.
+    assert_eq!(
+        bounded_event(&mut events).await,
+        Some(Ok(Event::Known(KnownEvent::AgentStart)))
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(10), events.recv())
+            .await
+            .is_err()
+    );
+    drop(owner);
+    assert_eq!(bounded_event(&mut events).await, Some(Err(Error::Closed)));
+    assert_eq!(bounded_event(&mut events).await, None);
+    assert_eq!(client.abort().await, Err(Error::Closed));
+}
 #[tokio::test]
 async fn transport_reader_failure_is_explicit_and_not_protocol_or_eof() {
     struct Broken;
