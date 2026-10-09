@@ -15,9 +15,12 @@ case "$1" in
   *) echo "Pi executable path must be absolute" >&2; exit 2 ;;
 esac
 test -x "$executable"
-# Pin build output explicitly so Cargo config/CARGO_TARGET_DIR cannot select a stale runner.
-cargo build --locked --example release_smoke --target-dir "$PWD/target"
-runner="$PWD/target/debug/examples/release_smoke"
+# Pin both output directory and host target so Cargo config/CARGO_BUILD_TARGET
+# cannot redirect the fresh build while an older runner is executed.
+host=$(rustc -vV | awk '/^host: / { print $2 }')
+test -n "$host"
+cargo build --locked --example release_smoke --target "$host" --target-dir "$PWD/target"
+runner="$PWD/target/$host/debug/examples/release_smoke"
 # Host-provided scratch directory avoids writing in the project or real HOME.
 scratch="${JCODE_SCRATCH_DIR:-${TMPDIR:-/tmp}}"
 isolation=$(mktemp -d "$scratch/pi-rpc-release.XXXXXX")
