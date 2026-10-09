@@ -1,0 +1,112 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_smoke:
+        description: 'Run isolated Pi 1.1.0 read-only smoke (no auth or model requests)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    name: ${{ matrix.os }} / Rust ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: [stable, '1.85.0']
+    steps:
+      # actions/checkout v4.2.2, reviewed upstream immutable commit.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install exact matrix toolchain via rustup
+        env:
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        run: |
+          rustup toolchain install "$TOOLCHAIN" --profile minimal
+          rustup default "$TOOLCHAIN"
+          if [ "$TOOLCHAIN" = stable ]; then
+            rustup component add rustfmt clippy --toolchain stable
+          fi
+          rustc --version
+          cargo --version
+      - name: Stable strict feature matrix and examples
+        if: matrix.toolchain == 'stable'
+        run: bash scripts/verify.sh
+      - name: Exact MSRV feature matrix
+        if: matrix.toolchain == '1.85.0'
+        run: bash scripts/verify-msrv.sh
+      - name: Three-round fake transport stress
+        if: matrix.toolchain == 'stable'
+        run: bash scripts/verify-stress.sh
+      - name: Documentation checks and checker unit tests
+        if: matrix.toolchain == 'stable'
+        run: |
+          python -c 'import sys; assert sys.version_info >= (3, 11), "Python 3.11+ required"'
+          python scripts/check-docs.py
+          python scripts/test_checks.py
+      - name: Build and inspect the actual crate archive
+        if: matrix.toolchain == 'stable'
+        run: |
+          cargo package --locked
+          python scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
+
+  release-smoke:
+    name: Manual Pi 1.1.0 / ${{ matrix.os }}
+    if: github.event_name == 'workflow_dispatch' && inputs.release_smoke
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: pi-linux-x64.tar.gz
+            sha256: 3faa94666cd3849d37af320ff749407d0271b07a9b94f420c87e30866e10e289
+          - os: macos-14
+            artifact: pi-darwin-arm64.tar.gz
+            sha256: 3455b13de35c15a5893cdebc922678199e90a7ce99b06cbc23f37860e90d63c7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install stable Rust via rustup
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      # Digests observed 2026-10-09 from the official GitHub release assets API:
+      # https://api.github.com/repos/earendil-works/pi/releases/tags/v1.1.0
+      # Linux asset 619962805, macOS asset 619962801. Never trust a downloaded checksum alone.
+      - name: Download and verify official release before extraction
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          SHA256: ${{ matrix.sha256 }}
+        run: |
+          directory="$RUNNER_TEMP/pi-release"
+          mkdir -p "$directory"
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            "https://github.com/earendil-works/pi/releases/download/v1.1.0/$ARTIFACT" \
+            --output "$directory/$ARTIFACT"
+          if command -v sha256sum >/dev/null 2>&1; then
+            actual=$(sha256sum "$directory/$ARTIFACT")
+          else
+            actual=$(shasum -a 256 "$directory/$ARTIFACT")
+          fi
+          test "${actual%% *}" = "$SHA256"
+          tar -xzf "$directory/$ARTIFACT" -C "$directory"
+          test -x "$directory/pi/pi"
+      - name: Isolated read-only real Pi smoke
+        run: bash scripts/verify-release.sh "$RUNNER_TEMP/pi-release/pi/pi"

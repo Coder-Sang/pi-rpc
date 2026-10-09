@@ -11,17 +11,24 @@ for configuration in default all none session_only; do
     none) flags=(--no-default-features) ;;
     session_only) flags=(--no-default-features --features session_file) ;;
   esac
-  cargo check ${flags[@]+"${flags[@]}"} --all-targets
-  cargo test ${flags[@]+"${flags[@]}"}
-  cargo clippy ${flags[@]+"${flags[@]}"} --all-targets -- -D warnings
+  cargo check --locked ${flags[@]+"${flags[@]}"} --all-targets
+  cargo test --locked ${flags[@]+"${flags[@]}"}
+  cargo clippy --locked ${flags[@]+"${flags[@]}"} --all-targets -- -D warnings
+  RUSTDOCFLAGS='-D warnings' cargo doc --locked ${flags[@]+"${flags[@]}"} --no-deps
 done
-cargo run --example injected --no-default-features
-cargo run --example injected --all-features
-cargo run --example native_session --no-default-features --features session_file
-cargo run --example native_session --all-features
+cargo run --locked --example injected --no-default-features
+cargo run --locked --example injected --all-features
+cargo run --locked --example native_session --no-default-features --features session_file
+cargo run --locked --example native_session --all-features
 mkdir -p target/verification
-rustc --edition=2024 tests/fixtures/fake_pi.rs -o target/verification/fake-pi
-cargo run --example local -- "$PWD/target/verification/fake-pi"
-cargo run --example local --all-features -- "$PWD/target/verification/fake-pi"
-RUSTDOCFLAGS='-D warnings' cargo doc --all-features --no-deps
-RUSTDOCFLAGS='-D warnings' cargo doc --no-default-features --no-deps
+fake="$PWD/target/verification/fake-pi"
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) fake="${fake}.exe" ;;
+esac
+rustc --edition=2024 tests/fixtures/fake_pi.rs -o "$fake"
+# Native Windows programs need a drive-qualified path, not an MSYS /c/... path.
+if command -v cygpath >/dev/null 2>&1; then
+  fake=$(cygpath -m "$fake")
+fi
+cargo run --locked --example local -- "$fake"
+cargo run --locked --example local --all-features -- "$fake"

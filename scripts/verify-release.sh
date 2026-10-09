@@ -2,6 +2,10 @@
 # Opt-in real release check. No installation, credentials, prompts or paid requests.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+case "$(uname -s)" in
+  Darwin|Linux) ;;
+  *) echo "Real Pi release verification supports macOS/Linux only" >&2; exit 2 ;;
+esac
 if [ "$#" -ne 1 ]; then
   echo "usage: bash scripts/verify-release.sh /absolute/path/to/pi" >&2
   exit 2
@@ -12,7 +16,7 @@ case "$1" in
 esac
 test -x "$executable"
 # Pin build output explicitly so Cargo config/CARGO_TARGET_DIR cannot select a stale runner.
-cargo build --example release_smoke --target-dir "$PWD/target"
+cargo build --locked --example release_smoke --target-dir "$PWD/target"
 runner="$PWD/target/debug/examples/release_smoke"
 # Host-provided scratch directory avoids writing in the project or real HOME.
 scratch="${JCODE_SCRATCH_DIR:-${TMPDIR:-/tmp}}"
