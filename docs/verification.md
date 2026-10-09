@@ -7,8 +7,8 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 - Four-feature offline check/test/strict-clippy matrix: PASS, **222 test executions**, not 222 distinct tests. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.1**: all-features/all-targets check and **59 integration + 2 unit + 3 doctests** PASS. Exact 1.85.0 and other OSes remain untested.
-- Packaging: `cargo package --offline` created and verified the source archive. The project is now licensed under **[Apache-2.0](../LICENSE)**; `publish=false`, repository metadata/CI remain absent, and no publication was attempted.
+- Rust **1.85.0**: exact minimum compiler now passed four-feature all-targets check/test (**222 test executions**); earlier 1.85.1 checks remain recorded below. Linux/Windows runtime remains untested.
+- Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
 
 ## Current release verification: Pi 1.1.0 (2026-10-09)
@@ -162,6 +162,35 @@ At the owner's direction, this project's original code and documentation now use
 - `cargo metadata --offline --no-deps` reports `Apache-2.0` and publication disabled. Actual `cargo package --offline --allow-dirty` built and verified a **36-file** archive; its `LICENSE` matches the working text and its normalized manifest preserves both settings. Cargo's missing-license warning is gone; documentation/homepage/repository warnings remain.
 - Both all-features and no-default-features doctests passed (**6 executions**) and strict rustdoc passed. The first rustdoc attempt rejected the bare `LICENSE` target as an intra-doc identifier; changing the README target to `./LICENSE` resolved it. Local Markdown/link checks and Git whitespace checks passed.
 - No paid request, live Pi configuration change, publication, push or history rewrite was performed. Local packaging log: `pi-apache-package.log` (not distributed).
+
+## Validation supplement (2026-10-09)
+
+The supplement implements reproducible release checks, not a new production-feature claim. Local platform: **macOS aarch64**, stable **rustc 1.97.1**, exact minimum **rustc 1.85.0 (4d91de4e4 2025-02-17)**. Exact 1.85.0 was installed without changing the default toolchain; `verify-msrv.sh` exports `RUSTUP_TOOLCHAIN=1.85.0` so its nested standalone fake compilation also uses the minimum compiler. `Cargo.lock` is unchanged, and resolving Cargo commands use `--locked`.
+
+| Requirement | Executed check / observation | Result and boundary |
+|---|---|---|
+| Four-feature build/test/lint/docs/examples | `CARGO_NET_OFFLINE=true bash scripts/verify.sh` | PASS, **222 executions**, strict Clippy, strict docs in all four configurations and runnable injected/native/fake-local examples |
+| Exact minimum compiler | `CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh` | PASS, four all-targets checks and **222 test executions** on **1.85.0**, not merely the installed `+1.85` alias (1.85.1) |
+| Repeat process/terminal regressions | `CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh` | PASS, three rounds of **29 client + 11 subprocess tests**, **120 executions**, no automatic failure retry; existing 3000/1000 inner loops retained |
+| Windows-specific test compilation | `cargo check --locked --target x86_64-pc-windows-msvc --all-features --all-targets` and standalone fake `rustc --emit=metadata` for that target | PASS cross-check only, not linking or native Windows execution |
+| Windows EOF/drop test implementation | Retained Win32 observation handle, synchronized stdout-close fixture, exactly-one-terminal assertions; Unix counterparts rerun | macOS counterparts PASS; Windows runtime awaits CI. Direct-child ownership only |
+| CI syntax and integration | Six OS/toolchain jobs, pinned checkout/Python actions, timeouts, read-only permissions, stable three-round stress and package checks; `actionlint 1.7.7` | Static check PASS. ShellCheck/Pyflakes unavailable and disabled in that check. Hosted jobs **not run** |
+| Real executable public interface | Isolated `verify-release.sh`, official digest-checked Darwin archive and actual installed npm launcher | Both PASS, **10 read-only RPCs each**, clean exit and unique terminal; no auth, model request or normal agent directory |
+| Local documentation/archive checks | `check-docs.py` with explicit root and `check-package.py` against the actual Cargo-built archive | Explicit root, archive-local targets, official LICENSE hash, original/normalized metadata, source docs inventory and optional clean VCS checks; see final package result |
+| Checker failure paths | `python3 scripts/test_checks.py` | **11 tests PASS**: changed CWD/root without Git, missing link/anchor, malformed fences, missing archive/source files, source/docs drift, wrong license/publish, wrong/dirty VCS, symlink/traversal/duplicate and known sensitive file names |
+
+### Corrections discovered while validating
+
+- The old private `pi-doc-check.py` ignored the supplied unpacked-root argument and always checked the current working directory. Earlier invocations that supplied a package path did **not** establish package-root Markdown validation. New committed tools actually read the specified root/archive; tests prove a deleted target fails even when it exists in the worktree. Current archive documents were separately read and checked before implementation as well.
+- Independent review found `verify-release.sh` pinned the output directory but not Cargo's default build target, allowing a fresh cross-target build followed by an old host runner. It now explicitly selects the rustc host target and its corresponding executable path. Invalid inherited `CARGO_BUILD_TARGET` and alternate `CARGO_TARGET_DIR` are exercised without redirecting the runner.
+- Independent review found initial `--source-root` comparison silently omitted deleted source files. It now requires core source comparison files and a bidirectional docs inventory, with deletion regressions.
+- During shared-workspace delivery, a transient Git index lock prevented one command before any verification ran; it released normally and the command was rerun without removing an active lock. An early clean `cargo package` correctly rejected a concurrently edited script rather than including uncommitted work. Final packaging runs only after commits.
+
+### Remaining external verification
+
+The CI has a default-off manual real-Pi job for Linux x64 and macOS arm64. It pins Pi **1.1.0** official assets and their SHA-256 values: Linux x64 `3faa94666cd3849d37af320ff749407d0271b07a9b94f420c87e30866e10e289`, Darwin arm64 `3455b13de35c15a5893cdebc922678199e90a7ce99b06cbc23f37860e90d63c7`. Linux's digest was read from the official release API, not from an executed Linux acceptance. No Linux/Windows host or configured remote repository was available for actual hosted jobs, and no source upload/push was authorized. Windows real-Pi launching is not yet accepted; the POSIX release script explicitly rejects other platforms. Static CI checks and Windows cross-compilation cannot replace those runtime results.
+
+Local logs: `pi-verify-complete.log`, `pi-verify-stress-final.log`, `pi-verify-msrv-final.log`, `pi-verify-real-release.log`, `pi-verify-real-npm.log` and `pi-verify-package.log`, not distributed. This supplement made no paid request, publication, push, history rewrite or production SDK semantic change.
 
 ## Historical verification: Pi 0.99.2 (2026-10-02)
 

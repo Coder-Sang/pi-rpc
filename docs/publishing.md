@@ -13,7 +13,8 @@ See [verification](verification.md) for dated results and [compatibility](compat
 - [ ] Confirm which email/name should be public. Existing ten commits' author and committer were unified to the configured identity and verified. Future commits use the repository's Git configuration.
 - [ ] Review **Git history**, not only HEAD, for private paths, machine names, email addresses and other sensitive information. Current documentation uses portable paths, but older blobs still contain the original personal absolute paths. The author rewrite intentionally preserved file contents. Further history editing would need an explicit decision and a new backup.
 - [ ] Review package contents and credentials with appropriate tooling. The completed local pattern scan found no matching real credentials, but is not an exhaustive secret audit. Never commit test auth/model configuration copies, sessions or private diagnostics.
-- [ ] Add automated CI for the four feature configurations and the supported OS/toolchain matrix, or prominently retain the current macOS-only verification limits. Exact Rust 1.85.0 is not yet tested; 1.85.1 is.
+- [x] Add CI configuration for all four features on macOS/Linux/Windows with stable and exact Rust 1.85.0, plus default-off macOS/Linux real-release smoke. Configuration is committed and statically validated; actual hosted runs still need a configured repository and authorization.
+- [ ] Obtain passing native Linux/Windows and hosted CI results before broadening platform claims. Exact Rust 1.85.0 four-feature checks/tests now passed locally on macOS aarch64.
 
 ## Before a crates.io release
 
@@ -26,18 +27,22 @@ See [verification](verification.md) for dated results and [compatibility](compat
 
 ```bash
 CARGO_NET_OFFLINE=true bash scripts/verify.sh
-cargo +1.85 check --offline --all-features --all-targets
-cargo +1.85 test --offline --all-features
-cargo package --offline --list
-cargo package --offline
+CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh
+CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
+python3 scripts/test_checks.py
+python3 scripts/check-docs.py .
+cargo package --locked --offline --list
+cargo package --locked --offline
+python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
+python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
 ```
 
-`--offline` requires dependencies/toolchains already present locally. `+1.85` selects the installed Rust 1.85-series toolchain; record its actual `rustc --version`, rather than assuming it is exactly 1.85.0.
+`--offline` requires dependencies/toolchains already present locally. The MSRV script requires explicitly installed **1.85.0** and pins nested `rustc` calls too. Python checks require **3.11+** (CI pins 3.12). Package checks inspect archive-internal targets; source/manifest/docs comparison and clean VCS matching are separate assertions, not a general secret audit.
 
 ## What the current checks establish
 
 - Normal build/test/lint/docs workflow passed in four feature configurations, with 222 test executions, not 222 independent tests.
-- Rust 1.85.1 all-features/all-targets check and 59 integration, 2 unit and 3 documentation tests passed.
+- Exact Rust 1.85.0 passed all four feature configurations' all-targets check and tests, with 222 executions. Earlier Rust 1.85.1 all-features checks remain historical evidence.
 - Local source packaging and its verification build passed. The earlier pre-license package check warned about missing licensing/repository metadata. Apache-2.0 now resolves the licensing metadata warning; public repository/documentation metadata remains to be configured. Packaging is not permission or proof of registry acceptance.
 - Every normal RPC command name has real Pi execution evidence. Opus 4.6 supplied real queue/tool/active-abort/manual-compaction evidence. Retry/automatic-compaction evidence uses real Pi with synthetic upstream faults/usage and an extension summary, not production provider incidents.
 - No Linux/Windows or remote-vendor deployment was verified. No publication, remote push or global Pi installation was performed.

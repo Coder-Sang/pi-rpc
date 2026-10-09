@@ -2,7 +2,7 @@
 
 Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. Licensed under **[Apache-2.0](./LICENSE)**. This license covers this project's original code and documentation, not separately licensed dependencies or the Pi executable. `publish=false` remains set. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
-Declared minimum Rust: **1.85** (edition 2024). Checks and tests have passed on **1.85.1** and 1.97.1 on macOS aarch64; exact 1.85.0 and Linux/Windows have not been verified. Pi is a separately supplied executable, not installed by this crate.
+Declared minimum Rust: **1.85** (edition 2024). Four-feature checks and tests have passed on exact **1.85.0** and 1.97.1 on macOS aarch64; earlier 1.85.1 checks also passed. Linux/Windows runtime and hosted CI results remain unverified. Pi is a separately supplied executable, not installed by this crate.
 
 ## Features and ownership
 
@@ -119,7 +119,20 @@ Required-but-nullable fields distinguish absence from explicit null: cycle respo
 
 ## Development
 
-See `docs/verification.md` for actual feature-matrix commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
+See [verification](docs/verification.md#validation-supplement-2026-10-09) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
+
+```bash
+CARGO_NET_OFFLINE=true bash scripts/verify.sh       # Four features, strict lint/docs, examples
+CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh  # Requires installed exact Rust 1.85.0
+CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh # Three rounds, no failure retries
+python3 scripts/test_checks.py                     # Python 3.11+ required
+python3 scripts/check-docs.py .                    # Explicit root, no Git dependency
+cargo package --locked --offline
+python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
+python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
+```
+
+Offline mode requires previously downloaded dependencies and toolchains. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. The committed CI defines six OS/toolchain combinations and an opt-in macOS/Linux real-release smoke, but adding the workflow is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
 
 For opt-in, non-paid acceptance against a real **1.1.0** executable, run `bash scripts/verify-release.sh /absolute/path/to/pi`. It executes ten read-only RPCs through this crate and verifies orderly exit plus terminal-event delivery. The script clears inherited environment variables, uses temporary HOME/agent/work directories, and disables sessions, tools, MCP, extensions, skills, templates and themes. It does not install Pi or submit a prompt. The normal `verify.sh` remains fake-only and makes no Pi/model requests. Use `CARGO_NET_OFFLINE=true bash scripts/verify.sh` to forbid Cargo network access; plain `bash scripts/verify.sh` may download dependencies.
 
