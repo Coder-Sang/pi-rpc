@@ -194,6 +194,12 @@ The CI has a default-off manual real-Pi job for Linux x64 and macOS arm64. It pi
 
 After the implementation and documentation commits, `cargo package --locked --offline` built and verified a **44-file** archive. `check-package.py --source-root . --expected-commit <full-HEAD>` passed against that actual archive, including its clean VCS commit, exact official LICENSE, original/normalized metadata and source-document inventory. `check-docs.py target/package/pi-rpc-0.1.0` then passed **4 Markdown documents / 22 local links and anchors** from Cargo's actual unpacked package directory without Git or worktree fallback. No cache/private session/auth files were present in the inspected package file list; this is not an exhaustive secret scan.
 
+### Packaged workflow acceptance
+
+The actual **`bd976a2`** archive was also exercised from Cargo's unpacked package root, not the development worktree: `verify.sh`, `verify-msrv.sh`, three-round `verify-stress.sh`, all 11 checker tests, explicit-root document checks and the official Pi ten-read-only-RPC smoke all completed **exit 0**. This checks that the shipped scripts, Rust fixtures, examples and README inclusion work together without a `.git` dependency. It does not add Linux/Windows runtime evidence.
+
+The first extra unpacked run failed during compilation with **No space left on device**. Only that run's generated package-local build cache was cleaned. The full workflow then passed with `CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0`, `CARGO_BUILD_JOBS=2` and offline dependencies. This is an explicit resource adjustment, not a silent test retry or timeout relaxation. Both failure and successful rerun logs are retained locally as `pi-verify-packaged-acceptance.log` and `pi-verify-packaged-acceptance-lowdisk.log`. The subsequent documentation-only commit and rebuilt archive were rechecked for source/document/VCS consistency.
+
 Local logs: `pi-verify-complete.log`, `pi-verify-stress-final.log`, `pi-verify-msrv-final.log`, `pi-verify-real-release.log`, `pi-verify-real-npm.log` and `pi-verify-package.log`, not distributed. This supplement made no paid request, publication, push, history rewrite or production SDK semantic change.
 
 ## Historical verification: Pi 0.99.2 (2026-10-02)
