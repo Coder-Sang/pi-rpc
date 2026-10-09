@@ -190,6 +190,10 @@ The supplement implements reproducible release checks, not a new production-feat
 
 The CI has a default-off manual real-Pi job for Linux x64 and macOS arm64. It pins Pi **1.1.0** official assets and their SHA-256 values: Linux x64 `3faa94666cd3849d37af320ff749407d0271b07a9b94f420c87e30866e10e289`, Darwin arm64 `3455b13de35c15a5893cdebc922678199e90a7ce99b06cbc23f37860e90d63c7`. Linux's digest was read from the official release API, not from an executed Linux acceptance. No Linux/Windows host or configured remote repository was available for actual hosted jobs, and no source upload/push was authorized. Windows real-Pi launching is not yet accepted; the POSIX release script explicitly rejects other platforms. Static CI checks and Windows cross-compilation cannot replace those runtime results.
 
+### Final package result
+
+After the implementation and documentation commits, `cargo package --locked --offline` built and verified a **44-file** archive. `check-package.py --source-root . --expected-commit <full-HEAD>` passed against that actual archive, including its clean VCS commit, exact official LICENSE, original/normalized metadata and source-document inventory. `check-docs.py target/package/pi-rpc-0.1.0` then passed **4 Markdown documents / 22 local links and anchors** from Cargo's actual unpacked package directory without Git or worktree fallback. No cache/private session/auth files were present in the inspected package file list; this is not an exhaustive secret scan.
+
 Local logs: `pi-verify-complete.log`, `pi-verify-stress-final.log`, `pi-verify-msrv-final.log`, `pi-verify-real-release.log`, `pi-verify-real-npm.log` and `pi-verify-package.log`, not distributed. This supplement made no paid request, publication, push, history rewrite or production SDK semantic change.
 
 ## Historical verification: Pi 0.99.2 (2026-10-02)
