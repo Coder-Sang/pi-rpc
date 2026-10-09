@@ -1,6 +1,6 @@
 # pi-rpc
 
-Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 0.99.2**, official commit [`005af57d88ee23b33778f343a9595b32e67ff788`](https://github.com/earendil-works/pi/tree/005af57d88ee23b33778f343a9595b32e67ff788). This is a new, unpublished library. **License undecided**: no LICENSE or license grant has been invented. See [source coverage and compatibility](docs/compatibility.md) and [verification](docs/verification.md).
+Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. **License undecided**: no LICENSE or license grant has been invented. See [source coverage and compatibility](docs/compatibility.md) and [verification](docs/verification.md).
 
 ## Features and ownership
 
@@ -59,7 +59,7 @@ consumer.await.expect("event task");
 # Ok(()) }
 ```
 
-The executable is probed with `--version` before `--mode rpc`; only trimmed `0.99.2` is accepted. Startup timeout and probe output are bounded. The executable inherits the environment. This crate never reads or edits Pi/global configuration or credentials, but Pi itself may use its configured environment/resources. CLI options, isolation and access policy belong to the host. No PTY is ever allocated.
+The executable is probed with `--version` before `--mode rpc`; only trimmed `1.1.0` is accepted. Startup timeout and probe output are bounded. The executable inherits the environment. This crate never reads or edits Pi/global configuration or credentials, but Pi itself may use its configured environment/resources. CLI options, isolation and access policy belong to the host. No PTY is ever allocated.
 
 `examples/local.rs` accepts an optional executable path argument, enabling the same example to run against the test fake rather than a configured Pi installation.
 
@@ -71,7 +71,7 @@ Every command has a typed convenience method, including `prompt_with`, `steer`, 
 
 `PromptDisposition::{Started, Queued, Handled}` and `QueuedInputDisposition::{Queued, Handled}` mean acceptance, **not completion**. Handled input need not start a run. New/switch/fork/clone results retain `cancelled`; success is not an unconditional session change.
 
-Session events generally have **no command ID**. Only direct bash output can repeat its originating ID. There are no per-prompt event streams or `prompt_and_wait` convenience that pretends unrelated session events belong to a prompt. `agent_end` is a low-level run boundary, not `agent_settled`. Settlement is a session-run continuation boundary, **not evidence the queues are empty**. Observe `queue_update` and `get_state` separately.
+Session events generally have **no command ID**. Only direct bash output can repeat its originating ID. There are no per-prompt event streams or `prompt_and_wait` convenience that pretends unrelated session events belong to a prompt. `agent_end` is a low-level run boundary, not `agent_settled`. `agent_settled.aborted` reports whether that run ended because it was aborted. Settlement is a session-run continuation boundary, **not evidence the queues are empty**. Optional `durationMs` on tool completion and native assistant/tool-result messages preserves Pi's monotonic execution timing. Observe `queue_update` and `get_state` separately.
 
 `Error` distinguishes Pi rejection, uncertain-outcome timeout, protocol errors, transport errors, process exit, capacity, event overflow, EOF, explicit close, close timeout and forced termination. Known malformed records fail the connection, never become `Unknown`. Unknown event types retain their complete JSON. Rejection text comes from Pi and is not automatically logged. The owner exposes `terminal_reason()` and `wait_terminal()`. Events drain accepted buffered records, then deliver the terminal error once, then return `None`.
 
@@ -113,8 +113,10 @@ There is **no `import_history` RPC**. With `session_file`, `SessionFile` builds/
 
 Only caller-supplied bytes are parsed; there is no automatic session discovery, OpenAI/Anthropic conversion or history-as-prompt. Delivering bytes to a remote sandbox, selecting `--session`, and filesystem permissions/atomic writes are the host's job. See `examples/native_session.rs`.
 
-Required-but-nullable fields distinguish absence from explicit null: cycle response `data`, last-assistant `text`, entries/tree `leafId`, native `parentId` and context-edit `replacement`. Tool `args`, `partialResult` and `result` accept arbitrary JSON including null, but missing properties are protocol errors. Native timestamps are carried verbatim and checked for presence, not calendrical correctness. The caller owns timestamp generation and valid Pi-native identifiers.
+Required-but-nullable fields distinguish absence from explicit null: cycle response `data`, entries/tree `leafId`, native `parentId` and context-edit `replacement`. Tool `args`, `partialResult` and `result` accept arbitrary JSON including null, but missing properties are protocol errors. Native timestamps are carried verbatim and checked for presence, not calendrical correctness. `get_last_assistant_text` accepts omitted `text` as well as null because real Pi omits it for an empty session, despite its TypeScript response declaration. The caller owns timestamp generation and valid Pi-native identifiers.
 
 ## Development
 
 See `docs/verification.md` for actual feature-matrix commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
+
+For opt-in, non-paid acceptance against a real **1.1.0** executable, run `bash scripts/verify-release.sh /absolute/path/to/pi`. It executes ten read-only RPCs through this crate and verifies orderly exit plus terminal-event delivery. The script clears inherited environment variables, uses temporary HOME/agent/work directories, and disables sessions, tools, MCP, extensions, skills, templates and themes. It does not install Pi or submit a prompt. The normal `verify.sh` remains offline/fake-only.

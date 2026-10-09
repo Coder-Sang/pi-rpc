@@ -128,7 +128,7 @@ async fn verify(options: &ProcessOptions) -> Result<()> {
     }
 }
 impl PiProcess {
-    /// Runs only `--version` to verify 0.99.2 before launching `--mode rpc`.
+    /// Runs only `--version` to verify 1.1.0 before launching `--mode rpc`.
     pub async fn spawn(options: ProcessOptions) -> Result<(PiClient, PiEvents, Self)> {
         verify(&options).await?;
         let mut child = base_command(&options)

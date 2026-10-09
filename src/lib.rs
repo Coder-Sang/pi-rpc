@@ -1,4 +1,4 @@
-//! Async, bounded Pi 0.99.2 RPC. See the README for lifecycle and gateway policy.
+//! Async, bounded Pi 1.1.0 RPC. See the README for lifecycle and gateway policy.
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 pub mod client;
@@ -15,8 +15,8 @@ pub use client::{Config, PiClient, PiConnection, PiEvents, UiPolicy};
 pub use subprocess::{PiProcess, ProcessOptions};
 pub use transport::Transport;
 
-pub const PI_VERSION: &str = "0.99.2";
-pub const SOURCE_COMMIT: &str = "005af57d88ee23b33778f343a9595b32e67ff788";
+pub const PI_VERSION: &str = "1.1.0";
+pub const SOURCE_COMMIT: &str = "abe508e1b89912adde45528136c3221eb69acdd7";
 
 /// Terminal errors are also delivered to every outstanding command and the owner.
 /// Error messages never include inbound records or submitted prompts.

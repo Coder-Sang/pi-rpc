@@ -6,11 +6,6 @@ fn required_nullable_rpc_and_native_fields_distinguish_absence_from_null() {
         ("cycle_model", Value::Null, None),
         ("cycle_thinking_level", Value::Null, None),
         (
-            "get_last_assistant_text",
-            json!({"text":null}),
-            Some("text"),
-        ),
-        (
             "get_entries",
             json!({"entries":[],"leafId":null}),
             Some("leafId"),
@@ -35,7 +30,44 @@ fn required_nullable_rpc_and_native_fields_distinguish_absence_from_null() {
     assert!(serde_json::from_value::<SessionEntry>(entry).is_err());
     assert!(serde_json::from_value::<Entries>(json!({"entries":[]})).is_err());
     assert!(serde_json::from_value::<Tree>(json!({"tree":[]})).is_err());
-    assert!(serde_json::from_value::<LastAssistantText>(json!({})).is_err());
+    assert_eq!(
+        serde_json::from_value::<LastAssistantText>(json!({}))
+            .unwrap()
+            .text,
+        None
+    );
+}
+#[test]
+fn last_assistant_text_accepts_empty_session_omission_but_rejects_bad_types() {
+    for data in [json!({}), json!({"text":null}), json!({"text":"answer"})] {
+        let record = decode_record(json!({"type":"response","command":"get_last_assistant_text","success":true,"data":data})).unwrap();
+        let Record::Response(response) = record else {
+            panic!("expected response")
+        };
+        assert_eq!(
+            response.decode::<LastAssistantText>().unwrap().text,
+            data.get("text").and_then(Value::as_str).map(str::to_owned)
+        );
+    }
+    for data in [
+        Value::Null,
+        json!([]),
+        json!([null]),
+        json!(42),
+        json!("answer"),
+        json!({"text":42}),
+        json!({"text":false}),
+        json!({"text":[]}),
+        json!({"text":{}}),
+    ] {
+        assert!(decode_record(json!({"type":"response","command":"get_last_assistant_text","success":true,"data":data})).is_err());
+    }
+    assert!(
+        decode_record(
+            json!({"type":"response","command":"get_last_assistant_text","success":true})
+        )
+        .is_err()
+    );
 }
 #[test]
 fn required_open_tool_payloads_allow_null_but_reject_absence_and_bad_nested_updates() {
@@ -134,6 +166,86 @@ fn user() -> Value {
 fn assistant() -> Value {
     json!({"role":"assistant","content":[],"api":"provider-native","provider":"future-provider","model":"future-model","usage":usage(),"stopReason":"stop","timestamp":123,"opaque":{"provider":true}})
 }
+fn tool_result() -> Value {
+    json!({"role":"toolResult","content":[],"toolCallId":"t","toolName":"open","isError":false,"timestamp":123,"details":{"opaque":true}})
+}
+#[test]
+fn settled_requires_boolean_aborted() {
+    for aborted in [false, true] {
+        let wire = json!({"type":"agent_settled","aborted":aborted});
+        assert_eq!(
+            decode_record(wire.clone()).unwrap(),
+            Record::Event(Event::Known(KnownEvent::AgentSettled { aborted }))
+        );
+        assert_eq!(
+            serde_json::to_value(KnownEvent::AgentSettled { aborted }).unwrap(),
+            wire
+        );
+    }
+    for wire in [
+        json!({"type":"agent_settled"}),
+        json!({"type":"agent_settled","aborted":null}),
+        json!({"type":"agent_settled","aborted":"false"}),
+        json!({"type":"agent_settled","aborted":0}),
+    ] {
+        assert!(matches!(decode_record(wire), Err(Error::Protocol(_))));
+    }
+}
+#[test]
+fn tool_duration_is_optional_numeric_and_keeps_open_payloads() {
+    let base = json!({"type":"tool_execution_end","toolCallId":"t","toolName":"open","result":{"durationMs":"opaque"},"isError":false,"parentToolCallId":"p","extensionField":{"arbitrary":true}});
+    for duration in [None, Some(json!(0)), Some(json!(12.5))] {
+        let mut wire = base.clone();
+        if let Some(duration) = duration {
+            wire["durationMs"] = duration;
+        }
+        let Record::Event(Event::Known(event)) = decode_record(wire.clone()).unwrap() else {
+            panic!("expected known event")
+        };
+        assert!(
+            matches!(&event, KnownEvent::ToolExecutionEnd { duration_ms, extra, .. } if *duration_ms == wire.get("durationMs").and_then(Value::as_f64) && extra["extensionField"] == wire["extensionField"] && !extra.contains_key("durationMs"))
+        );
+        let encoded = serde_json::to_value(event).unwrap();
+        if let Some(duration) = wire.get("durationMs").and_then(Value::as_f64) {
+            wire["durationMs"] = json!(duration);
+        }
+        assert_eq!(encoded, wire);
+    }
+    for bad in [Value::Null, json!("12"), json!(true), json!([]), json!({})] {
+        let mut wire = base.clone();
+        wire["durationMs"] = bad;
+        assert!(serde_json::from_value::<KnownEvent>(wire.clone()).is_err());
+        assert!(matches!(decode_record(wire), Err(Error::Protocol(_))));
+    }
+}
+#[test]
+fn native_message_durations_survive_rpc_and_session_entries_but_reject_bad_types() {
+    for base in [assistant(), tool_result()] {
+        for duration in [None, Some(json!(0)), Some(json!(42.25))] {
+            let mut wire = base.clone();
+            if let Some(duration) = duration {
+                wire["durationMs"] = duration;
+            }
+            let message: Message = serde_json::from_value(wire.clone()).unwrap();
+            assert_eq!(serde_json::to_value(message).unwrap(), wire);
+            assert!(decode_record(json!({"type":"response","command":"get_messages","success":true,"data":{"messages":[wire.clone()]}})).is_ok());
+            let entry =
+                json!({"type":"message","id":"e","parentId":null,"timestamp":"iso","message":wire});
+            let decoded: SessionEntry = serde_json::from_value(entry.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), entry);
+        }
+        for bad in [Value::Null, json!("42"), json!(false), json!([]), json!({})] {
+            let mut wire = base.clone();
+            wire["durationMs"] = bad;
+            assert!(serde_json::from_value::<Message>(wire.clone()).is_err());
+            assert!(decode_record(json!({"type":"message_end","message":wire.clone()})).is_err());
+            assert!(decode_record(json!({"type":"response","command":"get_messages","success":true,"data":{"messages":[wire.clone()]}})).is_err());
+            assert!(serde_json::from_value::<SessionEntry>(json!({"type":"message","id":"e","parentId":null,"timestamp":"iso","message":wire})).is_err());
+        }
+    }
+    let extension = json!({"role":"futureRole","durationMs":"opaque"});
+    assert!(serde_json::from_value::<Message>(extension).is_ok());
+}
 #[test]
 fn every_command_round_trips_with_correct_wire_name_and_casing() {
     let fixtures = vec![
@@ -184,7 +296,7 @@ fn all_known_event_shapes_decode_and_required_fields_are_not_unknown() {
     let fixtures = vec![
         json!({"type":"agent_start"}),
         json!({"type":"agent_end","messages":[user()],"willRetry":false}),
-        json!({"type":"agent_settled"}),
+        json!({"type":"agent_settled","aborted":false}),
         json!({"type":"turn_start"}),
         json!({"type":"turn_end","message":assistant(),"toolResults":[]}),
         json!({"type":"message_start","message":user()}),

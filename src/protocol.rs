@@ -5,6 +5,13 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 pub type Extra = Map<String, Value>;
+// Optional TypeScript numbers may be absent, but explicit null is not a number.
+fn optional_number<'de, D>(d: D) -> std::result::Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    f64::deserialize(d).map(Some)
+}
 // deserialize_with (without default) makes absence invalid while allowing null.
 fn required_nullable<'de, D, T>(d: D) -> std::result::Result<Option<T>, D::Error>
 where
@@ -238,6 +245,9 @@ fn validate_message(role: &str, f: &Extra) -> std::result::Result<(), String> {
             field::<f64>(f, "tokensBefore")?;
         }
         _ => {}
+    }
+    if matches!(role, "assistant" | "toolResult") && f.contains_key("durationMs") {
+        field::<f64>(f, "durationMs")?;
     }
     Ok(())
 }
@@ -543,7 +553,8 @@ pub struct ForkMessages {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LastAssistantText {
-    #[serde(deserialize_with = "required_nullable")]
+    // rpc-mode omits an undefined result in empty sessions despite the nullable wire type.
+    #[serde(default)]
     pub text: Option<String>,
 }
 
@@ -599,7 +610,15 @@ impl Response {
             "get_fork_messages" => check!(ForkMessages),
             "get_entries" => check!(Entries),
             "get_tree" => check!(Tree),
-            "get_last_assistant_text" => check!(LastAssistantText),
+            "get_last_assistant_text" => {
+                if self.data.as_ref().is_some_and(Value::is_object) {
+                    check!(LastAssistantText)
+                } else {
+                    Err(Error::Protocol(
+                        "invalid last assistant text response".into(),
+                    ))
+                }
+            }
             "get_messages" => check!(Messages),
             "get_commands" => check!(Commands),
             "abort"
@@ -803,7 +822,9 @@ pub enum KnownEvent {
         messages: Vec<Message>,
         will_retry: bool,
     },
-    AgentSettled,
+    AgentSettled {
+        aborted: bool,
+    },
     TurnStart,
     #[serde(rename_all = "camelCase")]
     TurnEnd {
@@ -846,6 +867,12 @@ pub enum KnownEvent {
         tool_name: String,
         result: Value,
         is_error: bool,
+        #[serde(
+            default,
+            deserialize_with = "optional_number",
+            skip_serializing_if = "Option::is_none"
+        )]
+        duration_ms: Option<f64>,
         parent_tool_call_id: Option<String>,
         #[serde(flatten)]
         extra: Extra,
@@ -1056,7 +1083,6 @@ pub fn decode_record(v: Value) -> Result<Record> {
             }
             let required = match command {
                 "get_entries" | "get_tree" => Some("leafId"),
-                "get_last_assistant_text" => Some("text"),
                 _ => None,
             };
             if let Some(key) = required {

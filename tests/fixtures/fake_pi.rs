@@ -20,9 +20,9 @@ fn main() {
         println!(
             "{}",
             if name.contains("wrong-version") {
-                "0.99.1"
-            } else {
                 "0.99.2"
+            } else {
+                "1.1.0"
             }
         );
         return;

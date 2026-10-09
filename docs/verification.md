@@ -1,5 +1,51 @@
 # Actual verification results
 
+Current target: **Pi 1.1.0**, upgraded on 2026-10-09. See the current-release results below. The 2026-10-02 observations retained later in this file apply to the previous Pi 0.99.2 target, not the newly pinned release.
+
+## Current release verification: Pi 1.1.0 (2026-10-09)
+
+Verified on macOS aarch64 with rustc/cargo 1.97.1. The target is the official `v1.1.0` release commit `abe508e1b89912adde45528136c3221eb69acdd7`, resolved via GitHub's latest stable release API and tag ref. Fixed source archives were compared to the former 0.99.2 commit, with current hashes in [compatibility.md](compatibility.md).
+
+### Actual complete matrix
+
+`CARGO_NET_OFFLINE=true bash scripts/verify.sh` returned **exit 0**, both before and after final response-shape tightening. The final combined matrix and real-release command completed at 2026-10-09 03:07 UTC, exit 0. Full local scratch logs: `pi-upgrade/final-verification.log` and `pi-upgrade/final-release.log`.
+
+| Features | check --all-targets | Integration tests | Unit / doctests | clippy --all-targets -D warnings |
+|---|---|---|---|---|
+| default | PASS | 53 passed | 2 / 3 passed | PASS |
+| --all-features | PASS | 59 passed | 2 / 3 passed | PASS |
+| --no-default-features | PASS | 42 passed | 2 / 3 passed | PASS |
+| --no-default-features --features session_file | PASS | 48 passed | 2 / 3 passed | PASS |
+
+**222 passing test executions across four configurations**, not 222 distinct tests. No failures or lint warnings. Crate/fake-fixture formatting, injected/native/fake-local examples and strict all-features/no-default rustdoc all passed. The added release_smoke example compiled in both subprocess-enabled all-targets checks.
+
+### Upgrade-specific coverage and observed improvement
+
+- Required boolean `agent_settled.aborted`: false/true round trips, missing/null/wrong types fail. Client tests observe both settlement values without inventing per-prompt correlation.
+- Optional numeric tool `durationMs`: omitted/zero/fractional values, no null/wrong types, no accidental swallowing into extension JSON. Client receives the typed timing field, and malformed values terminate explicitly with Protocol.
+- Native assistant/tool-result `durationMs`: preserves fields through RPC/native entries and complete SessionFile encode/parse, rejects malformed numeric fields but does not constrain unknown-role or nested open payloads.
+- Former Pi 0.99.2 local executable is rejected by the real fake-process version probe; current 1.1.0 fake is accepted. Existing declared-version and configuration rejection checks remain passing.
+- Real empty-session `get_last_assistant_text` initially failed the new release smoke with `Protocol("malformed known record: response")`. Isolated raw RPC observation showed `data:{}`. After accepting omitted text as None, the exact same real-release smoke passed. Protocol/client regression accepts omitted/null/string text, rejects wrong text types, missing data and non-object data. Adding array/null/scalar boundaries first reproduced Serde's permissive array-to-struct decoding, then passed after the explicit response object guard. Required tree/native nullable fields stay strict.
+- Existing bounded queues, transport errors, process-exit/EOF races and 3000/1000-iteration terminal delivery regressions still pass in the complete matrix.
+
+### Real official release acceptance, no model request
+
+Downloaded only to scratch, not installed globally: official `pi-darwin-arm64.tar.gz`, SHA-256 **3455b13de35c15a5893cdebc922678199e90a7ce99b06cbc23f37860e90d63c7**, matched the release API digest. Executed:
+
+```bash
+CARGO_NET_OFFLINE=true bash scripts/verify-release.sh /absolute/path/to/release/pi/pi
+```
+
+**Actual output:** `Pi 1.1.0: 10 read-only RPCs passed; clean exit and terminal delivery verified`.
+
+Through the public PiProcess/PiClient API, the executable's exact --version probe succeeded, then get_state, get_messages, get_available_models, get_available_thinking_levels, get_session_stats, get_commands, get_entries, get_tree, get_last_assistant_text and get_fork_messages all decoded. The fresh session had streaming=false, pending=0, no messages/assistant text. Close returned ProcessExit(Some(0)); the event consumer received the same terminal exactly once then None.
+
+The script uses env -i, fresh temporary HOME/PI_CODING_AGENT_DIR/cwd/TMPDIR, disables session persistence/tools/extensions/MCP/skills/templates/themes, and submits no prompt/bash/model request. No existing credentials/global settings were read or modified. It pins Cargo build and runner output to the same explicit target directory. For npm shebang compatibility it exposes only the resolved Node executable via a temporary symlink, not the host PATH. Independent review identified both target-dir drift and missing non-system Node before this correction. After the fix, direct binary and temporary `/usr/bin/env node` wrapper smoke runs passed with CARGO_TARGET_DIR set to an alternate scratch path; that alternate path was not created. The wrapper test is synthetic Node-launch coverage, not acceptance of an installed npm package.
+
+Remaining boundaries: paid/live prompt, tool timing/abort generation were not exercised against a model (new fields are covered by wire/client/native regressions); no remote vendor deployment, Linux/Windows or Rust 1.85 MSRV verification. License remains undecided, publish=false, no push/publication. The historical independent external harness was not rerun during this upgrade; its in-crate stress coverage was rerun.
+
+## Historical verification: Pi 0.99.2 (2026-10-02)
+
 Completed 2026-10-02 on macOS aarch64, in `/Users/sang/Com/Github/pi-rpc`.
 Toolchain: `rustc 1.97.1 (8bab26f4f 2026-07-14)`, `cargo 1.97.1 (c980f4866 2026-06-30)`.
 No real Pi process or paid model request was used. The local executable tests/example use `tests/fixtures/fake_pi.rs`, compiled with rustc. No credentials/global configuration were read, printed or modified, and nothing was pushed, published or remotely created. Implementation was performed by the current agent without changing provider/model or spawning another implementation agent.

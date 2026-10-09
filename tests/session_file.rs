@@ -3,6 +3,46 @@ use pi_rpc::{Error, protocol::*, session_file::*};
 use serde_json::{Value, json};
 const ISO: &str = "2026-10-02T00:00:00.000Z";
 #[test]
+fn native_session_message_durations_are_preserved_and_strictly_validated() {
+    let usage = json!({"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}});
+    for base in [
+        json!({"role":"assistant","content":[],"api":"open","provider":"azure","model":"m","usage":usage,"stopReason":"stop","timestamp":1,"opaque":true}),
+        json!({"role":"toolResult","content":[],"toolCallId":"t","toolName":"open","isError":false,"timestamp":1,"details":{"durationMs":"opaque"}}),
+    ] {
+        for duration in [None, Some(json!(0)), Some(json!(8.25))] {
+            let mut message = base.clone();
+            if let Some(duration) = duration {
+                message["durationMs"] = duration;
+            }
+            let mut file = SessionFile::new("s", ISO, "/p");
+            add(
+                &mut file,
+                "e",
+                None,
+                json!({"type":"message","message":message.clone()}),
+            );
+            let bytes = file.encode(SessionLimits::default()).unwrap();
+            let parsed = SessionFile::parse(&bytes, SessionLimits::default()).unwrap();
+            let EntryData::Message { message: decoded } = &parsed.entries[0].data else {
+                panic!("expected message")
+            };
+            assert_eq!(serde_json::to_value(decoded).unwrap(), message);
+            assert_eq!(parsed.encode(SessionLimits::default()).unwrap(), bytes);
+        }
+        for bad in [Value::Null, json!("8"), json!(false), json!([]), json!({})] {
+            let mut message = base.clone();
+            message["durationMs"] = bad;
+            let file = SessionFile::new("s", ISO, "/p");
+            let mut bytes = file.encode(SessionLimits::default()).unwrap();
+            bytes.extend(pi_rpc::codec::encode(&json!({"type":"message","id":"e","parentId":null,"timestamp":ISO,"message":message}), 4096).unwrap());
+            assert!(matches!(
+                SessionFile::parse(&bytes, SessionLimits::default()),
+                Err(Error::Protocol(_))
+            ));
+        }
+    }
+}
+#[test]
 fn native_parser_rejects_absent_parent_and_context_replacement_but_accepts_null() {
     let mut f = SessionFile::new("s", ISO, "/p");
     f.append_message(
