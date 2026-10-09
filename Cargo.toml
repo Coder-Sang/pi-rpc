@@ -38,3 +38,19 @@ required-features = ["subprocess"]
 [[example]]
 name = "model_smoke"
 required-features = ["subprocess"]
+
+[[example]]
+name = "rpc_extension_smoke"
+required-features = ["subprocess"]
+
+[[example]]
+name = "rpc_state_smoke"
+required-features = ["subprocess"]
+
+[[example]]
+name = "rpc_live_smoke"
+required-features = ["subprocess"]
+
+[[example]]
+name = "rpc_session_smoke"
+required-features = ["subprocess"]

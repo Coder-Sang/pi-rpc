@@ -71,6 +71,55 @@ The cost is Pi's reported estimate, not an independently observed invoice. Publi
 
 This now exercises real model generation, assistant timing and non-aborted settlement, beyond the earlier read-only release smoke. Real tool timing, interrupted/aborted runs, retries, remote vendor deployment, Linux/Windows and Rust 1.85 remain outside this observation.
 
+## Broader real RPC acceptance (2026-10-09)
+
+Executed the installed **Pi 1.1.0** on macOS aarch64 through the public SDK, following the user's request to test the remaining RPCs. Across the examples below **33/33 command names now have real-Pi execution evidence**. This is not 33 fully exercised feature state machines or all 24 events observed from Anthropic. Retry and automatic compaction use a real Pi process with synthetic provider fault/usage injection, explicitly separated from hosted-model evidence.
+
+### Per-command acceptance map
+
+| RPC commands | Actual effect and acceptance source |
+|---|---|
+| `get_state`, `get_messages`, `get_available_models`, `get_available_thinking_levels`, `get_session_stats`, `get_commands`, `get_entries`, `get_tree`, `get_last_assistant_text`, `get_fork_messages` (10) | Existing release smoke plus new state/session/live tests. Empty and populated histories, selected model identity, nonempty native trees, every-entry exclusive `since` suffix, user fork text and final assistant marker. Extension test confirms discovered explicit slash command. |
+| `set_model`, `cycle_model`, `set_thinking_level`, `cycle_thinking_level`, `set_steering_mode`, `set_follow_up_mode` (6) | `rpc_state_smoke`: actual non-null model cycle followed by matching state, restore Opus, thinking cycle followed by matching state, both queue-mode values followed by matching state. Multi-input batching under each mode is not separately tested. |
+| `set_auto_compaction`, `set_auto_retry`, `abort_retry` (3) | State toggles and independent extension workflow. Retry enabled: synthetic 429 then 503 then success, attempt 1/2 start and successful end. Active abort: call after real auto_retry_start while streaming, cancelled end, no second provider call, settlement before the original delay expires. Disabled: one provider error, no retry events. `get_state` omits autoRetryEnabled, so its behavior is checked rather than inventing a state field. Auto compaction threshold: synthetic usage plus extension summary triggers actual start/end and native compaction entry. |
+| `bash`, `abort_bash` (2) | Real shell `printf` output/exit 0 and streaming update. `printf START; sleep 30`, then abort only after START is observed: bash result `cancelled=true` and preserved output. Only fixed scratch shell commands are used. |
+| `prompt`, `steer`, `follow_up`, `clear_queue`, `abort` (5) | Real **anthropic/claude-opus-4-6** with one explicitly loaded local gate tool. Prompt Started; streaming prompt followUp Queued; queued steer/follow_up acknowledged. Clear returns exact one steering/two follow-up inputs, none enters history. Replacement steering/follow-up enters actual history, final response PI_FOLLOWUP_OK, pending=0. New tool invocation interrupted after a tool update: real agent_settled.aborted=true and idle state. Slash extension input separately returns Handled with no model inference. |
+| `compact` (1) | Default **Opus 4.6** summarizer, no summary hook loaded. Nonempty summary, positive tokensBefore, persisted native compaction entry matching the result, idle state. Final isolated session test also requires successful compaction_end before clean shutdown. |
+| `new_session`, `switch_session`, `fork`, `clone`, `set_session_name`, `export_html` (6) | `rpc_session_smoke`: new empty identity, clone different identity with identical projected history, fork native user entry before the selected input with matching returned text, switch restores original identity/name/history, name visible in state, real HTML file >1 KB containing `<html`. Tested both a real error conversation and a populated Opus conversation after compaction. Actual exported file sizes: 279358, 293094 and final 292346 bytes. |
+
+### Real model observations and failures, not hidden
+
+- Two early live tool requests returned provider **Request timed out**, assistant usage/cost zero. A minimal no-tool Opus probe then passed with **929 tokens, estimated $0.005405**. Subsequent real tool workflows passed.
+- `live-run-4`: tool durationMs=23, queue consumption/removal and active abort all PASS, **7112 tokens / estimated $0.04414**. Manual compact initially rejected `Nothing to compact (session too small)`. Project-local settings were insufficient for this run. Moving keepRecentTokens=0 to the **dedicated scratch agent** allowed default Opus compaction, tokensBefore=2157, estimated summary cost **$0.048535**. The first session harness then hit an incorrect post-compaction user-message assertion. Raw user entries remain available for fork, but projected get_messages can contain only the compaction summary. Corrected the assertion and reran all session operations successfully without another model call.
+- `live-run-5`: tool durationMs=22, queue consumption/removal and active abort all PASS, **7064 tokens / estimated $0.04168**. Its inline compact call hit the 180-second command deadline. It is **not recorded as an exit-0 combined live smoke**. The uncertain request was not blindly repeated on a live process: the process was explicitly terminated/reaped, and no compaction entry existed. Reopened that saved scratch session for the final standalone default Opus compact/session workflow: **exit 0**, tokensBefore=2055, summary 1544 UTF-8 bytes, estimated summary cost **$0.03787**, matching persisted entry and successful compaction_end. All subsequent session operations and exact single-terminal clean shutdown passed.
+- Sum of the successful reported generation/summary costs in this round is approximately **$0.17763**. This is Pi's estimate, not an invoice or a guarantee that timed-out upstream requests incurred no charge.
+
+### Real extension UI and controlled failure injection
+
+`rpc_extension_smoke` loads explicit checked-in fixtures with `--offline --no-session --no-tools --no-context-files`, no hosted API requests. All six scenarios ran from fresh scratch directories **three consecutive times, each exit 0**:
+
+```text
+UI manual: all 9 method payloads and extension-received answer markers PASS
+UI cancel: all 9 method payloads and extension-received answer markers PASS
+Retry recover: real Pi + synthetic upstream fault injection PASS
+Retry abort: real Pi + synthetic upstream fault injection PASS
+Retry disabled: real Pi + synthetic upstream fault injection PASS
+Auto compaction threshold: real Pi + synthetic usage, extension-provided summary (not Opus summarizer) PASS
+Pi 1.1.0 real extension UI and synthetic retry acceptance: no paid request; clean exits PASS
+```
+
+Select/confirm/input/editor request IDs and payloads were checked, manual answers returned to the actual extension, and the extension acknowledged exact received values via notifications. Default Cancel returned undefined/false without manual responses. notify/status/widget/title/editor-text one-way payloads were all observed without acknowledgements. This verifies the SDK-to-Pi extension bridge, not a host's rendered graphical UI. Automatic compaction used synthetic 35000-token usage, a small-context fixture model and an extension-provided summary, with threshold reason, success flags and native fromHook=true entry checked. It does **not** demonstrate Anthropic rate limiting, production retry reliability, or Opus automatic summarization.
+
+### Isolation incident and subsequent safeguards
+
+**Important side effect:** the first two no-model state-test attempts inherited the normal Pi agent directory before persistent-setting behavior was recognized. They left **steeringMode=one-at-a-time, followUpMode=one-at-a-time, compaction.enabled=false and retry.enabled=false** in global settings. Source audit: agent-session.ts setSteeringMode/setFollowUpMode/setAutoCompactionEnabled/setAutoRetryEnabled call persistent SettingsManager setters. Default provider/model/thinking are **not** persisted by these RPCs because they do not pass `options.persist`; their Opus/off selection was session-only. Original values were not saved, so no speculative restoration was made. This incident was disclosed in the chat. All subsequent setting tests enforce scratch agent paths and use private opaque auth/models copies where needed, without reading/printing credential contents. A SHA-1 file-integrity check of the user's settings after the incident remained unchanged throughout subsequent isolated runs. This proves no later modification, not restoration of the original settings.
+
+All saved sessions, HTML, tool gates and shell work are scratch-only. Examples are feature-gated and not executed by normal verification. Live/session exercises capture assertion-task failures and explicitly terminate/reap the process before returning, rather than relying on runtime-shutdown Drop. Credentials can be refreshed only in the private copies. Cleanup of retained scratch auth copies remains the caller's responsibility.
+
+Local evidence logs: `pi-upgrade/rpc-state-smoke-20261009-1146.log` (isolated state, exit 0), `pi-full-rpc/simple.log`, `pi-full-rpc/live-run-{2,3,4,5}.log`, `pi-full-rpc/session-{compact,after-compact,compact-final}.log`, and `rpc-extension-final-{1,2,3}/acceptance.log`. Failed attempts are retained and distinguished above. Final `CARGO_NET_OFFLINE=true bash scripts/verify.sh` after process-cleanup corrections returned **exit 0** (`pi-full-rpc/verification-cleanup-final.log`): four check/test/clippy configurations, **222 test executions**, formatting, offline/fake examples and strict rustdoc all passed. The newly added examples compiled in both subprocess-enabled configurations. Final diff whitespace check passed, no acceptance-example processes remained, and the post-incident settings integrity check was still unchanged.
+
+Remaining limits: not every command variant, optional image field, cancellation hook, queue race, all-mode batching or all 24 events received from a hosted model. Tool coverage uses a real custom extension tool rather than all built-in tools. No real production provider retry failure was forced. Linux/Windows, Rust 1.85 MSRV and remote vendor deployment remain untested. No push/publication or global Pi install was performed.
+
 ## Historical verification: Pi 0.99.2 (2026-10-02)
 
 Completed 2026-10-02 on macOS aarch64, in `/Users/sang/Com/Github/pi-rpc`.
