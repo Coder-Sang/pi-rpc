@@ -34,3 +34,7 @@ required-features = ["session_file"]
 [[example]]
 name = "release_smoke"
 required-features = ["subprocess"]
+
+[[example]]
+name = "model_smoke"
+required-features = ["subprocess"]

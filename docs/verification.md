@@ -44,6 +44,33 @@ The script uses env -i, fresh temporary HOME/PI_CODING_AGENT_DIR/cwd/TMPDIR, dis
 
 Remaining boundaries: paid/live prompt, tool timing/abort generation were not exercised against a model (new fields are covered by wire/client/native regressions); no remote vendor deployment, Linux/Windows or Rust 1.85 MSRV verification. License remains undecided, publish=false, no push/publication. The historical independent external harness was not rerun during this upgrade; its in-crate stress coverage was rerun.
 
+## Real model acceptance: Claude Opus 4.6 (2026-10-09)
+
+After the upgrade, the user explicitly requested a live model request. The installed `/opt/homebrew/bin/pi` reported **1.1.0**, and its public `get_available_models` RPC listed the configured `anthropic/claude-opus-4-6`. The requested spelling `claude-opus-4.6` is not Pi's model ID; `claude-opus-4-6` is the matching Opus 4.6, not a substituted model.
+
+Actual command (fresh empty scratch cwd, existing Pi-managed authentication):
+
+```bash
+cargo run --offline --example model_smoke -- /opt/homebrew/bin/pi /absolute/path/to/empty-work anthropic
+```
+
+**Exit 0**, completed at 2026-10-09 03:20:25 UTC. Exactly one fixed prompt was submitted, requesting `PI_RPC_OPUS_OK`. No tool execution, automatic retry, extensions/MCP/skills/templates/themes or persistent session were enabled. Discovery used only public RPC model IDs/providers, no credential content or diagnostics were printed. Pi used its existing provider configuration/authentication; the test did not edit those files.
+
+Actual observed output:
+
+```text
+Available claude-opus-4-6 providers: anthropic
+Prompt accepted: started
+Session tokens=936 reported_cost=0.00562
+Reply=PI_RPC_OPUS_OK; updates=9; durationMs=6033; agent_settled.aborted=false; clean exit and terminal delivery PASS
+```
+
+The cost is Pi's reported estimate, not an independently observed invoice. Public `set_model` and `get_state` confirmed model/provider, `prompt` returned Started, events delivered agent_start, nine message updates including text deltas, assistant message_end (model=claude-opus-4-6, stopReason=stop, durationMs=6033), agent_end without retry and agent_settled with aborted=false. Reassembled text and get_last_assistant_text both matched the token. get_messages included user/assistant, final state was not streaming with pending=0. Close reported ProcessExit(Some(0)), and the event consumer saw the same terminal error exactly once followed by None.
+
+`examples/model_smoke.rs` is a reproducible opt-in entry point with a 180-second deadline and forced cleanup on error/timeout. With no provider argument it only lists the requested model's available providers. It is compiled by the normal feature matrix, but never run as a paid request by verify.sh. No second paid request was made for local regression validation. After the example and its README/verification documentation were finalized, `CARGO_NET_OFFLINE=true bash scripts/verify.sh` returned exit 0 at 03:22:06 UTC: all four check/test/clippy configurations, formatting, examples and strict docs passed (222 test executions, zero failures). This compiles the exact paid-tested example through public crate interfaces but does not issue another model request.
+
+This now exercises real model generation, assistant timing and non-aborted settlement, beyond the earlier read-only release smoke. Real tool timing, interrupted/aborted runs, retries, remote vendor deployment, Linux/Windows and Rust 1.85 remain outside this observation.
+
 ## Historical verification: Pi 0.99.2 (2026-10-02)
 
 Completed 2026-10-02 on macOS aarch64, in `/Users/sang/Com/Github/pi-rpc`.
