@@ -1,6 +1,6 @@
 # pi-rpc
 
-Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. **License undecided**: no `LICENSE` or reuse license has been selected, and `publish=false` remains set. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
+Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. Licensed under **[Apache-2.0](./LICENSE)**. This license covers this project's original code and documentation, not separately licensed dependencies or the Pi executable. `publish=false` remains set. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
 Declared minimum Rust: **1.85** (edition 2024). Checks and tests have passed on **1.85.1** and 1.97.1 on macOS aarch64; exact 1.85.0 and Linux/Windows have not been verified. Pi is a separately supplied executable, not installed by this crate.
 

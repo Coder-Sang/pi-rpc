@@ -2,13 +2,13 @@
 
 ## Current decision
 
-The implementation is suitable for a **technical preview**, subject to the unresolved licensing and publication decisions below. Successful tests and packaging do not themselves grant reuse rights or publish a crate. The package is **0.1.0, unpublished, `publish=false`, license undecided**, pinned to exactly Pi 1.1.0. No remote repository is configured in the audited local repository.
+The implementation is suitable for a **technical preview**, subject to the remaining publication and third-party provenance checks below. The owner selected **[Apache-2.0](../LICENSE)** on 2026-10-09; Cargo metadata and the full license text now declare that license for this project's original code and documentation. Successful tests and packaging do not themselves publish a crate or replace third-party license obligations. The package is **0.1.0, unpublished, `publish=false`**, pinned to exactly Pi 1.1.0. No remote repository is configured in the audited local repository.
 
 See [verification](verification.md) for dated results and [compatibility](compatibility.md) for protocol/source boundaries.
 
 ## Before an open-source release
 
-- [ ] The owner selects a license, adds its `LICENSE` text and sets matching Cargo `license` or `license-file` metadata. README and compatibility text must then be updated. Do not infer the project's license from dependency licenses.
+- [x] Owner selected Apache-2.0. Full `LICENSE` added, Cargo `license = "Apache-2.0"` declared, README and compatibility text updated. Dependency and upstream licenses are not replaced by this project's license.
 - [ ] Review upstream provenance. The inspected Pi release is MIT licensed, copyright Mario Zechner. Rust source is an independent wire-compatible implementation, not a vendored Pi source archive. Any copied/substantial upstream material still needs the applicable notices. Confirm fixture/prose provenance as part of the license decision, not just package compilation.
 - [ ] Confirm which email/name should be public. Existing ten commits' author and committer were unified to the configured identity and verified. Future commits use the repository's Git configuration.
 - [ ] Review **Git history**, not only HEAD, for private paths, machine names, email addresses and other sensitive information. Current documentation uses portable paths, but older blobs still contain the original personal absolute paths. The author rewrite intentionally preserved file contents. Further history editing would need an explicit decision and a new backup.
@@ -38,7 +38,7 @@ cargo package --offline
 
 - Normal build/test/lint/docs workflow passed in four feature configurations, with 222 test executions, not 222 independent tests.
 - Rust 1.85.1 all-features/all-targets check and 59 integration, 2 unit and 3 documentation tests passed.
-- Local source packaging and its verification build passed. Cargo still warned about missing licensing/repository metadata. Packaging is not permission or proof of registry acceptance.
+- Local source packaging and its verification build passed. The earlier pre-license package check warned about missing licensing/repository metadata. Apache-2.0 now resolves the licensing metadata warning; public repository/documentation metadata remains to be configured. Packaging is not permission or proof of registry acceptance.
 - Every normal RPC command name has real Pi execution evidence. Opus 4.6 supplied real queue/tool/active-abort/manual-compaction evidence. Retry/automatic-compaction evidence uses real Pi with synthetic upstream faults/usage and an extension summary, not production provider incidents.
 - No Linux/Windows or remote-vendor deployment was verified. No publication, remote push or global Pi installation was performed.
 

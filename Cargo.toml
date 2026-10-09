@@ -6,7 +6,7 @@ rust-version = "1.85"
 description = "Bounded asynchronous Tokio JSONL client for Pi 1.1.0"
 readme = "README.md"
 publish = false
-# License undecided. No license grant is made by this manifest.
+license = "Apache-2.0"
 
 [features]
 default = ["subprocess"]

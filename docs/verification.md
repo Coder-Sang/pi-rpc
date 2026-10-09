@@ -8,7 +8,7 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
 - Rust **1.85.1**: all-features/all-targets check and **59 integration + 2 unit + 3 doctests** PASS. Exact 1.85.0 and other OSes remain untested.
-- Packaging: `cargo package --offline` created and verified the source archive. License is still undecided, `publish=false`, repository metadata/CI remain absent, and no publication was attempted.
+- Packaging: `cargo package --offline` created and verified the source archive. The project is now licensed under **[Apache-2.0](../LICENSE)**; `publish=false`, repository metadata/CI remain absent, and no publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
 
 ## Current release verification: Pi 1.1.0 (2026-10-09)
@@ -51,7 +51,7 @@ Through the public PiProcess/PiClient API, the executable's exact --version prob
 
 The script uses env -i, fresh temporary HOME/PI_CODING_AGENT_DIR/cwd/TMPDIR, disables session persistence/tools/extensions/MCP/skills/templates/themes, and submits no prompt/bash/model request. No existing credentials/global settings were read or modified. It pins Cargo build and runner output to the same explicit target directory. For npm shebang compatibility it exposes only the resolved Node executable via a temporary symlink, not the host PATH. Independent review identified both target-dir drift and missing non-system Node before this correction. After the fix, direct binary and temporary `/usr/bin/env node` wrapper smoke runs passed with CARGO_TARGET_DIR set to an alternate scratch path; that alternate path was not created. The wrapper test is synthetic Node-launch coverage, not acceptance of an installed npm package.
 
-Scope of this read-only run: no paid prompt, real tool execution or active model abort. Those were exercised later in the broader RPC acceptance below. The historical independent external harness was not rerun during the upgrade; its in-crate stress coverage was rerun. Cross-platform and remote-vendor boundaries remain; the later public-readiness section records Rust 1.85.1 checks. License remains undecided, publish=false, no push/publication.
+Scope of this read-only run: no paid prompt, real tool execution or active model abort. Those were exercised later in the broader RPC acceptance below. The historical independent external harness was not rerun during the upgrade; its in-crate stress coverage was rerun. Cross-platform and remote-vendor boundaries remain; the later public-readiness section records Rust 1.85.1 checks. Licensing was undecided at the time of this read-only observation; Apache-2.0 was selected later. `publish=false` remains set, no push/publication.
 
 ## Real model acceptance: Claude Opus 4.6 (2026-10-09)
 
@@ -152,7 +152,16 @@ cargo +1.85 test --offline --all-features
 - At 06:26 UTC the committed session and extension examples were rerun against real Pi, both **exit 0** with no additional hosted-model request: projected-history/identity checks and **292690-byte HTML** passed; both UI policies, retry recovery/active cancellation/disabled behavior and synthetic automatic compaction passed again.
 - All ten existing commits' author and committer identities were unified at 06:36 UTC. Tree contents, messages and dates were verified unchanged. Local commit references in this document use the rewritten IDs; upstream Pi commit IDs and source hashes are unaffected. Rewriting authors does **not** remove private paths from older file contents.
 
-See [public release checklist](publishing.md) for unresolved licensing, metadata, history-privacy and CI decisions. Local logs for package/MSRV checks are `pi-public-package.log`, `pi-public-msrv.log` and `pi-public-msrv-tests.log`; they are not included in the package.
+See [public release checklist](publishing.md) for remaining metadata, third-party provenance, history-privacy and CI decisions. The owner selected Apache-2.0 later on the same date; the pre-license warnings above are historical observations, not the current license state. Local logs for package/MSRV checks are `pi-public-package.log`, `pi-public-msrv.log` and `pi-public-msrv-tests.log`; they are not included in the package.
+
+## Apache-2.0 adoption (2026-10-09)
+
+At the owner's direction, this project's original code and documentation now use **[Apache-2.0](../LICENSE)**. Cargo declares `license = "Apache-2.0"`; `publish = false` is unchanged. Pi and dependencies remain separately licensed. Third-party provenance/notices review remains on the [release checklist](publishing.md), rather than being inferred from build success.
+
+- `LICENSE` matches the official `https://www.apache.org/licenses/LICENSE-2.0.txt` byte-for-byte, including the appendix. SHA-256: `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
+- `cargo metadata --offline --no-deps` reports `Apache-2.0` and publication disabled. Actual `cargo package --offline --allow-dirty` built and verified a **36-file** archive; its `LICENSE` matches the working text and its normalized manifest preserves both settings. Cargo's missing-license warning is gone; documentation/homepage/repository warnings remain.
+- Both all-features and no-default-features doctests passed (**6 executions**) and strict rustdoc passed. The first rustdoc attempt rejected the bare `LICENSE` target as an intra-doc identifier; changing the README target to `./LICENSE` resolved it. Local Markdown/link checks and Git whitespace checks passed.
+- No paid request, live Pi configuration change, publication, push or history rewrite was performed. Local packaging log: `pi-apache-package.log` (not distributed).
 
 ## Historical verification: Pi 0.99.2 (2026-10-02)
 
