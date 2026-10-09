@@ -2,6 +2,7 @@
 # No real Pi/model requests. Local example uses the compiled test fake.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# cargo fmt does not resolve dependencies and does not accept --locked.
 cargo fmt --check
 rustfmt --edition 2024 --check tests/fixtures/fake_pi.rs
 for configuration in default all none session_only; do
