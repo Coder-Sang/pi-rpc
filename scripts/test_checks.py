@@ -93,12 +93,46 @@ class PackageChecks(unittest.TestCase):
             with self.assertRaises(CheckError):
                 check_package(self.archive, expected_commit="expected")
 
-    def test_source_mismatch(self):
+    def source_root(self):
         root = Path(self.temp.name) / "source"
-        root.mkdir()
+        root.mkdir(exist_ok=True)
+        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", *sorted(n for n in self.files if n.startswith("docs/"))]:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(self.files[name])
+        return root
+
+    def test_source_mismatch(self):
+        root = self.source_root()
         (root / "README.md").write_text("changed", encoding="utf-8")
         self.write_archive()
-        with self.assertRaises(CheckError):
+        with self.assertRaisesRegex(CheckError, "differs from source"):
+            check_package(self.archive, source_root=root)
+
+    def test_missing_source_files(self):
+        root = self.source_root()
+        self.write_archive()
+        check_package(self.archive, source_root=root)
+        for name in ["LICENSE", "Cargo.lock", "README.md", "docs/verification.md"]:
+            with self.subTest(name=name):
+                path = root / name
+                saved = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(CheckError, "missing source comparison files"):
+                    check_package(self.archive, source_root=root)
+                path.write_bytes(saved)
+
+    def test_bidirectional_docs_inventory(self):
+        root = self.source_root()
+        self.files["docs/extra.md"] = b"# Extra\n"
+        self.write_archive()
+        with self.assertRaisesRegex(CheckError, "docs inventory differs"):
+            check_package(self.archive, source_root=root)
+        (root / "docs/extra.md").write_bytes(self.files["docs/extra.md"])
+        check_package(self.archive, source_root=root)
+        del self.files["docs/extra.md"]
+        self.write_archive()
+        with self.assertRaisesRegex(CheckError, "docs inventory differs"):
             check_package(self.archive, source_root=root)
 
     def test_symlink_traversal_duplicate_and_sensitive_file(self):

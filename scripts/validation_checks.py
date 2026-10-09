@@ -147,6 +147,10 @@ def check_package(path, source_root=None, expected_commit=None):
     documents, links = check_documents(files)
     if source_root:
         root, source = read_root(source_root)
+        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md"}
+        require(required_source <= source.keys(), f"missing source comparison files: {sorted(required_source - source.keys())}")
+        require({n for n in source if n.startswith("docs/")} == {n for n in files if n.startswith("docs/")},
+                "package/source docs inventory differs")
         for name in source:
             packaged_name = "Cargo.toml.orig" if name == "Cargo.toml" else name
             require(packaged_name in files and source[name] == files[packaged_name], f"package differs from source root: {name}")
