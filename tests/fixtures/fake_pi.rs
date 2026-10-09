@@ -66,6 +66,19 @@ fn main() {
                 .exec();
             panic!("exec failed: {error}");
         }
+        #[cfg(windows)]
+        {
+            // Let the test retain a process handle before triggering EOF.
+            let _ = io::stdin().lock().lines().next();
+            out.flush().unwrap();
+            drop(out);
+            close_stdout();
+            // Never use stdout or return through std's exit-time flush after
+            // closing its raw handle. The owner must terminate this child.
+            loop {
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        }
     }
     match mode {
         "exit" => std::process::exit(7),
@@ -123,5 +136,22 @@ fn main() {
             }
             out.flush().unwrap();
         }
+    }
+}
+
+#[cfg(windows)]
+fn close_stdout() {
+    use std::ffi::c_void;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetStdHandle(kind: u32) -> *mut c_void;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+    // SAFETY: stdout was flushed and its lock dropped. This is the fixture's
+    // inherited stdout handle, closed exactly once and never used again.
+    unsafe {
+        let handle = GetStdHandle(-11_i32 as u32);
+        assert!(!handle.is_null() && handle as isize != -1);
+        assert_ne!(CloseHandle(handle), 0);
     }
 }

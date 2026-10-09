@@ -33,6 +33,7 @@ async fn stdout_eof_while_child_lives_fails_promptly_and_reaps() {
         .output()
         .unwrap();
     assert!(out.stdout.is_empty());
+    terminal_once(&mut e, Error::Eof).await;
 }
 use std::{path::PathBuf, sync::OnceLock, time::Duration};
 fn fixture() -> PathBuf {
@@ -71,6 +72,110 @@ async fn ready(events: &mut PiEvents) -> u32 {
         panic!("expected fake ready")
     };
     v["pid"].as_u64().unwrap() as u32
+}
+async fn terminal_once(events: &mut PiEvents, reason: Error) {
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(3), events.recv())
+            .await
+            .unwrap(),
+        Some(Err(reason))
+    );
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(3), events.recv())
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[cfg(windows)]
+mod windows_process {
+    use std::ffi::c_void;
+
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    const WAIT_OBJECT_0: u32 = 0;
+    const WAIT_TIMEOUT: u32 = 258;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    pub struct Process(*mut c_void);
+    impl Process {
+        pub fn open(pid: u32) -> Self {
+            // SAFETY: requests only observation rights for the ready child.
+            let handle = unsafe { OpenProcess(SYNCHRONIZE, 0, pid) };
+            assert!(
+                !handle.is_null(),
+                "OpenProcess: {}",
+                std::io::Error::last_os_error()
+            );
+            Self(handle)
+        }
+        pub fn assert_alive(&self) {
+            // SAFETY: this object retains a valid handle until Drop.
+            assert_eq!(unsafe { WaitForSingleObject(self.0, 0) }, WAIT_TIMEOUT);
+        }
+        pub async fn wait_terminated(&self) {
+            tokio::time::timeout(super::Duration::from_secs(3), async {
+                loop {
+                    // A retained handle observes the original child, not a
+                    // later process that happens to reuse its PID.
+                    match unsafe { WaitForSingleObject(self.0, 0) } {
+                        WAIT_OBJECT_0 => break,
+                        WAIT_TIMEOUT => tokio::time::sleep(super::Duration::from_millis(10)).await,
+                        result => panic!("WaitForSingleObject failed: {result:#x}"),
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    }
+    impl Drop for Process {
+        fn drop(&mut self) {
+            // SAFETY: uniquely owned handle, closed exactly once.
+            assert_ne!(unsafe { CloseHandle(self.0) }, 0);
+        }
+    }
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn stdout_eof_while_child_lives_fails_promptly_and_terminates() {
+    let (c, mut e, mut p) = PiProcess::spawn(options("closed-stdout")).await.unwrap();
+    let child = windows_process::Process::open(ready(&mut e).await);
+    child.assert_alive();
+    // The fixture closes stdout only after receiving this request, then lives
+    // indefinitely unless the subprocess owner terminates it.
+    let command = tokio::spawn(async move { c.abort().await });
+    assert_eq!(
+        tokio::time::timeout(Duration::from_millis(700), p.wait_terminal())
+            .await
+            .unwrap(),
+        Error::Eof
+    );
+    assert_eq!(command.await.unwrap(), Err(Error::Eof));
+    p.close().await;
+    assert_eq!(p.terminal_reason(), Some(Error::Eof));
+    assert!(p.process_exit().is_some());
+    child.wait_terminated().await;
+    terminal_once(&mut e, Error::Eof).await;
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn process_owner_drop_terminates_direct_child_even_with_live_clients() {
+    let (c, mut e, p) = PiProcess::spawn(options("hang")).await.unwrap();
+    let child = windows_process::Process::open(ready(&mut e).await);
+    child.assert_alive();
+    drop(p);
+    assert_eq!(c.abort().await, Err(Error::Closed));
+    child.wait_terminated().await;
+    terminal_once(&mut e, Error::Closed).await;
 }
 #[tokio::test]
 async fn local_subprocess_fragmented_protocol_and_orderly_close() {
@@ -205,4 +310,5 @@ async fn process_owner_drop_kills_and_reaps_even_with_live_clients() {
     })
     .await
     .unwrap();
+    terminal_once(&mut e, Error::Closed).await;
 }
