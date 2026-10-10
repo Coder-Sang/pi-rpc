@@ -35,6 +35,10 @@ name = "native_session"
 required-features = ["session_file"]
 
 [[example]]
+name = "session_builder_bench"
+required-features = ["session_file"]
+
+[[example]]
 name = "release_smoke"
 required-features = ["subprocess"]
 

@@ -9,5 +9,5 @@ if [ "$#" -gt 1 ] || [[ ! "$rounds" =~ ^[1-9][0-9]?$ ]] || [ "$rounds" -gt 20 ];
 fi
 for ((round = 1; round <= rounds; round++)); do
   echo "Transport stress round $round/$rounds"
-  cargo test --locked --all-features --test client --test subprocess
+  cargo test --locked --all-features --test client --test subprocess --test ui_close --test json_depth
 done

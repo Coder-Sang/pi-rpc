@@ -7,6 +7,9 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+mod builder;
+pub use builder::SessionFileBuilder;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionHeader {
@@ -166,10 +169,7 @@ impl SessionFile {
             }
             // Validate even manually constructed Message fields before exporting.
             if let EntryData::Message { message } = &e.data {
-                let v = json::to_value(message)
-                    .map_err(|_| Error::Protocol("invalid message".into()))?;
-                json::decode::<Message>(&v)
-                    .map_err(|_| Error::Protocol("invalid native message".into()))?;
+                validate_message(message)?;
             }
         }
         for e in &self.entries {
@@ -230,6 +230,12 @@ impl SessionFile {
         path.reverse();
         Ok(path)
     }
+}
+fn validate_message(message: &Message) -> Result<()> {
+    let value = json::to_value(message).map_err(|_| Error::Protocol("invalid message".into()))?;
+    json::decode::<Message>(&value)
+        .map(|_| ())
+        .map_err(|_| Error::Protocol("invalid native message".into()))
 }
 /// Convenience constructor for a native user message, not history-as-prompt.
 pub fn user_message(content: MessageContent, timestamp_ms: u64) -> Result<Message> {

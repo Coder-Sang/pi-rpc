@@ -4,12 +4,38 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 
 ## Current status summary
 
-- Four-feature offline check/test/strict-clippy matrix: PASS, **222 test executions**, not 222 distinct tests. Strict docs and examples also passed.
+- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **266 test executions**, not 266 distinct tests. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler now passed four-feature all-targets check/test (**222 test executions**); earlier 1.85.1 checks remain recorded below. Linux/Windows runtime remains untested.
+- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**266 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
 - Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Bounded JSON, close/UI and bulk construction fixes (2026-10-11)
+
+Fake-only verification on macOS aarch64, Rust 1.97.1 and exact 1.85.0. No live Pi or paid model requests were made for these changes; the real-Pi observations below predate these fixes.
+
+- `CARGO_NET_OFFLINE=true bash scripts/verify.sh`: exit 0; four feature configurations passed all-targets check, tests, strict Clippy, strict rustdoc and formatting, plus injected/native/fake-local examples. Integration counts were **61/73/50/62**, with **2 unit tests and 3 doctests** in each configuration, totaling **266 test executions**.
+- `CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh`: exit 0 on exact **1.85.0**, all four configurations and the same test counts. A first dependency resolution selected `ar_archive_writer` with unsupported let-chain syntax despite incomplete MSRV metadata. Constraining `psm` to 0.1.27 removed that dependency and preserved compilation on 1.85.0.
+- `CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh`: exit 0, all three rounds; stress now includes the new JSON depth and close/UI suites alongside client/subprocess tests.
+- `python3 scripts/test_checks.py`: all **11** tests passed; `python3 scripts/check-docs.py .` and Git whitespace checks passed. The subprocess suites required execution outside the local sandbox because fake-child process-state inspection is blocked inside it.
+- Linux x64: `CC_x86_64_unknown_linux_gnu=clang AR_x86_64_unknown_linux_gnu=ar cargo check --offline --locked --all-features --all-targets --target x86_64-unknown-linux-gnu` passed. This is compile evidence, not linking or runtime evidence. The equivalent Windows MSVC check stopped in `stacker`'s native build because this Mac lacks Windows SDK `windows.h`; native Windows execution remains for the existing hosted CI matrix. No hosted CI run is claimed.
+
+New regressions cover real client calls with **70/100/200-node-deep session trees**, accepted **512** and rejected **513** JSON container levels, fragmented unknown events, CRLF/escaping, malformed/trailing JSON, direct Value entrypoints and native sessions. An isolated child process checks a **2 MiB** thread stack for deep object/array clones, typed tree conversion, serialization, normal destruction and partial-conversion error cleanup. Direct rejection of a caller-built 10,000-level Value uses iterative destruction.
+
+Close/UI tests deterministically establish closing state before late dialogs arrive, both while an admitted write is stalled and after stdin EOF. They verify successful pending responses, ordered UI/ordinary events, no late reply behind shutdown, exactly one terminal error and then None. Open-connection auto-cancel capacity errors still fail the connection.
+
+The builder preserves the existing mutable SessionFile API and moves indexed bulk message admission into privately owned history. Tests cover invalid headers/history/messages, duplicate IDs, missing/self parents, failure rollback, existing native checkpoints/header metadata, exact equality/encoded bytes against the old API and a 10,000-message roundtrip.
+
+Release timing command: `cargo run --offline --locked --release --no-default-features --features session_file --example session_builder_bench`. Final medians from **three samples** per count/path, after the compiler workload finished:
+
+| Messages | Existing append_message | SessionFileBuilder including finish |
+|---|---|---|
+| 1,000 | 741.3 ms | 4.56 ms |
+| 2,000 | 3,401.8 ms | 8.92 ms |
+| 4,000 | 11,731.0 ms | 18.35 ms |
+
+Builder time roughly doubled as message count doubled, versus repeated full-history validation in the original mutable API. This measures pure message construction, not arbitrary mixed-history reference validation or file encoding. Timing is informational and has no machine-specific pass/fail threshold. Local scratch logs: `pi-rpc-final-verify.log`, `pi-rpc-final-msrv.log`, `pi-rpc-final-stress.log`, `pi-rpc-builder-bench-final.log` and the two platform cross-check logs.
 
 ## Current release verification: Pi 1.1.0 (2026-10-09)
 
