@@ -1,7 +1,7 @@
 //! Wire types from the pinned Pi sources listed in docs/compatibility.md.
 //! Tool, provider and extension payloads remain open JSON. Unknown events retain
 //! their complete record. Known event decoding never falls back to Unknown.
-use crate::{Error, Result};
+use crate::{Error, Result, json};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 pub type Extra = Map<String, Value>;
@@ -164,13 +164,9 @@ fn validate_message(role: &str, f: &Extra) -> std::result::Result<(), String> {
         f: &Extra,
         key: &str,
     ) -> std::result::Result<(), String> {
-        serde_json::from_value::<T>(
-            f.get(key)
-                .cloned()
-                .ok_or_else(|| format!("missing {key}"))?,
-        )
-        .map(|_| ())
-        .map_err(|_| format!("invalid {key}"))
+        json::decode::<T>(f.get(key).ok_or_else(|| format!("missing {key}"))?)
+            .map(|_| ())
+            .map_err(|_| format!("invalid {key}"))
     }
     if matches!(
         role,
@@ -570,10 +566,14 @@ pub struct Response {
 }
 impl Response {
     pub fn decode<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
-        serde_json::from_value(self.data.clone().unwrap_or(Value::Null))
+        json::check_value_depth(self.data.as_ref().unwrap_or(&Value::Null))?;
+        json::decode(self.data.as_ref().unwrap_or(&Value::Null))
             .map_err(|_| Error::Protocol(format!("invalid {} response data", self.command)))
     }
     pub fn validate(&self) -> Result<()> {
+        if let Some(data) = &self.data {
+            json::check_value_depth(data)?;
+        }
         if !self.success {
             if self.error.is_none() {
                 return Err(Error::Protocol("rejection missing error".into()));
@@ -1043,6 +1043,10 @@ pub enum Record {
 }
 /// Strict known-record parsing, with raw preservation only for unknown types.
 pub fn decode_record(v: Value) -> Result<Record> {
+    if let Err(error) = json::check_value_depth(&v) {
+        json::drop_value(v);
+        return Err(error);
+    }
     let kind = v
         .get("type")
         .and_then(Value::as_str)
@@ -1091,12 +1095,12 @@ pub fn decode_record(v: Value) -> Result<Record> {
                 }
             }
         }
-        let r: Response = serde_json::from_value(v.clone()).map_err(|_| invalid())?;
+        let r: Response = json::decode(&v).map_err(|_| invalid())?;
         r.validate()?;
         return Ok(Record::Response(r));
     }
     if kind == "extension_ui_request" {
-        let u: UiRequest = serde_json::from_value(v.clone()).map_err(|_| invalid())?;
+        let u: UiRequest = json::decode(&v).map_err(|_| invalid())?;
         return Ok(Record::Event(Event::Ui(u)));
     }
     const KNOWN: &[&str] = &[
@@ -1135,7 +1139,7 @@ pub fn decode_record(v: Value) -> Result<Record> {
         if required.iter().any(|key| v.get(key).is_none()) {
             return Err(invalid());
         }
-        let e: KnownEvent = serde_json::from_value(v.clone()).map_err(|_| invalid())?;
+        let e: KnownEvent = json::decode(&v).map_err(|_| invalid())?;
         if let KnownEvent::MessageUpdate {
             assistant_message_event,
             ..

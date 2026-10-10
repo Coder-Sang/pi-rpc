@@ -1,5 +1,5 @@
 //! One continuous reader, one serialized writer, ID-correlated command futures.
-use crate::{Error, Result, codec, protocol::*, transport::Transport};
+use crate::{Error, Result, codec, json, protocol::*, transport::Transport};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::{
@@ -322,7 +322,7 @@ impl PiClient {
     ) -> Result<Response> {
         let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
         let name = command.name();
-        let mut v = serde_json::to_value(command)
+        let mut v = json::to_value(&command)
             .map_err(|_| Error::Protocol("cannot encode command".into()))?;
         v["id"] = id.clone().into();
         let bytes = codec::encode(&v, self.shared.config.max_record_bytes)?;

@@ -1,15 +1,22 @@
 //! Strict LF JSONL. CR is stripped only immediately before LF.
-use crate::{Error, Result};
+use crate::{Error, Result, json};
 use serde::Serialize;
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
+/// Maximum JSON object/array nesting. The root container counts as one.
+pub const MAX_JSON_DEPTH: usize = json::MAX_DEPTH;
+
 pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
-    let mut bytes =
-        serde_json::to_vec(value).map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
+    let mut bytes = Vec::new();
+    let mut serializer = serde_json::Serializer::new(&mut bytes);
+    value
+        .serialize(serde_stacker::Serializer::new(&mut serializer))
+        .map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
     if bytes.len() > max_bytes {
         return Err(Error::Capacity("record bytes"));
     }
+    json::check_wire_depth(&bytes)?;
     bytes.push(b'\n');
     Ok(bytes)
 }
@@ -40,8 +47,7 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
                 if record.len() > self.max_bytes {
                     return Err(Error::Protocol("record byte limit exceeded".into()));
                 }
-                let value = serde_json::from_slice(record)
-                    .map_err(|_| Error::Protocol("invalid JSON record".into()))?;
+                let value = json::parse(record)?;
                 let size = record.len();
                 self.start = end + 1;
                 return Ok(Some((value, size)));

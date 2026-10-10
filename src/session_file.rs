@@ -1,7 +1,7 @@
 //! Pi-native v3 JSONL sessions only. No history RPC, vendor conversion, prompt
 //! injection, filesystem discovery, delivery, or model-context replay is provided.
 use crate::{
-    Error, Result, codec,
+    Error, Result, codec, json,
     protocol::{EntryData, Extra, Message, MessageContent, SessionEntry},
 };
 use serde::{Deserialize, Serialize};
@@ -83,8 +83,7 @@ impl SessionFile {
             if bytes.len() > limit {
                 return Err(Error::Capacity("session record bytes"));
             }
-            serde_json::from_slice(bytes)
-                .map_err(|_| Error::Protocol("malformed native session record".into()))
+            json::parse(bytes)
         }
         let header: SessionHeader = parse(header, limits.max_record_bytes)?;
         if header.version != 3 {
@@ -167,9 +166,9 @@ impl SessionFile {
             }
             // Validate even manually constructed Message fields before exporting.
             if let EntryData::Message { message } = &e.data {
-                let v = serde_json::to_value(message)
+                let v = json::to_value(message)
                     .map_err(|_| Error::Protocol("invalid message".into()))?;
-                serde_json::from_value::<Message>(v)
+                json::decode::<Message>(&v)
                     .map_err(|_| Error::Protocol("invalid native message".into()))?;
             }
         }
@@ -234,8 +233,7 @@ impl SessionFile {
 }
 /// Convenience constructor for a native user message, not history-as-prompt.
 pub fn user_message(content: MessageContent, timestamp_ms: u64) -> Result<Message> {
-    serde_json::from_value(
-        serde_json::json!({"role":"user","content":content,"timestamp":timestamp_ms}),
-    )
-    .map_err(|_| Error::Protocol("invalid user message".into()))
+    let content = json::to_value(&content)?;
+    json::decode(&serde_json::json!({"role":"user","content":content,"timestamp":timestamp_ms}))
+        .map_err(|_| Error::Protocol("invalid user message".into()))
 }

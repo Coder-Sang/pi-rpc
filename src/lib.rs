@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 pub mod client;
 pub mod codec;
+mod json;
 pub mod protocol;
 #[cfg(feature = "session_file")]
 pub mod session_file;
