@@ -383,6 +383,24 @@ impl PiClient {
         }
         self.enqueue_locked(bytes)
     }
+    /// Auto-replies share close's admission lock; late dialogs remain events.
+    fn cancel_ui_if_open(&self, request: &UiRequest) -> Result<()> {
+        let state = self.shared.state.lock().unwrap();
+        if let Some(error) = &state.terminal {
+            return Err(error.clone());
+        }
+        if state.closing {
+            return Ok(());
+        }
+        let bytes = codec::encode(
+            &UiAnswer::Cancel.record(request)?,
+            self.shared.config.max_record_bytes,
+        )?;
+        // Only local admission is performed here; the continuous reader never
+        // waits for flush or registers a normal pending command for this reply.
+        self.enqueue_locked(bytes)?;
+        Ok(())
+    }
     pub async fn prompt(&self, message: impl Into<String>) -> Result<PromptDisposition> {
         Ok(self
             .typed::<Disposition<PromptDisposition>>(Command::Prompt {
@@ -674,7 +692,7 @@ async fn read_loop(
         if let Event::Ui(u) = &event {
             if u.method.is_dialog() && client.shared.config.ui_policy == UiPolicy::Cancel {
                 // Enqueue without awaiting the writer, so the reader remains continuous.
-                client.send_one_way(UiAnswer::Cancel.record(u)?)?;
+                client.cancel_ui_if_open(u)?;
             }
         }
         let permit = budget
