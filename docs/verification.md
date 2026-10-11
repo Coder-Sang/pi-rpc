@@ -7,9 +7,23 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 - Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **356 test executions** across four feature configurations. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**356 test executions**); earlier checks remain recorded below. Native Linux ARM64 execution now supplements the earlier Linux x64 cross-check. Native Windows execution still awaits the hosted CI run.
-- Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
+- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**356 test executions**); earlier checks remain recorded below. Native Linux ARM64 execution supplements the earlier Linux x64 cross-check. Hosted Linux, macOS and Windows jobs also passed on both stable and exact 1.85.0, including Debug/Release boundary regressions and three stress rounds.
+- Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing manifest repository metadata remain. The source was pushed to the public `Coder-Sang/pi-rpc` GitHub repository with user authorization; all six hosted OS/toolchain jobs passed, including packaging/checker steps on stable. No crate publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Hosted six-job cross-platform acceptance (2026-10-11)
+
+Commit **9567193** passed [Verify run 38137879472](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472), triggered by the authorized push of `main`. All six jobs completed successfully:
+
+| Native runner | Stable | Exact Rust 1.85.0 |
+|---|---|---|
+| Linux (`ubuntu-latest`) | [PASS](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472/job/114465398662) | [PASS](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472/job/114465398706) |
+| macOS (`macos-latest`) | [PASS](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472/job/114465398736) | [PASS](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472/job/114465398707) |
+| Windows (`windows-latest`) | [PASS](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472/job/114465398536) | [PASS](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472/job/114465398687) |
+
+Every job passed its complete feature matrix, three fake-only stress rounds (including native floating-point cases) and focused Debug/Release regressions. The exact MSRV script checks the compiler is **1.85.0**, rather than accepting a newer 1.85 patch release. Windows therefore has native execution evidence for bounded UI admission/close races, bit-exact floats and subnormals, isolated **2 MiB** stack tests, deep-input rejection/destruction and subprocess termination. Stable jobs also passed strict lint/docs/examples, Python checker tests, document checks and actual crate archive verification.
+
+No CI job failed, so no production fix or test relaxation was needed. The real-Pi smoke job was **skipped**; no real Pi or paid model request was made. This replaces the earlier Windows/hosted-CI limitation below; local results and initial environment failures remain as dated evidence.
 
 ## Native cross-platform verification supplement (2026-10-11)
 
@@ -19,7 +33,7 @@ Native Ubuntu ARM64 (OrbStack, GCC, stable **1.99.0**) passed `verify.sh`, the D
 
 Initial environment setup incorrectly shared the whole macOS Cargo home, causing fake-fixture compiler invocations to use host paths, and then exhausted the guest's 3.2 GiB `/tmp` memory disk. Those failures were resolved by separating tool binaries and moving build output to disk. One initial MSRV version-probe assertion also failed without printing the unexpected error. The test now reports that error explicitly; the full matrix, focused suite, three stress rounds and **20 additional probe repetitions** passed afterward. The original transient error could not be identified or reproduced, so these passing runs do not establish its cause. This diagnostic change does not alter timeouts or accept additional errors.
 
-Windows execution requires pushing the prepared workflow to `Coder-Sang/pi-rpc`. The SSH-accessible repository was empty when checked; no hosted Linux x64/Windows x64 result is claimed before the push and completed jobs. The separate real-Pi smoke remains opt-in and is not invoked by these checks. No real Pi or paid model request was made.
+At the start of this supplement the SSH-accessible `Coder-Sang/pi-rpc` repository was empty, and hosted Windows execution was pending the first push. The subsequent hosted acceptance above completes that check. The separate real-Pi smoke remains opt-in and is not invoked by these checks. No real Pi or paid model request was made.
 
 Guest logs are `/tmp/pi-rpc-linux-{verify,msrv,regressions,msrv-regressions,stress,msrv-stress,probe-repeat,python}.log`. Local macOS logs use `/tmp/pi-rpc-platform-mac-*.log`. These logs are maintainer evidence, not shipped files.
 
