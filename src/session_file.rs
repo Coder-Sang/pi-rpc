@@ -108,21 +108,34 @@ impl SessionFile {
         Ok(file)
     }
     pub fn encode(&self, limits: SessionLimits) -> Result<Vec<u8>> {
-        self.validate()?;
+        // Reject over-budget output before validation can clone message fields.
         if self.entries.len() > limits.max_entries {
             return Err(Error::Capacity("session entries"));
         }
-        let mut bytes = codec::encode(&self.header, limits.max_record_bytes)?;
-        if bytes.len() > limits.max_file_bytes {
-            return Err(Error::Capacity("session file bytes"));
+        fn record<T: Serialize>(
+            value: &T,
+            limits: SessionLimits,
+            remaining: usize,
+        ) -> Result<Vec<u8>> {
+            let body_budget = remaining
+                .checked_sub(1)
+                .ok_or(Error::Capacity("session file bytes"))?;
+            let limit = limits.max_record_bytes.min(body_budget);
+            codec::encode(value, limit).map_err(|error| {
+                if error == Error::Capacity("record bytes") && body_budget < limits.max_record_bytes
+                {
+                    Error::Capacity("session file bytes")
+                } else {
+                    error
+                }
+            })
         }
-        for e in &self.entries {
-            let record = codec::encode(e, limits.max_record_bytes)?;
-            if bytes.len().saturating_add(record.len()) > limits.max_file_bytes {
-                return Err(Error::Capacity("session file bytes"));
-            }
-            bytes.extend(record);
+        let mut bytes = record(&self.header, limits, limits.max_file_bytes)?;
+        for entry in &self.entries {
+            let next = record(entry, limits, limits.max_file_bytes - bytes.len())?;
+            bytes.extend(next);
         }
+        self.validate()?;
         Ok(bytes)
     }
     /// Appends a native message entry without changing or converting its role.
@@ -166,7 +179,7 @@ impl SessionFile {
             &self.header.extra,
             &["type", "version", "id", "timestamp", "cwd", "parentSession"],
         )?;
-        json::to_value(&self.header)?;
+        json::check_serialized_depth(&self.header)?;
         let mut seen = HashSet::new();
         for e in &self.entries {
             if e.id.is_empty() || e.timestamp.is_empty() || !seen.insert(e.id.as_str()) {
@@ -184,7 +197,7 @@ impl SessionFile {
             if let EntryData::Message { message } = &e.data {
                 validate_message(message)?;
             } else {
-                json::to_value(e)?;
+                json::check_serialized_depth(e)?;
             }
         }
         let index = index::Index::new(&self.entries);

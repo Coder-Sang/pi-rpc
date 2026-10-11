@@ -118,3 +118,34 @@ pub(crate) fn drop_value(value: Value) {
         }
     }
 }
+
+/// Checks typed wire depth without allocating a Value or output buffer.
+#[cfg(feature = "session_file")]
+pub(crate) fn check_serialized_depth<T: Serialize>(value: &T) -> Result<()> {
+    #[derive(Default)]
+    struct DepthWriter {
+        depth: DepthScanner,
+        failure: Option<Error>,
+    }
+    impl std::io::Write for DepthWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if self.failure.is_none() {
+                self.failure = self.depth.scan(bytes).err();
+            }
+            if self.failure.is_some() {
+                return Err(std::io::Error::other("JSON depth limit exceeded"));
+            }
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut writer = DepthWriter::default();
+    let mut serializer = serde_json::Serializer::new(&mut writer);
+    let result = value.serialize(serde_stacker::Serializer::new(&mut serializer));
+    if let Some(error) = writer.failure {
+        return Err(error);
+    }
+    result.map_err(|_| Error::Protocol("cannot encode JSON".into()))
+}
