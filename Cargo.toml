@@ -61,3 +61,7 @@ required-features = ["subprocess"]
 [[example]]
 name = "rpc_session_smoke"
 required-features = ["subprocess"]
+
+[[example]]
+name = "session_validation_bench"
+required-features = ["session_file"]

@@ -191,3 +191,40 @@ fn bulk_builder_handles_ten_thousand_messages_with_native_roundtrip() {
         file
     );
 }
+
+#[test]
+fn long_mixed_history_validates_and_roundtrips() {
+    let mut file = SessionFile::new("mixed", ISO, "/p");
+    file.append_message("0", None, ISO, message("root"))
+        .unwrap();
+    for i in 1..10_000 {
+        let data = if i % 2 == 0 {
+            EntryData::Compaction {
+                summary: "s".into(),
+                first_kept_entry_id: "0".into(),
+                tokens_before: 1.0,
+                extra: Extra::new(),
+            }
+        } else {
+            EntryData::ContextEdit {
+                target_id: "0".into(),
+                replacement: None,
+            }
+        };
+        file.entries.push(SessionEntry {
+            id: i.to_string(),
+            parent_id: Some((i - 1).to_string()),
+            timestamp: ISO.into(),
+            data,
+        });
+    }
+    let file = SessionFileBuilder::from_session_file(file)
+        .unwrap()
+        .finish()
+        .unwrap();
+    let bytes = file.encode(SessionLimits::default()).unwrap();
+    assert_eq!(
+        SessionFile::parse(&bytes, SessionLimits::default()).unwrap(),
+        file
+    );
+}

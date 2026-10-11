@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 mod builder;
+mod index;
 pub use builder::SessionFileBuilder;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -180,6 +181,7 @@ impl SessionFile {
                 json::to_value(e)?;
             }
         }
+        let index = index::Index::new(&self.entries);
         for e in &self.entries {
             match &e.data {
                 EntryData::Compaction {
@@ -187,10 +189,9 @@ impl SessionFile {
                     ..
                 } => {
                     if first_kept_entry_id != &e.id
-                        && !self
-                            .branch(e.parent_id.as_deref())?
-                            .iter()
-                            .any(|p| &p.id == first_kept_entry_id)
+                        && index
+                            .on_branch(first_kept_entry_id, e.parent_id.as_deref())
+                            .is_none()
                     {
                         return Err(Error::Protocol(
                             "compaction firstKeptEntryId is not on branch".into(),
@@ -198,10 +199,11 @@ impl SessionFile {
                     }
                 }
                 EntryData::ContextEdit { target_id, .. } => {
-                    let branch = self.branch(e.parent_id.as_deref())?;
-                    let target = branch.iter().find(|p| &p.id == target_id).ok_or_else(|| {
-                        Error::Protocol("context edit target is not on branch".into())
-                    })?;
+                    let target = index
+                        .on_branch(target_id, e.parent_id.as_deref())
+                        .ok_or_else(|| {
+                            Error::Protocol("context edit target is not on branch".into())
+                        })?;
                     if !matches!(&target.data,EntryData::Message{message} if matches!(message.role.as_str(),"user"|"assistant"|"toolResult"|"custom"))
                         && !matches!(target.data, EntryData::CustomMessage { .. })
                     {
