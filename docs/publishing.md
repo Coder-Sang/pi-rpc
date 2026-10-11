@@ -2,7 +2,9 @@
 
 ## Current decision
 
-The implementation is suitable for a **technical preview**, subject to the remaining publication and third-party provenance checks below. The owner selected **[Apache-2.0](../LICENSE)** on 2026-10-09; Cargo metadata and the full license text now declare that license for this project's original code and documentation. Successful tests and packaging do not themselves publish a crate or replace third-party license obligations. The package is **0.1.0, unpublished, `publish=false`**, pinned to exactly Pi 1.1.0. No remote repository is configured in the audited local repository.
+The implementation is suitable for a **technical preview**, subject to the remaining publication and third-party provenance checks below. The owner selected **[Apache-2.0](../LICENSE)** on 2026-10-09; Cargo metadata and the full license text now declare that license for this project's original code and documentation. Successful tests and packaging do not themselves publish a crate or replace third-party license obligations. The package is **0.1.0, unpublished on crates.io, `publish=false`**, pinned to exactly Pi 1.1.0. With user authorization, `main` was pushed to the public [Coder-Sang/pi-rpc repository](https://github.com/Coder-Sang/pi-rpc) on 2026-10-11; that repository is configured as `origin` and declared in Cargo metadata.
+
+Cargo also declares five discoverability keywords and `package.metadata.docs.rs.all-features = true`, so a future docs.rs build includes the optional APIs. This metadata does not upload a crate or create a hosted documentation page. No separate homepage is declared because there is no dedicated project website. `.DS_Store` is ignored at every directory level, preserving local Finder files while excluding them from normal package selection.
 
 See [verification](verification.md) for dated results and [compatibility](compatibility.md) for protocol/source boundaries.
 
@@ -10,16 +12,16 @@ See [verification](verification.md) for dated results and [compatibility](compat
 
 - [x] Owner selected Apache-2.0. Full `LICENSE` added, Cargo `license = "Apache-2.0"` declared, README and compatibility text updated. Dependency and upstream licenses are not replaced by this project's license.
 - [ ] Review upstream provenance. The inspected Pi release is MIT licensed, copyright Mario Zechner. Rust source is an independent wire-compatible implementation, not a vendored Pi source archive. Any copied/substantial upstream material still needs the applicable notices. Confirm fixture/prose provenance as part of the license decision, not just package compilation.
-- [ ] Confirm which email/name should be public. Existing ten commits' author and committer were unified to the configured identity and verified. Future commits use the repository's Git configuration.
+- [ ] Confirm which email/name should be public. The earlier ten-commit author/committer rewrite used the configured identity and was verified. Future commits use the repository's Git configuration.
 - [ ] Review **Git history**, not only HEAD, for private paths, machine names, email addresses and other sensitive information. Current documentation uses portable paths, but older blobs still contain the original personal absolute paths. The author rewrite intentionally preserved file contents. Further history editing would need an explicit decision and a new backup.
 - [ ] Review package contents and credentials with appropriate tooling. The completed local pattern scan found no matching real credentials, but is not an exhaustive secret audit. Never commit test auth/model configuration copies, sessions or private diagnostics.
-- [x] Add CI configuration for all four features on macOS/Linux/Windows with stable and exact Rust 1.85.0, plus default-off macOS/Linux real-release smoke. Configuration is committed and statically validated; actual hosted runs still need a configured repository and authorization.
-- [ ] Obtain passing native Linux/Windows and hosted CI results before broadening platform claims. Exact Rust 1.85.0 four-feature checks/tests now passed locally on macOS aarch64.
+- [x] Add CI configuration for all four features on macOS/Linux/Windows with stable and exact Rust 1.85.0. All six jobs also run three fake-only stress rounds and focused Debug/Release boundary regressions. The separate macOS/Linux real-release smoke is opt-in and remains skipped during normal CI.
+- [x] Obtain passing native Linux/Windows and hosted CI results. All six jobs passed for commit **8de9ba3** in [Verify run 38138333626](https://github.com/Coder-Sang/pi-rpc/actions/runs/38138333626), including Windows stable and exact Rust 1.85.0. Native Linux ARM64 and local macOS checks supplement the hosted results; see the dated verification record for scope.
 
 ## Before a crates.io release
 
 - [ ] Complete the licensing and privacy decisions above.
-- [ ] Choose and configure the actual public repository URL, appropriate documentation/homepage metadata and discoverability fields. No guessed owner URL is inserted by this audit.
+- [x] Configure the actual public repository URL and discoverability fields. Cargo declares the verified GitHub repository, keywords and all-feature docs.rs metadata. A hosted documentation URL can be added once an actual documentation site exists.
 - [ ] Decide package name/version and API stability policy. Crates.io name availability and account ownership have not been checked.
 - [ ] Review the exact packaged file list. Current packaging includes README, docs, tests and opt-in TypeScript fixtures. They do not execute automatically during a normal library build. Keep any fixture required by a shipped example available if adding an `include`/`exclude` policy.
 - [ ] Deliberately change `publish=false` only when release is authorized. This setting blocks registry publishing, not local `cargo package` verification.
@@ -29,6 +31,8 @@ See [verification](verification.md) for dated results and [compatibility](compat
 CARGO_NET_OFFLINE=true bash scripts/verify.sh
 CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh
 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
+CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
+RUSTUP_TOOLCHAIN=1.85.0 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
 python3 scripts/test_checks.py
 python3 scripts/check-docs.py .
 cargo package --locked --offline --list
@@ -41,11 +45,11 @@ python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
 
 ## What the current checks establish
 
-- Normal build/test/lint/docs workflow passed in four feature configurations, with 222 test executions, not 222 independent tests.
-- Exact Rust 1.85.0 passed all four feature configurations' all-targets check and tests, with 222 executions. Earlier Rust 1.85.1 all-features checks remain historical evidence.
-- Local source packaging and its verification build passed. The earlier pre-license package check warned about missing licensing/repository metadata. Apache-2.0 now resolves the licensing metadata warning; public repository/documentation metadata remains to be configured. Packaging is not permission or proof of registry acceptance.
-- Every normal RPC command name has real Pi execution evidence. Opus 4.6 supplied real queue/tool/active-abort/manual-compaction evidence. Retry/automatic-compaction evidence uses real Pi with synthetic upstream faults/usage and an extension summary, not production provider incidents.
-- No Linux/Windows or remote-vendor deployment was verified. No publication, remote push or global Pi installation was performed.
+- Normal build/test/lint/docs workflow passed in four feature configurations, with **356 test executions**, not 356 independent tests.
+- Exact Rust **1.85.0** passed all four feature configurations' all-targets check and tests, with **356 executions**. Each OS/compiler CI combination also passed **174** focused Debug/Release executions and **189** executions across three stress rounds. Coverage includes UI reply admission, floating-point counterexamples/subnormals, isolated 2 MiB stack safety and close races. Earlier compiler/test counts remain historical evidence in the verification document.
+- Source packaging and verification builds passed locally and on all three stable CI runners. The earlier missing licensing/repository metadata is now supplied. Packaging is not permission or proof of registry acceptance; future docs.rs hosting has not been tested.
+- Historical opt-in checks supplied real Pi execution evidence for every normal RPC command name, with Opus 4.6 queue/tool/active-abort/manual-compaction evidence. Retry/automatic-compaction used real Pi with synthetic upstream faults/usage and an extension summary, not production provider incidents. The recent cross-platform and metadata checks use only the fake and require no real Pi or paid model.
+- Native Linux, macOS and Windows CI execution is verified. Source was pushed publicly with authorization; no crates.io upload, release tag, remote-vendor deployment or global Pi installation was performed.
 
 ## Safe acceptance setup
 
