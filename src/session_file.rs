@@ -262,6 +262,10 @@ impl SessionFile {
 }
 fn validate_message(message: &Message) -> Result<()> {
     fields::reserved(&message.fields, &["role"])?;
+    // Native entry + message are two enclosing objects before any field value.
+    for value in message.fields.values() {
+        json::check_value_depth_at(value, 2)?;
+    }
     let value = json::to_value(message).map_err(|_| Error::Protocol("invalid message".into()))?;
     json::decode::<Message>(&value)
         .map(|_| ())

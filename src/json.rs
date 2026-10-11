@@ -55,6 +55,11 @@ impl DepthScanner {
 
 /// Check caller-created Values without cloning or recursive traversal.
 pub(crate) fn check_value_depth(value: &Value) -> Result<()> {
+    check_value_depth_at(value, 0)
+}
+
+/// Accounts for implicit containing objects in typed records.
+pub(crate) fn check_value_depth_at(value: &Value, ancestors: usize) -> Result<()> {
     // Iterators keep the traversal stack bounded by depth, not object width.
     let mut levels = vec![Box::new(std::iter::once(value)) as Box<dyn Iterator<Item = &Value>>];
     while let Some(level) = levels.last_mut() {
@@ -67,7 +72,7 @@ pub(crate) fn check_value_depth(value: &Value) -> Result<()> {
             Value::Object(values) => Box::new(values.values()),
             _ => continue,
         };
-        if levels.len() > MAX_DEPTH {
+        if levels.len().saturating_add(ancestors) > MAX_DEPTH {
             return Err(depth_error());
         }
         levels.push(children);
