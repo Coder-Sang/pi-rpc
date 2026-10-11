@@ -252,10 +252,12 @@ class PackageChecks(unittest.TestCase):
                  ".DS_Store", "nested/.DS_Store", "Thumbs.db", "desktop.ini", "Desktop.ini",
                  "a.swp", "a.swo", "a~", "nested/auth.json", "settings.json", "a.pem", "a.key",
                  "target/output", "nested/target/output", ".pi/config", "nested/__pycache__/a.pyc",
-                 "target", "__pycache__", "Cargo.lock", "tests/fixture.json", "README.md"]
-        result = subprocess.run(["git", "-C", str(root), "check-ignore", "--no-index", "--stdin"],
-                                input="\n".join(names) + "\n", text=True, capture_output=True, check=True)
-        ignored = set(result.stdout.splitlines())
+                 "target", "__pycache__", "Cargo.lock", "tests/fixture.json", "README.md",
+                 "nested/line\nbreak.key", 'nested/quoted"name.pem', "nested/中文.key", "nested/中文.json"]
+        # NUL-delimited bytes avoid Windows newline translation and Git path quoting.
+        result = subprocess.run(["git", "-C", str(root), "check-ignore", "--no-index", "--stdin", "-z"],
+                                input=("\0".join(names) + "\0").encode("utf-8"), capture_output=True, check=True)
+        ignored = set(result.stdout.decode("utf-8").rstrip("\0").split("\0"))
         for name in names:
             with self.subTest(name=name):
                 self.assertEqual(unwanted_package_file(name), name in ignored)
