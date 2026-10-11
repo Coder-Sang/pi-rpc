@@ -19,6 +19,12 @@ REQUIRED_FILES = {
     "tests/fixtures/fake_pi.rs", "tests/fixtures/rpc_acceptance_extension.ts",
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
 }
+PACKAGE_METADATA = {
+    "name": "pi-rpc", "license": "Apache-2.0", "publish": False,
+    "edition": "2024", "rust-version": "1.85", "readme": "README.md",
+    "repository": "https://github.com/Coder-Sang/pi-rpc",
+    "keywords": ["pi", "rpc", "jsonl", "tokio", "async"],
+}
 
 
 class CheckError(ValueError):
@@ -131,16 +137,30 @@ def read_archive(path):
     return prefix, files
 
 
+def check_package_metadata(metadata, name):
+    require(isinstance(metadata, dict), f"{name}: missing or invalid package table")
+    require(isinstance(metadata.get("version"), str) and bool(metadata["version"]),
+            f"{name}: missing or invalid version")
+    for key, expected in PACKAGE_METADATA.items():
+        actual = metadata.get(key)
+        require(type(actual) is type(expected) and actual == expected,
+                f"{name}: unexpected or missing {key}")
+    current = metadata
+    for key in ("metadata", "docs", "rs"):
+        current = current.get(key) if isinstance(current, dict) else None
+        require(isinstance(current, dict), f"{name}: missing or invalid docs.rs metadata")
+    require(current.get("all-features") is True, f"{name}: docs.rs all-features must be true")
+
+
 def check_package(path, source_root=None, expected_commit=None):
     prefix, files = read_archive(path)
     require(REQUIRED_FILES <= files.keys(), f"missing package files: {sorted(REQUIRED_FILES - files.keys())}")
-    manifest = tomllib.loads(files["Cargo.toml"].decode("utf-8"))["package"]
-    original = tomllib.loads(files["Cargo.toml.orig"].decode("utf-8"))["package"]
+    manifest = tomllib.loads(files["Cargo.toml"].decode("utf-8")).get("package")
+    original = tomllib.loads(files["Cargo.toml.orig"].decode("utf-8")).get("package")
+    for name, metadata in [("Cargo.toml", manifest), ("Cargo.toml.orig", original)]:
+        check_package_metadata(metadata, name)
     require(prefix == f"{manifest['name']}-{manifest['version']}", "package root does not match manifest")
-    for metadata in [manifest, original]:
-        require(metadata.get("name") == "pi-rpc", "unexpected package name")
-        require(metadata.get("license") == "Apache-2.0", "license must be Apache-2.0")
-        require(metadata.get("publish") is False, "publish=false must be preserved")
+    require(manifest["version"] == original.get("version"), "manifest versions differ")
     require(hashlib.sha256(files["LICENSE"]).hexdigest() == APACHE_SHA256, "LICENSE is not exact official Apache-2.0 text")
     require(not any(n.startswith((".git/", "target/", ".pi/")) or PurePosixPath(n).name in {"auth.json", ".env", "settings.json"}
                     or n.endswith((".pem", ".key")) for n in files), "unexpected sensitive/build file in package")

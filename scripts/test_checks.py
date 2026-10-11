@@ -48,7 +48,11 @@ class PackageChecks(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.archive = Path(self.temp.name) / "fixture.crate"
         self.files = {name: b"" for name in REQUIRED_FILES}
-        manifest = b'[package]\nname="pi-rpc"\nversion="0.1.0"\nlicense="Apache-2.0"\npublish=false\n'
+        manifest = (b'[package]\nname="pi-rpc"\nversion="0.1.0"\nlicense="Apache-2.0"\npublish=false\n'
+                    b'edition="2024"\nrust-version="1.85"\nreadme="README.md"\n'
+                    b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
+                    b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
+                    b'[package.metadata.docs.rs]\nall-features=true\n')
         self.files.update({"Cargo.toml": manifest, "Cargo.toml.orig": manifest,
                            "LICENSE": (ROOT / "LICENSE").read_bytes(),
                            "README.md": b"[license](LICENSE)\n[docs](docs/compatibility.md#scope)\n",
@@ -92,6 +96,52 @@ class PackageChecks(unittest.TestCase):
             self.write_archive()
             with self.assertRaises(CheckError):
                 check_package(self.archive, expected_commit="expected")
+
+    def test_required_metadata_missing_wrong_or_wrong_type(self):
+        mutations = [
+            (b'edition="2024"\n', [b'', b'edition="2021"\n', b'edition=2024\n']),
+            (b'rust-version="1.85"\n', [b'', b'rust-version="1.88"\n', b'rust-version=1.85\n']),
+            (b'readme="README.md"\n', [b'', b'readme="missing.md"\n', b'readme=false\n']),
+            (b'repository="https://github.com/Coder-Sang/pi-rpc"\n',
+             [b'', b'repository="https://example.invalid"\n', b'repository=false\n']),
+            (b'keywords=["pi","rpc","jsonl","tokio","async"]\n',
+             [b'', b'keywords=["pi"]\n', b'keywords="pi"\n']),
+            (b'all-features=true\n', [b'', b'all-features=false\n', b'all-features=1\n']),
+            (b'[package.metadata.docs.rs]\nall-features=true\n',
+             [b'', b'metadata="invalid"\n', b'[package.metadata]\ndocs=false\n',
+              b'[package.metadata.docs]\nrs=[]\n']),
+        ]
+        root = self.source_root()
+        for name in ["Cargo.toml", "Cargo.toml.orig"]:
+            saved = self.files[name]
+            for old, replacements in mutations:
+                for replacement in replacements:
+                    with self.subTest(name=name, old=old, replacement=replacement):
+                        self.files[name] = saved.replace(old, replacement)
+                        self.write_archive()
+                        for options in [{}, {"source_root": root, "expected_commit": "expected"}]:
+                            with self.assertRaises(CheckError):
+                                check_package(self.archive, **options)
+            self.files[name] = saved
+
+    def test_manifest_versions_must_agree(self):
+        self.files["Cargo.toml.orig"] = self.files["Cargo.toml.orig"].replace(b'version="0.1.0"', b'version="0.2.0"')
+        self.write_archive()
+        with self.assertRaisesRegex(CheckError, "versions differ"):
+            check_package(self.archive)
+
+    def test_package_table_and_version_required(self):
+        for name in ["Cargo.toml", "Cargo.toml.orig"]:
+            saved = self.files[name]
+            for replacement in [b'package=false\n', b'[other]\n',
+                                saved.replace(b'version="0.1.0"\n', b''),
+                                saved.replace(b'version="0.1.0"', b'version=1')]:
+                with self.subTest(name=name, replacement=replacement):
+                    self.files[name] = replacement
+                    self.write_archive()
+                    with self.assertRaises(CheckError):
+                        check_package(self.archive)
+            self.files[name] = saved
 
     def source_root(self):
         root = Path(self.temp.name) / "source"
