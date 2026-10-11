@@ -109,13 +109,25 @@ async fn late_dialog_while_admitted_writer_is_stalled_does_not_abort_drain() {
     })
     .await; // Establish closing admission without relying on scheduling/sleep.
     assert_eq!(client.abort().await, Err(Error::Closed));
-    w.write_all(b"{\"type\":\"extension_ui_request\",\"id\":\"u\",\"method\":\"confirm\",\"title\":\"t\",\"message\":\"m\"}\n").await.unwrap();
-    assert!(matches!(
-        tokio::time::timeout(Duration::from_secs(2), events.recv())
-            .await
-            .unwrap(),
-        Some(Ok(Event::Ui(_)))
-    ));
+    w.write_all(
+        b"{\"type\":\"extension_ui_request\",\"id\":\"u\",\"method\":\"input\",\"title\":\"t\"}\n",
+    )
+    .await
+    .unwrap();
+    let Some(Ok(Event::Ui(dialog))) = tokio::time::timeout(Duration::from_secs(2), events.recv())
+        .await
+        .unwrap()
+    else {
+        panic!("expected late dialog")
+    };
+    // Establish closing before an otherwise valid reply that exceeds the record
+    // budget: closing takes precedence and the admitted command still drains.
+    assert_eq!(
+        client
+            .respond_ui(&dialog, UiAnswer::Value("x".repeat(5 * 1024 * 1024)))
+            .await,
+        Err(Error::Closed)
+    );
     assert!(!command.is_finished());
     let mut reader = BufReader::new(r);
     reader.read_until(b'\n', &mut bytes).await.unwrap();

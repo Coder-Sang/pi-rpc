@@ -4,12 +4,28 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 
 ## Current status summary
 
-- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **336 test executions**, not 328 distinct tests. Strict docs and examples also passed.
+- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **356 test executions** across four feature configurations. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**336 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
+- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**356 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
 - Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Bounded UI replies and close admission (2026-10-11)
+
+Manual UI replies now serialize a borrowed ID/text record into the bounded writer. The public `UiAnswer::record` API still returns an owned Value and retains its existing behavior. Automatic cancellation uses the same borrowed wire representation. Public interfaces, dependency versions, the lockfile, Rust 1.85 and Pi 1.1.0 are unchanged.
+
+- Manual admission checks terminal/closing state before validation or record construction, releases the lock for bounded encoding, then rechecks state under the enqueue lock. Existing terminal errors take precedence; closing returns Closed. Reply kind and select-choice validation remains unchanged on open connections.
+- Wire tests cover confirm true/false, cancel for every dialog, select, empty input, editor text and escaped UTF-8 IDs/text. Exact record budgets exclude LF, and one-byte-short limits reject without submitting any record. Encoded fields match the existing public record API.
+- Oversized input/editor answers return Capacity without terminating the connection or sending a rejected reply. A subsequent command and small UI reply both succeed without an acknowledgement for the UI reply.
+- A stalled-writer close test supplies a valid **5 MiB** late input reply, checks Closed, drains the previously admitted command and verifies no late UI bytes, successful response processing and exactly one terminal event. Synchronization polls the close future directly; no sleep establishes the race.
+- Deterministic unit tests change closing/terminal state during serialization, assert encoding holds no state lock, and verify no writer records/byte permits or pending slots are consumed. A record-construction callback is not invoked after closing or termination. Public tests also cover large/invalid answers after owner drop or EOF, with the original terminal reason delivered exactly once.
+
+An external allocation probe repeated the review reproducer with **100,000,000 bytes** of caller-owned answer text and a **1,024-byte** record limit. The largest allocation inside the reply call fell from **100,000,000 bytes** to **64 bytes** while open; closing/closed calls return Closed with **zero** allocations. These are observed allocation sizes, not machine-dependent unit-test thresholds; the probe is not shipped.
+
+`verify.sh`, exact Rust **1.85.0** `verify-msrv.sh`, three-round `verify-stress.sh` (now including `ui_reply`), Release UI/client/protocol/depth/float regressions, all **11** Python checker tests, document links and whitespace checks passed. The four configurations execute **72/102/61/91 integration tests**, **4/5/4/5 unit tests**, and 3 doctests each: **356 executions** per matrix. Strict formatting, Clippy, rustdoc and injected/native/fake-local examples passed. Linux x64 all-feature/all-target cross-check passed; native Linux/Windows runtime and hosted CI were not run. No live Pi or paid model request was made.
+
+Local logs are `/tmp/pi-rpc-ui-reply-{verify,msrv,stress,release,linux,python}.log`; they are not shipped.
 
 ## Exact floating-point roundtrips (2026-10-11)
 

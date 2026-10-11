@@ -1009,7 +1009,7 @@ pub enum UiAnswer {
     Cancel,
 }
 impl UiAnswer {
-    pub fn record(&self, request: &UiRequest) -> Result<Value> {
+    fn validate(&self, request: &UiRequest) -> Result<()> {
         let valid = match (&request.method, self) {
             (m, Self::Cancel) => m.is_dialog(),
             (UiMethod::Confirm { .. }, Self::Confirmed(_)) => true,
@@ -1020,6 +1020,38 @@ impl UiAnswer {
         if !valid {
             return Err(Error::Protocol("UI response does not match dialog".into()));
         }
+        Ok(())
+    }
+    /// Borrow the text and ID so bounded output does not need an owned JSON copy.
+    pub(crate) fn wire_record<'a>(&'a self, request: &'a UiRequest) -> Result<impl Serialize + 'a> {
+        self.validate(request)?;
+        #[derive(Serialize)]
+        struct Reply<'a> {
+            r#type: &'static str,
+            id: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            value: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            confirmed: Option<bool>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            cancelled: Option<bool>,
+        }
+        Ok(Reply {
+            r#type: "extension_ui_response",
+            id: &request.id,
+            value: match self {
+                Self::Value(text) => Some(text),
+                _ => None,
+            },
+            confirmed: match self {
+                Self::Confirmed(value) => Some(*value),
+                _ => None,
+            },
+            cancelled: matches!(self, Self::Cancel).then_some(true),
+        })
+    }
+    pub fn record(&self, request: &UiRequest) -> Result<Value> {
+        self.validate(request)?;
         let mut v = serde_json::json!({"type":"extension_ui_response","id":request.id});
         match self {
             Self::Value(s) => v["value"] = s.clone().into(),

@@ -102,7 +102,7 @@ client.respond_ui(&request, UiAnswer::Cancel).await?;
 # Ok(()) }
 ```
 
-`respond_ui` uses the received request ID, validates response kind and select choices, writes exactly one UI response, and awaits local flush only. It **does not enter the normal pending map or wait for an ack**. Host UI policy should avoid duplicate replies and respect Pi-side timeouts. notify/setStatus/setWidget/setTitle/set_editor_text are one-way and must not be replied to. They are delivered as UI events in both policies.
+`respond_ui` uses the received request ID, validates response kind and select choices, writes exactly one UI response, and awaits local flush only. Text answers are serialized directly within the record byte budget, without first copying the full text into JSON. Once closing begins, replies are rejected before validation or encoding; an already published terminal error takes precedence. Admission checks the state again after encoding, so a concurrent close cannot enqueue a late reply. It **does not enter the normal pending map or wait for an ack**. Host UI policy should avoid duplicate replies and respect Pi-side timeouts. notify/setStatus/setWidget/setTitle/set_editor_text are one-way and must not be replied to. They are delivered as UI events in both policies.
 
 Once orderly close starts, automatic dialog replies are skipped atomically with submission admission. Late dialogs remain observable events, and reading continues through subsequent command responses and peer EOF. Public `respond_ui` calls after close starts still return `Closed`. Close does not enqueue replies behind the stdin shutdown marker.
 

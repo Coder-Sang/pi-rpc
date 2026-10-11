@@ -395,15 +395,29 @@ impl PiClient {
     }
     /// UI responses are write-only, never registered as pending commands.
     pub async fn respond_ui(&self, request: &UiRequest, answer: UiAnswer) -> Result<()> {
-        let record = answer.record(request)?;
-        let sent = self.send_one_way(record)?;
+        let sent = self.send_one_way(|| answer.wire_record(request))?;
         tokio::time::timeout(self.shared.config.command_timeout, async {
             sent.await.map_err(|_| self.shared.reason())?
         })
         .await
         .map_err(|_| Error::Timeout)?
     }
-    fn send_one_way(&self, value: Value) -> Result<oneshot::Receiver<Result<()>>> {
+    fn send_one_way<T: serde::Serialize>(
+        &self,
+        record: impl FnOnce() -> Result<T>,
+    ) -> Result<oneshot::Receiver<Result<()>>> {
+        // Check before validating/building the record, then serialize without
+        // holding the state lock and check again atomically with queue admission.
+        {
+            let state = self.shared.state.lock().unwrap();
+            if let Some(error) = &state.terminal {
+                return Err(error.clone());
+            }
+            if state.closing {
+                return Err(Error::Closed);
+            }
+        }
+        let value = record()?;
         let bytes = codec::encode(&value, self.shared.config.max_record_bytes)?;
         let s = self.shared.state.lock().unwrap();
         if let Some(e) = &s.terminal {
@@ -424,7 +438,7 @@ impl PiClient {
             return Ok(());
         }
         let bytes = codec::encode(
-            &UiAnswer::Cancel.record(request)?,
+            &UiAnswer::Cancel.wire_record(request)?,
             self.shared.config.max_record_bytes,
         )?;
         // Only local admission is performed here; the continuous reader never
@@ -755,6 +769,86 @@ async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn one_way_admission_skips_construction_after_close_or_terminal() {
+        for terminal in [None, Some(Error::Transport("failed writer".into()))] {
+            let (local, _peer) = tokio::io::duplex(1024);
+            let (r, w) = tokio::io::split(local);
+            let (client, _events, owner) = PiConnection::connect(
+                Transport::new(r, w, crate::PI_VERSION).unwrap(),
+                Config::default(),
+            )
+            .unwrap();
+            let expected = terminal.clone().unwrap_or(Error::Closed);
+            if let Some(error) = terminal {
+                client.shared.finish(error);
+            } else {
+                client.shared.state.lock().unwrap().closing = true;
+            }
+            assert_eq!(
+                client
+                    .send_one_way(|| -> Result<Value> { panic!("record must not be constructed") })
+                    .unwrap_err(),
+                expected
+            );
+            drop(owner);
+        }
+    }
+
+    #[tokio::test]
+    async fn one_way_admission_rechecks_close_and_terminal_after_serialization() {
+        struct Race<'a> {
+            shared: &'a Shared,
+            terminal: Option<Error>,
+        }
+        impl serde::Serialize for Race<'_> {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                // This callback deterministically puts the state change between
+                // preflight and enqueue, and asserts encoding releases the lock.
+                let mut state = self
+                    .shared
+                    .state
+                    .try_lock()
+                    .expect("no lock during encoding");
+                if let Some(error) = &self.terminal {
+                    drop(state);
+                    self.shared.finish(error.clone());
+                } else {
+                    state.closing = true;
+                }
+                serializer.serialize_unit()
+            }
+        }
+        for terminal in [None, Some(Error::Transport("racing writer failure".into()))] {
+            let (local, _peer) = tokio::io::duplex(1024);
+            let (r, w) = tokio::io::split(local);
+            let (client, _events, owner) = PiConnection::connect(
+                Transport::new(r, w, crate::PI_VERSION).unwrap(),
+                Config::default(),
+            )
+            .unwrap();
+            let records = client.writer.capacity();
+            let bytes = client.budget.available_permits();
+            let expected = terminal.clone().unwrap_or(Error::Closed);
+            assert_eq!(
+                client
+                    .send_one_way(|| Ok(Race {
+                        shared: &client.shared,
+                        terminal
+                    }))
+                    .unwrap_err(),
+                expected
+            );
+            assert_eq!(client.writer.capacity(), records);
+            assert_eq!(client.budget.available_permits(), bytes);
+            assert!(client.shared.state.lock().unwrap().pending.is_empty());
+            drop(owner);
+        }
+    }
 
     #[tokio::test]
     async fn closed_event_channel_waits_for_publication_and_cancelled_recv_keeps_error() {
