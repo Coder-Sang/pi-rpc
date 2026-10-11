@@ -49,8 +49,9 @@ def unwanted_package_file(name):
 
 
 def check_ignore_policy(data):
-    rules = [line.strip() for line in data.decode("utf-8").splitlines()
-             if line.strip() and not line.lstrip().startswith("#")]
+    # Git treats leading whitespace as part of a pattern, including before '#'.
+    rules = [line for line in data.decode("utf-8").splitlines()
+             if line and not line.startswith("#")]
     require(rules == package_ignore_rules(), ".gitignore differs from the package ignore policy")
 
 

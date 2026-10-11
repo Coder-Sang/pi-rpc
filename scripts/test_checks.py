@@ -238,6 +238,32 @@ class PackageChecks(unittest.TestCase):
                     check_package(self.archive)
         self.files[".gitignore"] = saved
 
+    def test_ignore_policy_leading_space_and_tab_rejected(self):
+        saved = self.files[".gitignore"]
+        for rule in saved.splitlines():
+            for prefix in [b" ", b"\t"]:
+                with self.subTest(rule=rule, prefix=prefix):
+                    self.files[".gitignore"] = saved.replace(rule + b"\n", prefix + rule + b"\n")
+                    self.write_archive()
+                    with self.assertRaisesRegex(CheckError, "ignore policy"):
+                        check_package(self.archive)
+        self.files[".gitignore"] = saved
+
+    def test_ignore_policy_indented_hash_is_not_comment(self):
+        saved = self.files[".gitignore"]
+        for prefix in [b" ", b"\t"]:
+            with self.subTest(prefix=prefix):
+                self.files[".gitignore"] = saved + prefix + b"#literal-pattern\n"
+                self.write_archive()
+                with self.assertRaisesRegex(CheckError, "ignore policy"):
+                    check_package(self.archive)
+        self.files[".gitignore"] = saved
+
+    def test_ignore_policy_comments_blank_lines_and_crlf(self):
+        self.files[".gitignore"] = (b"# Policy comment\n\n" + self.files[".gitignore"]).replace(b"\n", b"\r\n")
+        self.write_archive()
+        check_package(self.archive)
+
     def test_ignore_policy_matches_git(self):
         root = Path(self.temp.name) / "git-policy"
         root.mkdir()
