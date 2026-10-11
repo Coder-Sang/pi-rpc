@@ -2,7 +2,7 @@
 
 Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. Licensed under **[Apache-2.0](./LICENSE)**. This license covers this project's original code and documentation, not separately licensed dependencies or the Pi executable. `publish=false` remains set. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
-Declared minimum Rust: **1.85** (edition 2024). Four-feature checks and tests have passed on exact **1.85.0** and 1.97.1 on macOS aarch64; earlier 1.85.1 checks also passed. Linux/Windows runtime and hosted CI results remain unverified. Pi is a separately supplied executable, not installed by this crate.
+Declared minimum Rust: **1.85** (edition 2024). Native Linux, macOS and Windows CI passed all four feature configurations on stable and exact **1.85.0**, plus three stress rounds and Debug/Release boundary regressions; see the [hosted verification evidence](docs/verification.md#hosted-six-job-cross-platform-acceptance-2026-10-11). Local macOS and Linux ARM64 checks supplement those results. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
 
 ## Features and ownership
 
@@ -127,7 +127,7 @@ Required-but-nullable fields distinguish absence from explicit null: cycle respo
 
 ## Development
 
-See [verification](docs/verification.md#validation-supplement-2026-10-09) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
+See [verification](docs/verification.md#current-status-summary) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
 
 ```bash
 CARGO_NET_OFFLINE=true bash scripts/verify.sh       # Four features, strict lint/docs, examples
