@@ -14,31 +14,43 @@ fn depth_error() -> Error {
 /// Count containers before recursive parsing allocates any nested values.
 /// This is a depth guard, not a substitute for serde_json's syntax validation.
 pub(crate) fn check_wire_depth(bytes: &[u8]) -> Result<()> {
-    let (mut depth, mut in_string, mut escaped) = (0usize, false, false);
-    for &byte in bytes {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == b'"' {
-                in_string = false;
-            }
-        } else {
-            match byte {
-                b'"' => in_string = true,
-                b'{' | b'[' => {
-                    depth += 1;
-                    if depth > MAX_DEPTH {
-                        return Err(depth_error());
-                    }
+    DepthScanner::default().scan(bytes)
+}
+
+/// Incremental scanner shared by inbound parsing and the output writer.
+#[derive(Default)]
+pub(crate) struct DepthScanner {
+    depth: usize,
+    in_string: bool,
+    escaped: bool,
+}
+impl DepthScanner {
+    pub(crate) fn scan(&mut self, bytes: &[u8]) -> Result<()> {
+        for &byte in bytes {
+            if self.in_string {
+                if self.escaped {
+                    self.escaped = false;
+                } else if byte == b'\\' {
+                    self.escaped = true;
+                } else if byte == b'"' {
+                    self.in_string = false;
                 }
-                b'}' | b']' => depth = depth.saturating_sub(1),
-                _ => {}
+            } else {
+                match byte {
+                    b'"' => self.in_string = true,
+                    b'{' | b'[' => {
+                        self.depth += 1;
+                        if self.depth > MAX_DEPTH {
+                            return Err(depth_error());
+                        }
+                    }
+                    b'}' | b']' => self.depth = self.depth.saturating_sub(1),
+                    _ => {}
+                }
             }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 /// Check caller-created Values without cloning or recursive traversal.

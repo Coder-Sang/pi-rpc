@@ -54,3 +54,64 @@ fn serializer_failure_remains_protocol_error() {
         Err(Error::Protocol(_))
     ));
 }
+
+#[test]
+fn generated_depth_is_bounded_on_small_stack_in_isolated_process() {
+    const CHILD: &str = "PI_RPC_GENERATED_DEPTH_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        std::thread::Builder::new().stack_size(2 * 1024 * 1024).spawn(|| {
+            struct Generated<'a>(usize, &'a AtomicUsize, bool);
+            impl Serialize for Generated<'_> {
+                fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                    self.1.fetch_add(1, Ordering::Relaxed);
+                    if self.0 == 0 { return serializer.serialize_unit(); }
+                    if self.2 {
+                        use serde::ser::SerializeStruct;
+                        let mut object = serializer.serialize_struct("Generated", 1)?;
+                        object.serialize_field("child", &Generated(self.0 - 1, self.1, true))?;
+                        object.end()
+                    } else {
+                        let mut seq = serializer.serialize_seq(Some(1))?;
+                        seq.serialize_element(&Generated(self.0 - 1, self.1, false))?;
+                        seq.end()
+                    }
+                }
+            }
+            let count = AtomicUsize::new(0);
+            for object in [false, true] {
+                let bytes = codec::encode(&Generated(512, &count, object), 4 * 1024 * 1024).unwrap();
+                assert_eq!(bytes.len(), if object { 5125 } else { 1029 });
+                for depth in [513, 50_000] {
+                    count.store(0, Ordering::Relaxed);
+                    assert!(matches!(codec::encode(&Generated(depth, &count, object), 4 * 1024 * 1024), Err(Error::Protocol(s)) if s.contains("nesting depth")));
+                    assert_eq!(count.load(Ordering::Relaxed), 513);
+                }
+            }
+        }).unwrap().join().unwrap();
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "generated_depth_is_bounded_on_small_stack_in_isolated_process",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "generated depth child failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn streaming_depth_ignores_brackets_and_fragmented_escapes_in_strings() {
+    let text = "[{}]\\\"\n".repeat(1000);
+    let value = serde_json::json!({"text":text,"more":[{"x":"\\"}]});
+    let mut expected = serde_json::to_vec(&value).unwrap();
+    expected.push(b'\n');
+    assert_eq!(codec::encode(&value, 65536).unwrap(), expected);
+}

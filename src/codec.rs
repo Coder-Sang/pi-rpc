@@ -13,13 +13,20 @@ pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
     struct BoundedWriter {
         bytes: Vec<u8>,
         limit: usize,
-        exceeded: bool,
+        failure: Option<Error>,
+        depth: json::DepthScanner,
     }
     impl std::io::Write for BoundedWriter {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
-                self.exceeded = true;
-                return Err(std::io::Error::other("record byte limit exceeded"));
+            if self.failure.is_none() {
+                self.failure = if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
+                    Some(Error::Capacity("record bytes"))
+                } else {
+                    self.depth.scan(bytes).err()
+                };
+            }
+            if self.failure.is_some() {
+                return Err(std::io::Error::other("JSON output limit exceeded"));
             }
             self.bytes.extend_from_slice(bytes);
             Ok(bytes.len())
@@ -31,15 +38,15 @@ pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
     let mut writer = BoundedWriter {
         bytes: Vec::new(),
         limit: max_bytes,
-        exceeded: false,
+        failure: None,
+        depth: json::DepthScanner::default(),
     };
     let mut serializer = serde_json::Serializer::new(&mut writer);
     let result = value.serialize(serde_stacker::Serializer::new(&mut serializer));
-    if writer.exceeded {
-        return Err(Error::Capacity("record bytes"));
+    if let Some(error) = writer.failure {
+        return Err(error);
     }
     result.map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
-    json::check_wire_depth(&writer.bytes)?;
     writer.bytes.push(b'\n');
     Ok(writer.bytes)
 }
