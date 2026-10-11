@@ -299,3 +299,76 @@ fn owned_rejection_and_unpolled_futures_are_stack_safe() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn panicking_text_conversion_releases_images_on_small_stack() {
+    const CHILD: &str = "PI_RPC_TEXT_PANIC_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                struct PanickingText;
+                impl From<PanickingText> for String {
+                    fn from(_: PanickingText) -> Self {
+                        panic!("conversion failed");
+                    }
+                }
+                fn images() -> Option<Vec<pi_rpc::protocol::ImageContent>> {
+                    let mut image: pi_rpc::protocol::ImageContent = serde_json::from_value(
+                        json!({"type":"image","data":"","mimeType":"image/png"}),
+                    )
+                    .unwrap();
+                    let mut value = Value::Null;
+                    for _ in 0..100_000 {
+                        value = Value::Array(vec![value]);
+                    }
+                    image.extra.insert("opaque".into(), value);
+                    Some(vec![image])
+                }
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let (local, _remote) = tokio::io::duplex(1024);
+                    let (r, w) = tokio::io::split(local);
+                    let (client, _events, owner) = PiConnection::connect(
+                        Transport::new(r, w, PI_VERSION).unwrap(),
+                        Config::default(),
+                    )
+                    .unwrap();
+                    for method in 0..3 {
+                        let result =
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                                || match method {
+                                    0 => drop(client.prompt_with(PanickingText, images(), None)),
+                                    1 => drop(client.steer(PanickingText, images())),
+                                    _ => drop(client.follow_up(PanickingText, images())),
+                                },
+                            ));
+                        assert!(result.is_err());
+                        assert_eq!(owner.terminal_reason(), None);
+                    }
+                });
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        return;
+    }
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "panicking_text_conversion_releases_images_on_small_stack",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "text panic child failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

@@ -13,7 +13,6 @@ impl<T: Cleanup> Owned<T> {
     pub(crate) fn new(value: T) -> Self {
         Self(Some(value))
     }
-    #[cfg(feature = "session_file")]
     pub(crate) fn take(mut self) -> T {
         self.0.take().unwrap()
     }
@@ -118,6 +117,14 @@ impl Cleanup for crate::session_file::SessionFile {
         extra(&mut self.header.extra);
         for entry in &mut self.entries {
             entry.cleanup();
+        }
+    }
+}
+
+impl Cleanup for Option<Vec<crate::protocol::ImageContent>> {
+    fn cleanup(&mut self) {
+        for image in self.iter_mut().flatten() {
+            extra(&mut image.extra);
         }
     }
 }

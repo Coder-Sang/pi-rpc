@@ -448,9 +448,11 @@ impl PiClient {
         images: Option<Vec<ImageContent>>,
         streaming_behavior: Option<StreamingBehavior>,
     ) -> impl std::future::Future<Output = Result<PromptDisposition>> + Send {
+        let images = crate::owned::Owned::new(images);
+        let message = message.into();
         let response = self.typed::<Disposition<PromptDisposition>>(Command::Prompt {
-            message: message.into(),
-            images,
+            message,
+            images: images.take(),
             streaming_behavior,
         });
         async move { Ok(response.await?.disposition) }
@@ -460,9 +462,11 @@ impl PiClient {
         message: impl Into<String>,
         images: Option<Vec<ImageContent>>,
     ) -> impl std::future::Future<Output = Result<QueuedInputDisposition>> + Send {
+        let images = crate::owned::Owned::new(images);
+        let message = message.into();
         let response = self.typed::<Disposition<QueuedInputDisposition>>(Command::Steer {
-            message: message.into(),
-            images,
+            message,
+            images: images.take(),
         });
         async move { Ok(response.await?.disposition) }
     }
@@ -471,9 +475,11 @@ impl PiClient {
         message: impl Into<String>,
         images: Option<Vec<ImageContent>>,
     ) -> impl std::future::Future<Output = Result<QueuedInputDisposition>> + Send {
+        let images = crate::owned::Owned::new(images);
+        let message = message.into();
         let response = self.typed::<Disposition<QueuedInputDisposition>>(Command::FollowUp {
-            message: message.into(),
-            images,
+            message,
+            images: images.take(),
         });
         async move { Ok(response.await?.disposition) }
     }
