@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 sys.dont_write_bytecode = True
-from validation_checks import CheckError, REQUIRED_FILES, check_documents, check_package, read_archive
+from validation_checks import CheckError, REQUIRED_FILES, check_documents, check_package, read_archive, unwanted_package_file
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -54,6 +54,7 @@ class PackageChecks(unittest.TestCase):
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
                     b'[package.metadata.docs.rs]\nall-features=true\n')
         self.files.update({"Cargo.toml": manifest, "Cargo.toml.orig": manifest,
+                           ".gitignore": (ROOT / ".gitignore").read_bytes(),
                            "LICENSE": (ROOT / "LICENSE").read_bytes(),
                            "README.md": b"[license](LICENSE)\n[docs](docs/compatibility.md#scope)\n",
                            "docs/compatibility.md": b"# Scope\n",
@@ -146,7 +147,7 @@ class PackageChecks(unittest.TestCase):
     def source_root(self):
         root = Path(self.temp.name) / "source"
         root.mkdir(exist_ok=True)
-        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", *sorted(n for n in self.files if n.startswith("docs/"))]:
+        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", ".gitignore", *sorted(n for n in self.files if n.startswith("docs/"))]:
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(self.files[name])
@@ -154,16 +155,21 @@ class PackageChecks(unittest.TestCase):
 
     def test_source_mismatch(self):
         root = self.source_root()
-        (root / "README.md").write_text("changed", encoding="utf-8")
         self.write_archive()
-        with self.assertRaisesRegex(CheckError, "differs from source"):
-            check_package(self.archive, source_root=root)
+        for name in ["README.md", ".gitignore"]:
+            with self.subTest(name=name):
+                path = root / name
+                saved = path.read_bytes()
+                path.write_text("changed", encoding="utf-8")
+                with self.assertRaisesRegex(CheckError, "differs from source"):
+                    check_package(self.archive, source_root=root)
+                path.write_bytes(saved)
 
     def test_missing_source_files(self):
         root = self.source_root()
         self.write_archive()
         check_package(self.archive, source_root=root)
-        for name in ["LICENSE", "Cargo.lock", "README.md", "docs/verification.md"]:
+        for name in ["LICENSE", "Cargo.lock", "README.md", ".gitignore", "docs/verification.md"]:
             with self.subTest(name=name):
                 path = root / name
                 saved = path.read_bytes()
@@ -200,6 +206,59 @@ class PackageChecks(unittest.TestCase):
         self.write_archive()
         with self.assertRaises(CheckError):
             check_package(self.archive)
+
+    def test_unwanted_files_rejected_at_root_and_in_subdirectories(self):
+        names = [".env", ".env.local", ".env.production", ".env.example.bak", ".DS_Store", "Thumbs.db",
+                 "desktop.ini", "Desktop.ini", "file.swp", "file.swo", "file~", "file.pyc",
+                 "auth.json", "settings.json", "certificate.pem", "private.key"]
+        names += ["target/output", ".git/config", ".pi/config", "__pycache__/cache", "nested/__pycache__/cache",
+                  ".env.local/.env.example", "nested/.env.production/data"]
+        for name in [*names, *("nested/" + name for name in names[:16])]:
+            with self.subTest(name=name):
+                self.files[name] = b"harmless fixture"
+                self.write_archive()
+                with self.assertRaisesRegex(CheckError, "unexpected sensitive/build file"):
+                    check_package(self.archive)
+                del self.files[name]
+
+    def test_env_example_and_legitimate_json_files_preserved(self):
+        for name in [".env.example", "nested/.env.example", "nested/target/data", "tests/fixture.json"]:
+            self.files[name] = b"harmless fixture"
+        self.write_archive()
+        check_package(self.archive)
+
+    def test_ignore_policy_drift_rejected(self):
+        saved = self.files[".gitignore"]
+        reordered = saved.replace(b'!.env.example\n', b'').replace(b'.env.*\n', b'!.env.example\n.env.*\n')
+        for data in [saved.replace(b'.env.*\n', b''), saved.replace(b'!.env.example\n', b''), saved + b'*.json\n', reordered]:
+            with self.subTest(data=data):
+                self.files[".gitignore"] = data
+                self.write_archive()
+                with self.assertRaisesRegex(CheckError, "ignore policy"):
+                    check_package(self.archive)
+        self.files[".gitignore"] = saved
+
+    def test_ignore_policy_matches_git(self):
+        root = Path(self.temp.name) / "git-policy"
+        root.mkdir()
+        subprocess.run(["git", "init", "--quiet", "--template=", str(root)], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(root), "config", "core.ignorecase", "false"], check=True)
+        excludes = root / "empty-excludes"
+        excludes.write_bytes(b"")
+        subprocess.run(["git", "-C", str(root), "config", "core.excludesFile", str(excludes)], check=True)
+        (root / ".gitignore").write_bytes(self.files[".gitignore"])
+        names = [".env", ".env.local", "nested/.env.local", ".env.example", "nested/.env.example",
+                 ".env.example.bak", ".env.local/.env.example", "nested/.env.production/data",
+                 ".DS_Store", "nested/.DS_Store", "Thumbs.db", "desktop.ini", "Desktop.ini",
+                 "a.swp", "a.swo", "a~", "nested/auth.json", "settings.json", "a.pem", "a.key",
+                 "target/output", "nested/target/output", ".pi/config", "nested/__pycache__/a.pyc",
+                 "target", "__pycache__", "Cargo.lock", "tests/fixture.json", "README.md"]
+        result = subprocess.run(["git", "-C", str(root), "check-ignore", "--no-index", "--stdin"],
+                                input="\n".join(names) + "\n", text=True, capture_output=True, check=True)
+        ignored = set(result.stdout.splitlines())
+        for name in names:
+            with self.subTest(name=name):
+                self.assertEqual(unwanted_package_file(name), name in ignored)
 
 
 if __name__ == "__main__":

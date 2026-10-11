@@ -6,6 +6,8 @@ The implementation is suitable for a **technical preview**, subject to the remai
 
 Cargo also declares five discoverability keywords and `package.metadata.docs.rs.all-features = true`, so a future docs.rs build includes the optional APIs. This metadata does not upload a crate or create a hosted documentation page. No separate homepage is declared because there is no dedicated project website. `.DS_Store` is ignored at every directory level, preserving local Finder files while excluding them from normal package selection.
 
+The package checker enforces the repository, keywords, edition, Rust 1.85 minimum, README, license, `publish=false` and all-feature docs.rs configuration in both original and normalized manifests. The two versions must agree. The archived `.gitignore` must match the checker's ordered policy and, when a source root is supplied, the source file. Local `.env` variants, Finder/Windows/editor artifacts, Python caches and the existing private credential/configuration filenames are rejected even if accidentally tracked; `.env.example` remains allowed at the root and in subdirectories. An example template inside an otherwise ignored directory remains excluded. Rules are deliberately bounded, and the checker is not a general secret scanner.
+
 See [verification](verification.md) for dated results and [compatibility](compatibility.md) for protocol/source boundaries.
 
 ## Before an open-source release
@@ -41,7 +43,7 @@ python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root
 python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
 ```
 
-`--offline` requires dependencies/toolchains already present locally. The MSRV script requires explicitly installed **1.85.0** and pins nested `rustc` calls too. Python checks require **3.11+** (CI pins 3.12). Package checks inspect archive-internal targets; source/manifest/docs comparison and clean VCS matching are separate assertions, not a general secret audit.
+`--offline` requires dependencies/toolchains already present locally. The MSRV script requires explicitly installed **1.85.0** and pins nested `rustc` calls too. Python checks require **3.11+** (CI pins 3.12); checker unit tests also require Git to compare the ignore policy with actual Git behavior. The archive/document checker commands themselves use only the Python standard library. Package checks inspect archive-internal targets; source/manifest/docs comparison and clean VCS matching are separate assertions, not a general secret audit.
 
 ## What the current checks establish
 

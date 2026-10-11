@@ -9,12 +9,13 @@ import posixpath
 import re
 import tarfile
 import tomllib
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 APACHE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 REQUIRED_FILES = {
-    "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", "LICENSE", "README.md",
+    "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", "LICENSE", "README.md", ".gitignore",
     "src/lib.rs", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md",
     "tests/fixtures/fake_pi.rs", "tests/fixtures/rpc_acceptance_extension.ts",
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
@@ -25,6 +26,32 @@ PACKAGE_METADATA = {
     "repository": "https://github.com/Coder-Sang/pi-rpc",
     "keywords": ["pi", "rpc", "jsonl", "tokio", "async"],
 }
+IGNORED_ROOT_DIRECTORIES = ("target", ".git", ".pi")
+IGNORED_DIRECTORIES = ("__pycache__",)
+IGNORED_BASENAMES = ("*.pyc", ".DS_Store", "Thumbs.db", "[Dd]esktop.ini", "*.swp", "*.swo", "*~",
+                     ".env", ".env.*", "auth.json", "settings.json", "*.pem", "*.key")
+ALLOWED_BASENAMES = (".env.example",)
+
+
+def package_ignore_rules():
+    """The deliberately limited ignore policy shared with .gitignore."""
+    return [*(f"/{name}/" for name in IGNORED_ROOT_DIRECTORIES),
+            *(f"{name}/" for name in IGNORED_DIRECTORIES),
+            *IGNORED_BASENAMES, *(f"!{name}" for name in ALLOWED_BASENAMES)]
+
+
+def unwanted_package_file(name):
+    parts = PurePosixPath(name).parts
+    return (len(parts) > 1 and parts[0] in IGNORED_ROOT_DIRECTORIES
+            or any(part in IGNORED_DIRECTORIES for part in parts[:-1])
+            or any(part not in ALLOWED_BASENAMES and any(fnmatchcase(part, pattern) for pattern in IGNORED_BASENAMES)
+                   for part in parts))
+
+
+def check_ignore_policy(data):
+    rules = [line.strip() for line in data.decode("utf-8").splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    require(rules == package_ignore_rules(), ".gitignore differs from the package ignore policy")
 
 
 class CheckError(ValueError):
@@ -97,7 +124,7 @@ def read_root(root):
     require(root.is_dir(), f"not a directory: {root}")
     files = {}
     # Include potential local link destinations, but skip build/Git/private folders.
-    for name in ["README.md", "LICENSE", "Cargo.toml", "Cargo.toml.orig", "Cargo.lock"]:
+    for name in ["README.md", "LICENSE", "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".gitignore"]:
         path = root / name
         if path.is_file():
             require(not path.is_symlink(), f"symlink target not accepted: {name}")
@@ -162,12 +189,12 @@ def check_package(path, source_root=None, expected_commit=None):
     require(prefix == f"{manifest['name']}-{manifest['version']}", "package root does not match manifest")
     require(manifest["version"] == original.get("version"), "manifest versions differ")
     require(hashlib.sha256(files["LICENSE"]).hexdigest() == APACHE_SHA256, "LICENSE is not exact official Apache-2.0 text")
-    require(not any(n.startswith((".git/", "target/", ".pi/")) or PurePosixPath(n).name in {"auth.json", ".env", "settings.json"}
-                    or n.endswith((".pem", ".key")) for n in files), "unexpected sensitive/build file in package")
+    check_ignore_policy(files[".gitignore"])
+    require(not any(unwanted_package_file(n) for n in files), "unexpected sensitive/build file in package")
     documents, links = check_documents(files)
     if source_root:
         root, source = read_root(source_root)
-        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md"}
+        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", "README.md", ".gitignore", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md"}
         require(required_source <= source.keys(), f"missing source comparison files: {sorted(required_source - source.keys())}")
         require({n for n in source if n.startswith("docs/")} == {n for n in files if n.startswith("docs/")},
                 "package/source docs inventory differs")
