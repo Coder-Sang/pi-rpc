@@ -12,7 +12,25 @@ pub(super) fn reserved(fields: &Extra, names: &[&str]) -> Result<()> {
     }
     Ok(())
 }
+fn finite(values: &[f64]) -> Result<()> {
+    if values.iter().any(|value| !value.is_finite()) {
+        return Err(Error::Protocol("non-finite native numeric field".into()));
+    }
+    Ok(())
+}
 fn usage(usage: &Usage) -> Result<()> {
+    finite(&[
+        usage.input,
+        usage.output,
+        usage.cache_read,
+        usage.cache_write,
+        usage.total_tokens,
+        usage.cost.input,
+        usage.cost.output,
+        usage.cost.cache_read,
+        usage.cost.cache_write,
+        usage.cost.total,
+    ])?;
     reserved(
         &usage.extra,
         &[
@@ -60,7 +78,12 @@ pub(super) fn entry(data: &EntryData) -> Result<()> {
             reserved(extra, &["kind", "provider", "model", "usage"])?;
             Some(extra)
         }
-        EntryData::Compaction { extra, .. } => {
+        EntryData::Compaction {
+            extra,
+            tokens_before,
+            ..
+        } => {
+            finite(&[*tokens_before])?;
             reserved(extra, &["summary", "firstKeptEntryId", "tokensBefore"])?;
             Some(extra)
         }

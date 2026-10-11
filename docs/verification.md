@@ -4,12 +4,30 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 
 ## Current status summary
 
-- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **300 test executions**, not 300 distinct tests. Strict docs and examples also passed.
+- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **328 test executions**, not 328 distinct tests. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**300 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
+- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**328 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
 - Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Five boundary follow-up fixes (2026-10-11)
+
+Fake-only verification on macOS aarch64, Rust 1.97.1 and exact 1.85.0. Public method arguments, return types, Pi 1.1.0 and dependency versions remain unchanged. No live Pi or paid model request was made.
+
+- The output writer checks JSON depth incrementally, with string/escape state retained across writes. It stops on container 513 and preserves the first depth/byte error even if later writes are attempted. Isolated **2 MiB** thread-stack tests accept 512 and reject 513/50,000 levels for custom `SerializeSeq` and `SerializeStruct` implementations in Debug and Release; serializer counters prove rejection after 513 visits. Escaped strings and existing wire/typed-tree regressions passed.
+- `prompt_with`, `steer` and `follow_up` guard image ownership before `Into<String>`. An isolated **2 MiB** test supplies 100,000-level image metadata and a panicking conversion to each method. `catch_unwind` recovers, the connection remains open and the process exits normally. Existing rejection, rollback and unpolled-future tests passed.
+- Native export checks entry count and performs bounded serialization before full semantic validation. Per-record budgets exclude LF; remaining file budgets include LF, and bound the next record before allocating it. Header/nonmessage validation scans serialized depth into a sink without a Value copy. Regression cases cover capacity-before-semantics, zero/exact/one-byte-short budgets, remaining-file exhaustion and rejection of admitted reserved-field collisions. If an input violates both budgets and semantics, export may now return Capacity first; this is documented in the README.
+- Native message validation includes both enclosing entry/message objects. A 510-array opaque field gives a complete 512-container record and roundtrips; 511 arrays are rejected on append, mutable-file validation and existing-file builder admission. Failed appends neither retain records nor reserve IDs. Header/custom-entry roots continue to accept 511 arrays (512 containers total).
+- All **11 typed floating-point fields** across compaction, usage and cost reject NaN and both infinities before export or builder admission. Finite zero, negative zero, positive/negative ordinary values, large values, maximum finite magnitudes and the minimum positive normal value roundtrip.
+
+`CARGO_NET_OFFLINE=true bash scripts/verify.sh`, exact `verify-msrv.sh`, three-round `verify-stress.sh`, the Release encoding/depth/numeric suites, all **11** Python checker tests, explicit-root Markdown checks and Git whitespace checks passed. The four feature configurations run **68/96/57/85 integration tests**, **2/3/2/3 unit tests** and 3 doctests each: **328 executions** per matrix. Strict formatting, all-targets check, Clippy, rustdoc and injected/native/fake-local examples passed. Stress now includes `encoding_limits` along with client, subprocess, close/UI and JSON depth suites.
+
+The original isolated generated-sequence and conversion-panic reproductions now exit normally with a Protocol depth error and a recovered panic respectively. For a caller-created **100,000,000-byte** header string with a **32-byte** record limit, the macOS peak resident size was **101.7 MB**, versus **101.4 MB** for merely holding the input. Before the fix, the same review case reached **201.7 MB**. These are process measurements, not machine-dependent unit-test thresholds.
+
+After compiler/test workloads finished, seven-sample Release mixed-history parse medians were **1.43/2.84/5.67 ms** for 1,000/2,000/4,000 entries. Three-sample message-builder medians were **5.18/9.83/19.93 ms** for the same message counts; the compatible mutable append API took **917/3,593/14,160 ms**. Linux x64 all-feature/all-target cross-check passed using clang/ar. Native Linux/Windows runtime and hosted CI were not run; the existing Windows SDK limitation still applies. No dependency or native build configuration changed.
+
+Local evidence is in `/tmp/pi-rpc-five-fixes-*.log` and is not shipped. Older results below predate these boundary fixes.
 
 ## Four follow-up review fixes (2026-10-11)
 
