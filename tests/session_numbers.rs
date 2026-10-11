@@ -79,16 +79,74 @@ fn finite_numbers_roundtrip_without_normalization() {
             -f64::MAX,
             f64::MIN_POSITIVE,
         ] {
-            let file = file(field, number);
-            let file = SessionFileBuilder::from_session_file(file)
-                .unwrap()
-                .finish()
-                .unwrap();
-            let bytes = file.encode(SessionLimits::default()).unwrap();
-            assert_eq!(
-                SessionFile::parse(&bytes, SessionLimits::default()).unwrap(),
-                file
-            );
+            assert_exact_roundtrip(field, number);
+        }
+    }
+}
+
+fn assert_exact_roundtrip(field: usize, number: f64) {
+    let file = SessionFileBuilder::from_session_file(file(field, number))
+        .unwrap()
+        .finish()
+        .unwrap();
+    let bytes = file.encode(SessionLimits::default()).unwrap();
+    let parsed = SessionFile::parse(&bytes, SessionLimits::default()).unwrap();
+    let actual = match &parsed.entries[0].data {
+        EntryData::Compaction { tokens_before, .. } => *tokens_before,
+        EntryData::Usage { usage, .. } => match field {
+            1 => usage.input,
+            2 => usage.output,
+            3 => usage.cache_read,
+            4 => usage.cache_write,
+            5 => usage.total_tokens,
+            6 => usage.cost.input,
+            7 => usage.cost.output,
+            8 => usage.cost.cache_read,
+            9 => usage.cost.cache_write,
+            10 => usage.cost.total,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+    // PartialEq cannot distinguish +0.0 from -0.0; require identical IEEE bits.
+    assert_eq!(
+        actual.to_bits(),
+        number.to_bits(),
+        "field={field}, expected={number:?}, actual={actual:?}"
+    );
+    assert_eq!(parsed, file);
+}
+
+#[test]
+fn precision_counterexamples_roundtrip_exactly_in_every_typed_field() {
+    // The default JSON parser rounded these shortest decimal encodings by 1 ULP:
+    // 1.5801779765215413 and 8.971135692166839e-150.
+    for field in 0..=10 {
+        for bits in [0x3ff9_4868_b3b0_4fc6, 0x20fd_5db4_3a77_6693] {
+            for number in [f64::from_bits(bits), -f64::from_bits(bits)] {
+                assert_exact_roundtrip(field, number);
+            }
+        }
+    }
+}
+
+#[test]
+fn subnormal_numbers_roundtrip_exactly_in_every_typed_field() {
+    for field in 0..=10 {
+        // Smallest subnormal, its neighbor, a middle value, and the two values
+        // immediately below the smallest positive normal number.
+        for bits in [
+            1,
+            2,
+            0x0008_0000_0000_0001,
+            0x000f_ffff_ffff_fffe,
+            0x000f_ffff_ffff_ffff,
+        ] {
+            let number = f64::from_bits(bits);
+            assert!(number.is_subnormal());
+            for number in [number, -number] {
+                assert_exact_roundtrip(field, number);
+            }
         }
     }
 }

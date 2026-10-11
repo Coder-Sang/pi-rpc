@@ -4,12 +4,25 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 
 ## Current status summary
 
-- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **328 test executions**, not 328 distinct tests. Strict docs and examples also passed.
+- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **336 test executions**, not 328 distinct tests. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**328 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
+- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**336 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
 - Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Exact floating-point roundtrips (2026-10-11)
+
+Enabled the existing `serde_json/float_roundtrip` feature without changing dependency versions, the lockfile, public interfaces or Pi 1.1.0. The new regression failed before the feature was enabled: native `tokensBefore` changed from `1.5801779765215413` to `1.5801779765215411` after encoding and parsing (1 ULP).
+
+- Native tests exercise both signs of that counterexample and `8.971135692166839e-150` across all **11** compaction/usage/cost fields, using builder admission, finish, encode and parse.
+- Subnormal tests exercise the smallest value, its neighbor, a middle value and the two values immediately below the normal boundary, with both signs in every typed field.
+- All finite roundtrip assertions compare IEEE-754 bits, including signed zero. Existing non-finite rejection tests remain unchanged and pass.
+- A JSONL tool-duration test verifies the precision counterexamples, smallest/largest subnormal values and negative zero through wire parsing, typed event decoding, encoding and reparsing. It runs in all four feature configurations.
+
+`verify.sh`, exact Rust **1.85.0** `verify-msrv.sh`, three-round `verify-stress.sh`, Release regressions for encoding/depth/native budgets/numbers, all **11** Python checker tests, document links and whitespace checks passed. The four configurations execute **69/99/58/88 integration tests**, **2/3/2/3 unit tests**, and 3 doctests each: **336 executions** per matrix. Strict formatting, Clippy, rustdoc and injected/native/fake-local examples passed. Linux x64 all-feature/all-target cross-check also passed; native Linux/Windows runtime and hosted CI were not run. No live Pi or paid model request was made.
+
+Local logs are `/tmp/pi-rpc-float-{verify,msrv,stress,release,linux}.log`; they are not shipped.
 
 ## Five boundary follow-up fixes (2026-10-11)
 

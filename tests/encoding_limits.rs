@@ -115,3 +115,44 @@ fn streaming_depth_ignores_brackets_and_fragmented_escapes_in_strings() {
     expected.push(b'\n');
     assert_eq!(codec::encode(&value, 65536).unwrap(), expected);
 }
+
+#[tokio::test]
+async fn jsonl_tool_duration_preserves_float_bits_through_typed_decoding() {
+    use pi_rpc::protocol::{Event, KnownEvent, Record, decode_record};
+    for bits in [
+        0x3ff9_4868_b3b0_4fc6,
+        0x20fd_5db4_3a77_6693,
+        1,
+        0x000f_ffff_ffff_ffff,
+        (-0.0f64).to_bits(),
+    ] {
+        let number = f64::from_bits(bits);
+        let wire = format!(
+            "{{\"type\":\"tool_execution_end\",\"toolCallId\":\"t\",\"toolName\":\"tool\",\"result\":null,\"isError\":false,\"durationMs\":{number:?}}}\n"
+        );
+        let (value, _) = codec::JsonlReader::new(wire.as_bytes(), 65536)
+            .next()
+            .await
+            .unwrap()
+            .unwrap();
+        let Record::Event(Event::Known(event)) = decode_record(value).unwrap() else {
+            panic!("expected tool event");
+        };
+        let KnownEvent::ToolExecutionEnd { duration_ms, .. } = &event else {
+            panic!("expected tool execution end");
+        };
+        assert_eq!(duration_ms.unwrap().to_bits(), bits);
+        let encoded = codec::encode(&event, 65536).unwrap();
+        let (value, _) = codec::JsonlReader::new(encoded.as_slice(), 65536)
+            .next()
+            .await
+            .unwrap()
+            .unwrap();
+        let Record::Event(Event::Known(KnownEvent::ToolExecutionEnd { duration_ms, .. })) =
+            decode_record(value).unwrap()
+        else {
+            panic!("expected reencoded tool event");
+        };
+        assert_eq!(duration_ms.unwrap().to_bits(), bits);
+    }
+}
