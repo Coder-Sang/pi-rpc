@@ -4,6 +4,7 @@
 pub mod client;
 pub mod codec;
 mod json;
+mod owned;
 pub mod protocol;
 #[cfg(feature = "session_file")]
 pub mod session_file;

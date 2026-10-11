@@ -26,9 +26,13 @@ impl SessionFileBuilder {
 
     /// Validates existing history once and takes exclusive ownership of it.
     pub fn from_session_file(file: SessionFile) -> Result<Self> {
+        let file = crate::owned::Owned::new(file);
         file.validate()?;
         let ids = file.entries.iter().map(|entry| entry.id.clone()).collect();
-        Ok(Self { file, ids })
+        Ok(Self {
+            file: file.take(),
+            ids,
+        })
     }
 
     /// Checks only the new message and its ID/parent; failures leave history unchanged.
@@ -40,6 +44,7 @@ impl SessionFileBuilder {
         timestamp: impl Into<String>,
         message: Message,
     ) -> Result<()> {
+        let message = crate::owned::Owned::new(message);
         let id = id.into();
         let timestamp = timestamp.into();
         if id.is_empty() || timestamp.is_empty() || self.ids.contains(&id) {
@@ -58,7 +63,9 @@ impl SessionFileBuilder {
             id,
             parent_id,
             timestamp,
-            data: EntryData::Message { message },
+            data: EntryData::Message {
+                message: message.take(),
+            },
         });
         Ok(())
     }

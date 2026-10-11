@@ -311,56 +311,65 @@ impl PiClient {
     }
     /// No automatic retries. Capacity failure means not submitted. A timeout
     /// after local enqueue has an uncertain send/execution outcome.
-    pub async fn command(&self, command: Command) -> Result<Response> {
+    pub fn command(
+        &self,
+        command: Command,
+    ) -> impl std::future::Future<Output = Result<Response>> + Send {
         self.command_with_timeout(command, self.shared.config.command_timeout)
-            .await
     }
-    pub async fn command_with_timeout(
+    pub fn command_with_timeout(
         &self,
         command: Command,
         timeout: Duration,
-    ) -> Result<Response> {
-        let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
-        let name = command.name();
-        let mut v = json::to_value(&command)
-            .map_err(|_| Error::Protocol("cannot encode command".into()))?;
-        v["id"] = id.clone().into();
-        let bytes = codec::encode(&v, self.shared.config.max_record_bytes)?;
-        let (response, rx) = oneshot::channel();
-        let sent = {
-            let mut s = self.shared.state.lock().unwrap();
-            if let Some(e) = &s.terminal {
-                return Err(e.clone());
-            }
-            if s.closing {
-                return Err(Error::Closed);
-            }
-            if s.pending.len() >= self.shared.config.max_pending_commands {
-                return Err(Error::Capacity("pending commands"));
-            }
-            let sent = self.enqueue_locked(bytes)?;
-            s.pending.insert(
-                id.clone(),
-                Pending {
-                    command: name,
-                    response,
-                },
-            );
-            sent
-        };
-        let _guard = PendingGuard {
-            shared: self.shared.clone(),
-            id,
-        };
-        tokio::time::timeout(timeout, async {
-            sent.await.map_err(|_| self.shared.reason())??;
-            rx.await.map_err(|_| self.shared.reason())?
-        })
-        .await
-        .map_err(|_| Error::Timeout)?
+    ) -> impl std::future::Future<Output = Result<Response>> + Send {
+        let command = crate::owned::Owned::new(command);
+        async move {
+            let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
+            let name = command.name();
+            let mut v = json::to_value(&*command)
+                .map_err(|_| Error::Protocol("cannot encode command".into()))?;
+            v["id"] = id.clone().into();
+            let bytes = codec::encode(&v, self.shared.config.max_record_bytes)?;
+            let (response, rx) = oneshot::channel();
+            let sent = {
+                let mut s = self.shared.state.lock().unwrap();
+                if let Some(e) = &s.terminal {
+                    return Err(e.clone());
+                }
+                if s.closing {
+                    return Err(Error::Closed);
+                }
+                if s.pending.len() >= self.shared.config.max_pending_commands {
+                    return Err(Error::Capacity("pending commands"));
+                }
+                let sent = self.enqueue_locked(bytes)?;
+                s.pending.insert(
+                    id.clone(),
+                    Pending {
+                        command: name,
+                        response,
+                    },
+                );
+                sent
+            };
+            let _guard = PendingGuard {
+                shared: self.shared.clone(),
+                id,
+            };
+            tokio::time::timeout(timeout, async {
+                sent.await.map_err(|_| self.shared.reason())??;
+                rx.await.map_err(|_| self.shared.reason())?
+            })
+            .await
+            .map_err(|_| Error::Timeout)?
+        }
     }
-    pub async fn typed<T: DeserializeOwned>(&self, command: Command) -> Result<T> {
-        self.command(command).await?.decode()
+    pub fn typed<T: DeserializeOwned>(
+        &self,
+        command: Command,
+    ) -> impl std::future::Future<Output = Result<T>> + Send {
+        let response = self.command(command);
+        async move { response.await?.decode() }
     }
     /// UI responses are write-only, never registered as pending commands.
     pub async fn respond_ui(&self, request: &UiRequest, answer: UiAnswer) -> Result<()> {
@@ -411,46 +420,40 @@ impl PiClient {
             .await?
             .disposition)
     }
-    pub async fn prompt_with(
+    pub fn prompt_with(
         &self,
         message: impl Into<String>,
         images: Option<Vec<ImageContent>>,
         streaming_behavior: Option<StreamingBehavior>,
-    ) -> Result<PromptDisposition> {
-        Ok(self
-            .typed::<Disposition<PromptDisposition>>(Command::Prompt {
-                message: message.into(),
-                images,
-                streaming_behavior,
-            })
-            .await?
-            .disposition)
+    ) -> impl std::future::Future<Output = Result<PromptDisposition>> + Send {
+        let response = self.typed::<Disposition<PromptDisposition>>(Command::Prompt {
+            message: message.into(),
+            images,
+            streaming_behavior,
+        });
+        async move { Ok(response.await?.disposition) }
     }
-    pub async fn steer(
+    pub fn steer(
         &self,
         message: impl Into<String>,
         images: Option<Vec<ImageContent>>,
-    ) -> Result<QueuedInputDisposition> {
-        Ok(self
-            .typed::<Disposition<QueuedInputDisposition>>(Command::Steer {
-                message: message.into(),
-                images,
-            })
-            .await?
-            .disposition)
+    ) -> impl std::future::Future<Output = Result<QueuedInputDisposition>> + Send {
+        let response = self.typed::<Disposition<QueuedInputDisposition>>(Command::Steer {
+            message: message.into(),
+            images,
+        });
+        async move { Ok(response.await?.disposition) }
     }
-    pub async fn follow_up(
+    pub fn follow_up(
         &self,
         message: impl Into<String>,
         images: Option<Vec<ImageContent>>,
-    ) -> Result<QueuedInputDisposition> {
-        Ok(self
-            .typed::<Disposition<QueuedInputDisposition>>(Command::FollowUp {
-                message: message.into(),
-                images,
-            })
-            .await?
-            .disposition)
+    ) -> impl std::future::Future<Output = Result<QueuedInputDisposition>> + Send {
+        let response = self.typed::<Disposition<QueuedInputDisposition>>(Command::FollowUp {
+            message: message.into(),
+            images,
+        });
+        async move { Ok(response.await?.disposition) }
     }
     pub async fn abort(&self) -> Result<()> {
         self.command(Command::Abort).await.map(|_| ())

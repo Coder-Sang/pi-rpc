@@ -132,15 +132,20 @@ impl SessionFile {
         timestamp: impl Into<String>,
         message: Message,
     ) -> Result<()> {
+        let message = crate::owned::Owned::new(message);
         let entry = SessionEntry {
             id: id.into(),
             parent_id,
             timestamp: timestamp.into(),
-            data: EntryData::Message { message },
+            data: EntryData::Message {
+                message: message.take(),
+            },
         };
         self.entries.push(entry);
         if let Err(e) = self.validate() {
-            self.entries.pop();
+            if let Some(entry) = self.entries.pop() {
+                drop(crate::owned::Owned::new(entry));
+            }
             return Err(e);
         }
         Ok(())
@@ -155,6 +160,7 @@ impl SessionFile {
         {
             return Err(Error::Protocol("invalid native session header".into()));
         }
+        json::to_value(&self.header)?;
         let mut seen = HashSet::new();
         for e in &self.entries {
             if e.id.is_empty() || e.timestamp.is_empty() || !seen.insert(e.id.as_str()) {
@@ -170,6 +176,8 @@ impl SessionFile {
             // Validate even manually constructed Message fields before exporting.
             if let EntryData::Message { message } = &e.data {
                 validate_message(message)?;
+            } else {
+                json::to_value(e)?;
             }
         }
         for e in &self.entries {
@@ -239,7 +247,8 @@ fn validate_message(message: &Message) -> Result<()> {
 }
 /// Convenience constructor for a native user message, not history-as-prompt.
 pub fn user_message(content: MessageContent, timestamp_ms: u64) -> Result<Message> {
-    let content = json::to_value(&content)?;
+    let content = crate::owned::Owned::new(content);
+    let content = json::to_value(&*content)?;
     json::decode(&serde_json::json!({"role":"user","content":content,"timestamp":timestamp_ms}))
         .map_err(|_| Error::Protocol("invalid user message".into()))
 }

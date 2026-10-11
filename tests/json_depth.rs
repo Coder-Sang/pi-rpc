@@ -186,3 +186,116 @@ fn stack_safety_in_isolated_process() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn owned_rejection_and_unpolled_futures_are_stack_safe() {
+    const CHILD: &str = "PI_RPC_OWNED_STACK_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                fn deep() -> Value {
+                    let mut value = Value::Null;
+                    for _ in 0..100_000 {
+                        value = Value::Array(vec![value]);
+                    }
+                    value
+                }
+                fn images() -> Option<Vec<pi_rpc::protocol::ImageContent>> {
+                    let mut image: pi_rpc::protocol::ImageContent = serde_json::from_value(
+                        json!({"type":"image", "data":"", "mimeType":"image/png"}),
+                    )
+                    .unwrap();
+                    image.extra.insert("opaque".into(), deep());
+                    Some(vec![image])
+                }
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    use pi_rpc::protocol::Command as RpcCommand;
+                    let (local, _remote) = tokio::io::duplex(1024);
+                    let (r, w) = tokio::io::split(local);
+                    let (client, _events, _owner) = PiConnection::connect(
+                        Transport::new(r, w, PI_VERSION).unwrap(),
+                        Config::default(),
+                    )
+                    .unwrap();
+                    let command = || RpcCommand::Prompt {
+                        message: "test".into(),
+                        images: images(),
+                        streaming_behavior: None,
+                    };
+                    assert!(matches!(
+                        client.command(command()).await,
+                        Err(Error::Protocol(_))
+                    ));
+                    drop(client.command(command()));
+                    drop(client.command_with_timeout(command(), Duration::from_secs(1)));
+                    drop(client.typed::<Value>(command()));
+                    drop(client.prompt_with("test", images(), None));
+                    drop(client.steer("test", images()));
+                    drop(client.follow_up("test", images()));
+                    #[cfg(feature = "session_file")]
+                    {
+                        use pi_rpc::{
+                            protocol::{EntryData, Extra, Message, SessionEntry},
+                            session_file::{SessionFile, SessionFileBuilder},
+                        };
+                        let message = || {
+                            let mut fields = Extra::new();
+                            fields.insert("content".into(), json!("test"));
+                            fields.insert("timestamp".into(), json!(1));
+                            fields.insert("opaque".into(), deep());
+                            Message {
+                                role: "user".into(),
+                                fields,
+                            }
+                        };
+                        let mut builder = SessionFileBuilder::new("s", "t", "/p").unwrap();
+                        assert!(builder.append_message("a", None, "t", message()).is_err());
+                        assert!(builder.append_message("", None, "t", message()).is_err());
+                        assert!(
+                            builder
+                                .append_message("a", Some("missing".into()), "t", message())
+                                .is_err()
+                        );
+                        assert!(builder.finish().unwrap().entries.is_empty());
+                        let mut file = SessionFile::new("s", "t", "/p");
+                        assert!(file.append_message("a", None, "t", message()).is_err());
+                        assert!(file.entries.is_empty());
+                        file.entries.push(SessionEntry {
+                            id: "a".into(),
+                            parent_id: None,
+                            timestamp: "t".into(),
+                            data: EntryData::Message { message: message() },
+                        });
+                        assert!(SessionFileBuilder::from_session_file(file).is_err());
+                        let mut file = SessionFile::new("s", "t", "/p");
+                        file.header.extra.insert("opaque".into(), deep());
+                        assert!(SessionFileBuilder::from_session_file(file).is_err());
+                    }
+                });
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        return;
+    }
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "owned_rejection_and_unpolled_futures_are_stack_safe",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "owned stack child failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
