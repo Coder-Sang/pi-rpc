@@ -11,6 +11,10 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 - Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)** and retains `publish=false`; the manifest now declares the public repository, keywords and all-feature docs.rs metadata. The source was pushed to the public `Coder-Sang/pi-rpc` GitHub repository with user authorization; all six hosted OS/toolchain jobs passed, including packaging/checker steps on stable. No crate publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
 
+## Latest hosted verification (2026-10-12)
+
+Commit **4d9ed6f** passed all six jobs in [Verify run 38160425452](https://github.com/Coder-Sang/pi-rpc/actions/runs/38160425452), including stable and exact **1.85.0** on Linux, macOS and Windows. Stable jobs passed **21** Python checker tests, including leading-space/Tab ignore-policy regressions, plus document and actual crate checks. Every job passed its feature matrix, three stress rounds and Debug/Release boundary regressions. The manual real-Pi smoke was skipped; no real Pi or paid model request was made. This dated run is the latest completed evidence before the README reorganization; earlier observations below remain historical.
+
 ## Hosted six-job cross-platform acceptance (2026-10-11)
 
 Commit **9567193** passed [Verify run 38137879472](https://github.com/Coder-Sang/pi-rpc/actions/runs/38137879472), triggered by the authorized push of `main`. All six jobs completed successfully:

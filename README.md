@@ -2,9 +2,30 @@
 
 Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. Licensed under **[Apache-2.0](./LICENSE)**. This license covers this project's original code and documentation, not separately licensed dependencies or the Pi executable. `publish=false` remains set. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
-Declared minimum Rust: **1.85** (edition 2024). Native Linux, macOS and Windows CI passed all four feature configurations on stable and exact **1.85.0**, plus three stress rounds and Debug/Release boundary regressions; see the [hosted verification evidence](docs/verification.md#hosted-six-job-cross-platform-acceptance-2026-10-11). Local macOS and Linux ARM64 checks supplement those results. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
+Declared minimum Rust: **1.85** (edition 2024). Native Linux, macOS and Windows CI passed all four feature configurations on stable and exact **1.85.0**, plus three stress rounds and Debug/Release boundary regressions; see [Verify run 38160425452](https://github.com/Coder-Sang/pi-rpc/actions/runs/38160425452) for revision `4d9ed6f` and the [dated hosted verification evidence](docs/verification.md#hosted-six-job-cross-platform-acceptance-2026-10-11). Local macOS and Linux ARM64 checks supplement those results. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
 
-## Features and ownership
+## Installation
+
+The crate is not published on crates.io. Add a Git dependency to your application's `Cargo.toml`:
+
+```toml
+[dependencies]
+pi-rpc = { git = "https://github.com/Coder-Sang/pi-rpc", rev = "4d9ed6f2c883df9f0384ef8229b1aa763de94651" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+```
+
+This revision is the verified library snapshot linked above. Update `rev` deliberately when adopting a newer snapshot and retain your application's `Cargo.lock`. Rust imports use `pi_rpc`. For a sibling local checkout, replace the Git dependency with `pi-rpc = { path = "../pi-rpc" }`.
+
+### Cargo features
+
+| Feature | Default | Enables |
+|---|---|---|
+| `subprocess` | Yes | Local `PiProcess` and `ProcessOptions`; enables Tokio process support |
+| `session_file` | No | Native v3 `SessionFile` parsing, encoding and `SessionFileBuilder` |
+
+For injected transport only, add `default-features = false` to the dependency. To enable native sessions, add `features = ["session_file"]`; keep defaults for local processes, or also set `default-features = false` for native sessions with injected transport. `protocol`, `codec`, `transport` and `client` are always available modules, not Cargo feature names. The four tested configurations are default, no defaults, `session_file` without defaults, and all features.
+
+## Modules and ownership
 
 - `protocol`: all 33 normal commands, success-data types, 24 session/RPC event kinds, streaming deltas, nine extension UI methods, native messages and entries.
 - `codec`: strict LF JSONL, CRLF decoding, fragmented/coalesced byte streams, bounded records. Unicode U+2028/U+2029 inside strings do not split records. Nonempty unterminated EOF is an error.
@@ -96,11 +117,38 @@ Event byte accounting uses the original serialized UTF-8 record size, excluding 
 Default `UiPolicy::Cancel` enqueues `cancelled: true` for **every dialog**, including confirm. It never approves unattended actions. `Manual` leaves select/confirm/input/editor decisions to the consumer:
 
 ```rust,no_run
-# async fn example(client: pi_rpc::PiClient, request: pi_rpc::protocol::UiRequest) -> pi_rpc::Result<()> {
-use pi_rpc::protocol::UiAnswer;
-client.respond_ui(&request, UiAnswer::Cancel).await?;
+use pi_rpc::{Config, Error, PiConnection, Transport, UiPolicy, PI_VERSION};
+use pi_rpc::protocol::{Event, UiAnswer};
+# async fn example<R, W>(reader: R, writer: W) -> pi_rpc::Result<()>
+# where R: tokio::io::AsyncRead + Unpin + Send + 'static,
+# W: tokio::io::AsyncWrite + Unpin + Send + 'static {
+let config = Config { ui_policy: UiPolicy::Manual, ..Config::default() };
+let transport = Transport::new(reader, writer, PI_VERSION)?;
+let (client, mut events, mut owner) = PiConnection::connect(transport, config)?;
+let responder = client.clone();
+let consumer = tokio::spawn(async move {
+    while let Some(record) = events.recv().await {
+        match record {
+            Ok(Event::Ui(request)) if request.method.is_dialog() => {
+                // Replace Cancel with the host user's answer, once per dialog.
+                match responder.respond_ui(&request, UiAnswer::Cancel).await {
+                    Ok(()) | Err(Error::Closed) => {} // Drain late dialogs during close.
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(_) => { /* Handle ordinary events and one-way UI notifications. */ }
+            Err(_) => break,
+        }
+    }
+    Ok::<(), pi_rpc::Error>(())
+});
+let state = client.get_state().await?;
+owner.close().await;
+consumer.await.expect("event task")?;
 # Ok(()) }
 ```
+
+For local subprocesses, pass the same manual configuration in `ProcessOptions.connection` before calling `PiProcess::spawn`. Set the policy when connecting; the default Cancel policy already sends automatic replies and should not be combined with manual dialog responses.
 
 `respond_ui` uses the received request ID, validates response kind and select choices, writes exactly one UI response, and awaits local flush only. Text answers are serialized directly within the record byte budget, without first copying the full text into JSON. Once closing begins, replies are rejected before validation or encoding; an already published terminal error takes precedence. Admission checks the state again after encoding, so a concurrent close cannot enqueue a late reply. It **does not enter the normal pending map or wait for an ack**. Host UI policy should avoid duplicate replies and respect Pi-side timeouts. notify/setStatus/setWidget/setTitle/set_editor_text are one-way and must not be replied to. They are delivered as UI events in both policies.
 
@@ -129,33 +177,23 @@ Required-but-nullable fields distinguish absence from explicit null: cycle respo
 
 See [verification](docs/verification.md#current-status-summary) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
 
+Development requires stable Rust with rustfmt/Clippy, separately installed exact Rust **1.85.0**, **Bash**, **Git**, **Python 3.11+**, and a native C/assembly toolchain. On Windows use Git Bash plus MSVC with the Windows SDK. Python checker unit tests invoke Git; standalone document/archive checks use only the Python standard library. Commands below run from a clean Git checkout at the repository root; Windows users can use `python` if `python3` is unavailable.
+
 ```bash
 CARGO_NET_OFFLINE=true bash scripts/verify.sh       # Four features, strict lint/docs, examples
 CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh  # Requires installed exact Rust 1.85.0
 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh # Three rounds, no failure retries
 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh # Fake-only Debug and Release boundaries
-python3 scripts/test_checks.py                     # Python 3.11+ required
+RUSTUP_TOOLCHAIN=1.85.0 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
+python3 scripts/test_checks.py                     # Python 3.11+ and Git required
 python3 scripts/check-docs.py .                    # Explicit root, no Git dependency
 cargo package --locked --offline
 python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
 python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
 ```
 
-Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. All six CI combinations (Linux/macOS/Windows, stable/exact 1.85.0) run the feature matrix, three stress rounds including floating-point regressions, and focused Debug/Release UI, float, stack and close regressions. To repeat the focused suite on the minimum compiler, use `RUSTUP_TOOLCHAIN=1.85.0 bash scripts/verify-regressions.sh`. The separate opt-in macOS/Linux real-release smoke remains disabled by default; these normal checks use only the test fake. Configuring CI is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
+Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. All six CI combinations (Linux/macOS/Windows, stable/exact 1.85.0) run the feature matrix, three stress rounds including floating-point regressions, and focused Debug/Release UI, float, stack and close regressions. The separate opt-in macOS/Linux real-release smoke remains disabled by default; these normal checks use only the test fake. Configuring CI is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
 
-For opt-in, non-paid acceptance against a real **1.1.0** executable, run `bash scripts/verify-release.sh /absolute/path/to/pi`. It executes ten read-only RPCs through this crate and verifies orderly exit plus terminal-event delivery. The script clears inherited environment variables, uses temporary HOME/agent/work directories, and disables sessions, tools, MCP, extensions, skills, templates and themes. It does not install Pi or submit a prompt. The normal `verify.sh` remains fake-only and makes no Pi/model requests. Use `CARGO_NET_OFFLINE=true bash scripts/verify.sh` to forbid Cargo network access; plain `bash scripts/verify.sh` may download dependencies.
+## Real Pi acceptance
 
-For **opt-in paid minimal model acceptance**, prepare a private scratch agent directory and empty work directory, then run `PI_CODING_AGENT_DIR=/absolute/scratch/agent cargo run --example model_smoke -- /absolute/path/to/pi /absolute/path/to/empty-work anthropic`. Pi must find the required authentication and model configuration in that private agent directory. This selects Claude Opus 4.6, whose Pi ID is **`claude-opus-4-6`** (not `claude-opus-4.6`), disables tools/extensions/session saving/automatic retry, and sends one fixed short prompt. Omit the provider argument to list available matching providers without a model request. It verifies acceptance, streaming text, assistant completion/timing, non-aborted settlement, state/messages and clean terminal delivery. Unlike `verify-release.sh`, this inherits the configured environment. **The example does not enforce isolation itself: setting RPCs persist into the selected agent directory. Do not use your normal agent directory.** It never prints model metadata, credentials or raw diagnostics. The default verification script never runs this paid example.
-
-### Broader real-Pi acceptance
-
-All four examples below are opt-in and subprocess-feature gated. They are compiled, but **not run**, by `verify.sh`. Pi setting commands can persist configuration. Never point them at your normal agent directory. Use an absolute scratch `ROOT`, set `PI_CODING_AGENT_DIR=ROOT/agent`, and prepare private copies of `auth.json` and, if required, `models.json` there without printing their contents. Give the directory mode 700 and files mode 600. Each run needs fresh work/session directories. `rpc_live_smoke` overwrites `ROOT/agent/settings.json` with its test-only settings, so give it a dedicated disposable agent directory rather than a shared scratch configuration. `rpc_session_smoke` changes its supplied session and overwrites `ROOT/acceptance-export.html`; use a disposable copy of any history you want to retain. No private files belong in this repository.
-
-| Example | Arguments after `--` | Actual checks |
-|---|---|---|
-| `rpc_state_smoke` | `/path/pi ROOT` | Queries, model/thinking/queue modes, setting toggles, actual bash output and active bash cancellation, native entries/tree/since, new session. No model request. Unsaved bash-only export/clone restrictions are explicitly reported. |
-| `rpc_live_smoke` | `/path/pi ROOT` | **Paid Opus 4.6** tool execution, prompt queue acceptance, steer/follow-up consumption, exact queue removal, active abort, default manual compaction, fork and switch. Only its explicit local gate tool is enabled. It writes dedicated scratch settings with `keepRecentTokens=0` so the small test conversation can compact. |
-| `rpc_session_smoke` | `/path/pi ROOT ROOT/session.jsonl [--compact]` | Name, HTML file, clone, fork, new session and switch with exact history/identity checks. Existing session must be inside ROOT. No additional generation unless **paid** `--compact` is supplied; that option requires an appropriate small keepRecentTokens setting in the dedicated agent. |
-| `rpc_extension_smoke` | `/path/pi /fresh/scratch/cwd` | Nine UI methods under manual and default-cancel policies, actual extension-received answers, retry recovery/active cancellation/disabled behavior and automatic compaction. Requires `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` inside its scratch cwd. Uses an in-memory synthetic provider and extension-provided automatic summary, **not hosted-model fault evidence or Opus summarization**. |
-
-Use `cargo run --offline --example NAME -- ...`. Path guards in the opt-in examples are lexical, not a filesystem sandbox: use trusted scratch paths without symlinks or parent-directory traversal. Existing provider authentication is handled only by Pi. Settings isolation does not guarantee a readonly authentication copy: Pi may refresh tokens in that private copy. Scratch authentication/configuration cleanup remains the caller's responsibility. See the dated [per-RPC evidence and limitations](docs/verification.md#broader-real-rpc-acceptance-2026-10-09).
+Normal verification uses only the test fake. Separate opt-in checks cover read-only Pi RPCs, synthetic extension behavior and paid model acceptance; see the [real Pi acceptance guide](docs/acceptance.md). Those examples can persist settings or modify scratch files, and require the disposable environments described there.
