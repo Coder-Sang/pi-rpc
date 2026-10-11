@@ -133,6 +133,7 @@ See [verification](docs/verification.md#validation-supplement-2026-10-09) for ac
 CARGO_NET_OFFLINE=true bash scripts/verify.sh       # Four features, strict lint/docs, examples
 CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh  # Requires installed exact Rust 1.85.0
 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh # Three rounds, no failure retries
+CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh # Fake-only Debug and Release boundaries
 python3 scripts/test_checks.py                     # Python 3.11+ required
 python3 scripts/check-docs.py .                    # Explicit root, no Git dependency
 cargo package --locked --offline
@@ -140,7 +141,7 @@ python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root
 python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
 ```
 
-Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. The committed CI defines six OS/toolchain combinations and an opt-in macOS/Linux real-release smoke, but adding the workflow is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
+Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. All six CI combinations (Linux/macOS/Windows, stable/exact 1.85.0) run the feature matrix, three stress rounds including floating-point regressions, and focused Debug/Release UI, float, stack and close regressions. To repeat the focused suite on the minimum compiler, use `RUSTUP_TOOLCHAIN=1.85.0 bash scripts/verify-regressions.sh`. The separate opt-in macOS/Linux real-release smoke remains disabled by default; these normal checks use only the test fake. Configuring CI is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
 
 For opt-in, non-paid acceptance against a real **1.1.0** executable, run `bash scripts/verify-release.sh /absolute/path/to/pi`. It executes ten read-only RPCs through this crate and verifies orderly exit plus terminal-event delivery. The script clears inherited environment variables, uses temporary HOME/agent/work directories, and disables sessions, tools, MCP, extensions, skills, templates and themes. It does not install Pi or submit a prompt. The normal `verify.sh` remains fake-only and makes no Pi/model requests. Use `CARGO_NET_OFFLINE=true bash scripts/verify.sh` to forbid Cargo network access; plain `bash scripts/verify.sh` may download dependencies.
 

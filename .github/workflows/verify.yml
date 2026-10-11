@@ -21,7 +21,7 @@ jobs:
   verify:
     name: ${{ matrix.os }} / Rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -50,8 +50,9 @@ jobs:
         if: matrix.toolchain == '1.85.0'
         run: bash scripts/verify-msrv.sh
       - name: Three-round fake transport stress
-        if: matrix.toolchain == 'stable'
         run: bash scripts/verify-stress.sh
+      - name: Native Debug and Release boundary regressions
+        run: bash scripts/verify-regressions.sh
       # actions/setup-python v5.6.0, official tag resolved to this immutable commit.
       - name: Python 3.12 for release checks
         if: matrix.toolchain == 'stable'

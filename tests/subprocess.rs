@@ -282,7 +282,10 @@ async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
         })
         .await;
         if name == "wrong-version" {
-            assert!(matches!(result, Err(Error::Version)));
+            match result {
+                Err(error) => assert_eq!(error, Error::Version),
+                Ok(_) => panic!("wrong-version fixture unexpectedly started RPC"),
+            }
         } else {
             assert!(result.is_err());
         }
