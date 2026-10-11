@@ -7,18 +7,41 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 /// Maximum JSON object/array nesting. The root container counts as one.
 pub const MAX_JSON_DEPTH: usize = json::MAX_DEPTH;
 
+/// Serializes at most max_bytes of JSON (the LF terminator is excluded).
+/// Stops the serializer on its first write exceeding the budget.
 pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    let mut serializer = serde_json::Serializer::new(&mut bytes);
-    value
-        .serialize(serde_stacker::Serializer::new(&mut serializer))
-        .map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
-    if bytes.len() > max_bytes {
+    struct BoundedWriter {
+        bytes: Vec<u8>,
+        limit: usize,
+        exceeded: bool,
+    }
+    impl std::io::Write for BoundedWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
+                self.exceeded = true;
+                return Err(std::io::Error::other("record byte limit exceeded"));
+            }
+            self.bytes.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut writer = BoundedWriter {
+        bytes: Vec::new(),
+        limit: max_bytes,
+        exceeded: false,
+    };
+    let mut serializer = serde_json::Serializer::new(&mut writer);
+    let result = value.serialize(serde_stacker::Serializer::new(&mut serializer));
+    if writer.exceeded {
         return Err(Error::Capacity("record bytes"));
     }
-    json::check_wire_depth(&bytes)?;
-    bytes.push(b'\n');
-    Ok(bytes)
+    result.map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
+    json::check_wire_depth(&writer.bytes)?;
+    writer.bytes.push(b'\n');
+    Ok(writer.bytes)
 }
 
 pub struct JsonlReader<R> {

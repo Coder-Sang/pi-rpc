@@ -1,5 +1,5 @@
 //! One continuous reader, one serialized writer, ID-correlated command futures.
-use crate::{Error, Result, codec, json, protocol::*, transport::Transport};
+use crate::{Error, Result, codec, protocol::*, transport::Transport};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::{
@@ -326,10 +326,32 @@ impl PiClient {
         async move {
             let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
             let name = command.name();
-            let mut v = json::to_value(&*command)
-                .map_err(|_| Error::Protocol("cannot encode command".into()))?;
-            v["id"] = id.clone().into();
-            let bytes = codec::encode(&v, self.shared.config.max_record_bytes)?;
+            // Avoid copying rejected or oversized prompts into a temporary Value.
+            {
+                let state = self.shared.state.lock().unwrap();
+                if let Some(error) = &state.terminal {
+                    return Err(error.clone());
+                }
+                if state.closing {
+                    return Err(Error::Closed);
+                }
+                if state.pending.len() >= self.shared.config.max_pending_commands {
+                    return Err(Error::Capacity("pending commands"));
+                }
+            }
+            #[derive(serde::Serialize)]
+            struct CommandRecord<'a> {
+                id: &'a str,
+                #[serde(flatten)]
+                command: &'a Command,
+            }
+            let bytes = codec::encode(
+                &CommandRecord {
+                    id: &id,
+                    command: &command,
+                },
+                self.shared.config.max_record_bytes,
+            )?;
             let (response, rx) = oneshot::channel();
             let sent = {
                 let mut s = self.shared.state.lock().unwrap();

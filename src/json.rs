@@ -1,6 +1,8 @@
 //! Shared bounded, stack-protected JSON conversion. Wire framing lives in codec.
 use crate::{Error, Result};
-use serde::{Serialize, de::DeserializeOwned};
+#[cfg(feature = "session_file")]
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 pub(crate) const MAX_DEPTH: usize = 512;
@@ -79,6 +81,7 @@ pub(crate) fn decode<T: DeserializeOwned>(value: &Value) -> Result<T> {
         .map_err(|_| Error::Protocol("invalid JSON value".into()))
 }
 
+#[cfg(feature = "session_file")]
 pub(crate) fn to_value<T: Serialize>(value: &T) -> Result<Value> {
     let value = value
         .serialize(serde_stacker::Serializer::new(
