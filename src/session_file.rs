@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 mod builder;
+mod fields;
 mod index;
 pub use builder::SessionFileBuilder;
 
@@ -161,6 +162,10 @@ impl SessionFile {
         {
             return Err(Error::Protocol("invalid native session header".into()));
         }
+        fields::reserved(
+            &self.header.extra,
+            &["type", "version", "id", "timestamp", "cwd", "parentSession"],
+        )?;
         json::to_value(&self.header)?;
         let mut seen = HashSet::new();
         for e in &self.entries {
@@ -174,6 +179,7 @@ impl SessionFile {
                     return Err(Error::Protocol("session parent must precede child".into()));
                 }
             }
+            fields::entry(&e.data)?;
             // Validate even manually constructed Message fields before exporting.
             if let EntryData::Message { message } = &e.data {
                 validate_message(message)?;
@@ -242,6 +248,7 @@ impl SessionFile {
     }
 }
 fn validate_message(message: &Message) -> Result<()> {
+    fields::reserved(&message.fields, &["role"])?;
     let value = json::to_value(message).map_err(|_| Error::Protocol("invalid message".into()))?;
     json::decode::<Message>(&value)
         .map(|_| ())
@@ -250,6 +257,7 @@ fn validate_message(message: &Message) -> Result<()> {
 /// Convenience constructor for a native user message, not history-as-prompt.
 pub fn user_message(content: MessageContent, timestamp_ms: u64) -> Result<Message> {
     let content = crate::owned::Owned::new(content);
+    fields::content(&content)?;
     let content = json::to_value(&*content)?;
     json::decode(&serde_json::json!({"role":"user","content":content,"timestamp":timestamp_ms}))
         .map_err(|_| Error::Protocol("invalid user message".into()))

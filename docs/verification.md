@@ -4,12 +4,37 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 
 ## Current status summary
 
-- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **266 test executions**, not 266 distinct tests. Strict docs and examples also passed.
+- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-11, **300 test executions**, not 300 distinct tests. Strict docs and examples also passed.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**266 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
+- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-11 (**300 test executions**); earlier checks remain recorded below. Linux x64 cross-check passed with the new native dependencies; Linux/Windows runtime remains untested.
 - Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)**; `publish=false` and missing public repository metadata remain. Six OS/toolchain CI jobs are configured locally, but no hosted run or publication was attempted.
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Four follow-up review fixes (2026-10-11)
+
+Fake-only verification on macOS aarch64 with Rust 1.97.1 and exact 1.85.0. No live Pi, model requests, protocol upgrade or new dependencies were used.
+
+- Owned command/message/session admission now uses private iterative cleanup guards. Isolated child tests with a **2 MiB** thread stack reject **100,000-level** caller-created JSON without aborting, including rejected messages, invalid-ID/parent rollback, existing-file admission and unpolled command/typed/image convenience futures. Both Debug and Release depth suites passed. Calls retain their existing arguments and `.await` usage; guards are constructed before returning futures so cancellation before the first poll is safe.
+- Output serialization stops at the first write exceeding the record-byte budget, rather than allocating the complete output first. Commands serialize directly with their request ID, avoiding a full temporary Value copy. Tests cover early stopping of a 500,000-element generated sequence with a 32-byte limit, exact boundaries excluding LF, escaped strings and serializer errors. Admission is checked before serialization and checked again atomically before enqueue.
+- Mixed history validation constructs one forest index and uses DFS intervals for ancestor membership. Exhaustive small-forest comparisons against parent walks, existing branch/compaction/context-edit cases and a **10,000-entry** mixed-history roundtrip passed. Public `branch` behavior is unchanged.
+- Native flattened metadata cannot shadow reserved header/entry/message/content/usage fields. Tests cover all header keys, entry envelope and variant keys, role collisions with rollback, nested content/replacements, usage/cost and preserved nonreserved metadata.
+
+`verify.sh`, exact `verify-msrv.sh`, three-round `verify-stress.sh`, all 11 Python checker tests, explicit-root document checks and Git whitespace checks passed. The four feature configurations execute **65/85/54/74 integration tests**, **2/3/2/3 unit tests**, and 3 doctests each: **300 executions** per matrix. The strict matrix also checks formatting, all targets, Clippy, rustdoc and injected/native/fake-local examples. One initial strict run exposed a non-session dead-code warning after direct command encoding; the conversion helper was feature-gated and the final matrix rerun passed.
+
+Linux x64 all-feature/all-target cross-check passed using clang/ar. Native Linux/Windows runtime and hosted CI were not run; the existing Windows SDK limitation recorded below still applies. No dependencies or native build configuration changed.
+
+Release medians for mixed-history parsing from **seven samples**, measured again after other compiler/test workloads finished:
+
+| Entries | Parse median |
+|---|---|
+| 1,000 | 1.94 ms |
+| 2,000 | 3.94 ms |
+| 4,000 | 8.00 ms |
+
+Run `cargo run --release --no-default-features --features session_file --example session_validation_bench` to repeat. Final message-builder medians from three samples were **7.70/9.42/19.35 ms** at 1,000/2,000/4,000 messages; these were measured alongside other verification workloads. The unchanged mutable append API took **824/3,428/12,809 ms**. Timings are informational and have no machine-specific unit-test thresholds.
+
+Local logs are `/tmp/pi-rpc-four-fixes-{verify,msrv,stress,release-stack,linux,mixed-bench,builder-bench}.log`; they are not shipped. The older measurements and real-Pi observations below are historical evidence.
 
 ## Bounded JSON, close/UI and bulk construction fixes (2026-10-11)
 
