@@ -44,7 +44,7 @@ pub struct SessionLimits {
 impl Default for SessionLimits {
     fn default() -> Self {
         Self {
-            max_record_bytes: 4 * 1024 * 1024,
+            max_record_bytes: 32 * 1024 * 1024,
             max_file_bytes: 64 * 1024 * 1024,
             max_entries: 100_000,
         }

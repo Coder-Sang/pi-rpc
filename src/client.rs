@@ -37,12 +37,12 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_record_bytes: 4 * 1024 * 1024,
+            max_record_bytes: 32 * 1024 * 1024,
             max_pending_commands: 128,
             max_writer_records: 128,
-            max_writer_bytes: 8 * 1024 * 1024,
+            max_writer_bytes: 64 * 1024 * 1024,
             max_event_count: 1024,
-            max_event_bytes: 16 * 1024 * 1024,
+            max_event_bytes: 128 * 1024 * 1024,
             command_timeout: Duration::from_secs(30),
             close_timeout: Duration::from_secs(5),
             ui_policy: UiPolicy::Cancel,
