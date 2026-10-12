@@ -395,6 +395,9 @@ impl PiClient {
                 id: &id,
                 command: &command,
             })?;
+            // The owned input (including Base64) is no longer needed once the
+            // budgeted output exists; do not retain it while awaiting a reply.
+            drop(command);
             let (response, rx) = oneshot::channel();
             let sent = {
                 let mut s = self.shared.state.lock().unwrap();
@@ -440,6 +443,7 @@ impl PiClient {
     /// UI responses are write-only, never registered as pending commands.
     pub async fn respond_ui(&self, request: &UiRequest, answer: UiAnswer) -> Result<()> {
         let sent = self.send_one_way(|| answer.wire_record(request))?;
+        drop(answer); // The queued output owns the reply bytes through flush.
         tokio::time::timeout(self.shared.config.command_timeout, async {
             sent.await.map_err(|_| self.shared.reason())?
         })
@@ -821,6 +825,48 @@ async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    #[ignore = "manual Release encoding measurement; no timing assertions"]
+    async fn image_encoding_measurement() {
+        for count in [1, 4] {
+            let command = Command::Prompt {
+                message: "benchmark".into(),
+                streaming_behavior: None,
+                images: Some(
+                    (0..count)
+                        .map(|_| ImageContent {
+                            r#type: ImageType::Image,
+                            data: "A".repeat(9 * 1024 * 1024 / 2 - 4096),
+                            mime_type: "image/png".into(),
+                            extra: Default::default(),
+                        })
+                        .collect(),
+                ),
+            };
+            let (client, _events, owner) = budget_fixture(Config::default());
+            let mut single = Vec::new();
+            let mut reserved = Vec::new();
+            let mut peak = 0;
+            for _ in 0..7 {
+                let start = std::time::Instant::now();
+                drop(codec::encode(&command, client.shared.config.max_record_bytes).unwrap());
+                single.push(start.elapsed().as_micros());
+                let start = std::time::Instant::now();
+                let prepared = client.prepare_record(&command).unwrap();
+                peak = client.shared.config.max_writer_bytes - client.budget.available_permits();
+                drop(prepared);
+                reserved.push(start.elapsed().as_micros());
+            }
+            single.sort_unstable();
+            reserved.sort_unstable();
+            println!(
+                "images={count} single_median_us={} reserved_median_us={} reserved_peak_bytes={peak}",
+                single[3], reserved[3]
+            );
+            drop(owner);
+        }
+    }
+
     fn budget_fixture(config: Config) -> (PiClient, PiEvents, PiConnection) {
         PiConnection::connect(
             Transport::new(tokio::io::empty(), tokio::io::sink(), crate::PI_VERSION).unwrap(),
@@ -905,6 +951,59 @@ mod tests {
         assert_eq!(client.budget.available_permits(), 5);
         assert_eq!(client.writer.capacity(), 2);
         drop(owner);
+    }
+
+    #[tokio::test]
+    async fn write_and_flush_errors_return_reserved_bytes() {
+        struct FailingWriter {
+            fail_flush: bool,
+        }
+        impl tokio::io::AsyncWrite for FailingWriter {
+            fn poll_write(
+                self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+                bytes: &[u8],
+            ) -> std::task::Poll<std::io::Result<usize>> {
+                std::task::Poll::Ready(if self.fail_flush {
+                    Ok(bytes.len())
+                } else {
+                    Err(std::io::Error::other("write failed"))
+                })
+            }
+            fn poll_flush(
+                self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                std::task::Poll::Ready(Err(std::io::Error::other("flush failed")))
+            }
+            fn poll_shutdown(
+                self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                std::task::Poll::Ready(Ok(()))
+            }
+        }
+        for fail_flush in [false, true] {
+            let (input, _peer) = tokio::io::duplex(64);
+            let (client, _events, mut owner) = PiConnection::connect(
+                Transport::new(input, FailingWriter { fail_flush }, crate::PI_VERSION).unwrap(),
+                Config {
+                    max_writer_bytes: 5,
+                    ..Config::default()
+                },
+            )
+            .unwrap();
+            let prepared = client.prepare_record(&true).unwrap();
+            assert_eq!(client.budget.available_permits(), 0);
+            let sent = {
+                let _state = client.shared.state.lock().unwrap();
+                prepared.enqueue()
+            };
+            let error = sent.await.unwrap().unwrap_err();
+            assert!(matches!(&error, Error::Transport(_)));
+            assert_eq!(owner.wait_terminal().await, error);
+            assert_eq!(client.budget.available_permits(), 5);
+        }
     }
 
     #[tokio::test]

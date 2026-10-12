@@ -105,6 +105,9 @@ pub struct JsonlReader<R> {
     reader: R,
     buffer: Vec<u8>,
     start: usize,
+    scanned: usize,
+    #[cfg(test)]
+    scanned_bytes: usize,
     max_bytes: usize,
 }
 impl<R: AsyncRead + Unpin> JsonlReader<R> {
@@ -113,6 +116,9 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
             reader,
             buffer: Vec::new(),
             start: 0,
+            scanned: 0,
+            #[cfg(test)]
+            scanned_bytes: 0,
             max_bytes,
         }
     }
@@ -120,8 +126,13 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
     /// A nonempty unterminated final record is a protocol error, never accepted.
     pub async fn next(&mut self) -> Result<Option<(Value, usize)>> {
         loop {
-            if let Some(pos) = self.buffer[self.start..].iter().position(|b| *b == b'\n') {
-                let end = self.start + pos;
+            let pos = self.buffer[self.scanned..].iter().position(|b| *b == b'\n');
+            #[cfg(test)]
+            {
+                self.scanned_bytes += pos.map_or(self.buffer.len() - self.scanned, |p| p + 1);
+            }
+            if let Some(pos) = pos {
+                let end = self.scanned + pos;
                 let record = &self.buffer[self.start..end];
                 let record = record.strip_suffix(b"\r").unwrap_or(record);
                 if record.len() > self.max_bytes {
@@ -130,13 +141,16 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
                 let value = json::parse(record)?;
                 let size = record.len();
                 self.start = end + 1;
+                self.scanned = self.start;
                 return Ok(Some((value, size)));
             }
+            self.scanned = self.buffer.len();
             if self.buffer.len() - self.start > self.max_bytes.saturating_add(1) {
                 return Err(Error::Protocol("record byte limit exceeded".into()));
             }
             if self.start > 0 {
                 self.buffer.drain(..self.start);
+                self.scanned -= self.start;
                 self.start = 0;
             }
             let mut chunk = [0u8; 4096];
@@ -154,5 +168,58 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
             }
             self.buffer.extend_from_slice(&chunk[..n]);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn public_generic_encoding_invokes_serializer_once() {
+        struct Once(std::cell::Cell<bool>);
+        impl serde::Serialize for Once {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                assert!(!self.0.replace(true), "public serializer invoked twice");
+                serializer.serialize_bool(true)
+            }
+        }
+        assert_eq!(
+            encode(&Once(std::cell::Cell::new(false)), 4).unwrap(),
+            b"true\n"
+        );
+    }
+    #[tokio::test]
+    async fn large_fragmented_and_coalesced_records_scan_each_byte_once() {
+        let first = format!("\"{}\"\r\n", "A".repeat(1024 * 1024));
+        let wire = format!("{first}true\n");
+        let mut reader = JsonlReader::new(wire.as_bytes(), first.len());
+        assert!(reader.next().await.unwrap().is_some());
+        assert_eq!(reader.next().await.unwrap().unwrap().0, Value::Bool(true));
+        assert!(reader.next().await.unwrap().is_none());
+        assert_eq!(reader.scanned_bytes, wire.len());
+    }
+    #[tokio::test]
+    async fn cancelled_read_keeps_scan_position() {
+        use tokio::io::AsyncWriteExt;
+        let (mut writer, input) = tokio::io::duplex(64);
+        writer.write_all(b"\"AAAA").await.unwrap();
+        let mut reader = JsonlReader::new(input, 64);
+        let mut next = Box::pin(reader.next());
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(next.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        drop(next);
+        assert_eq!(reader.scanned_bytes, 5);
+        writer.write_all(b"BBBB\"\n").await.unwrap();
+        assert_eq!(
+            reader.next().await.unwrap().unwrap().0,
+            Value::String("AAAABBBB".into())
+        );
+        assert_eq!(reader.scanned_bytes, 11);
     }
 }
