@@ -10,6 +10,14 @@ pub const MAX_JSON_DEPTH: usize = json::MAX_DEPTH;
 /// Serializes at most max_bytes of JSON (the LF terminator is excluded).
 /// Stops the serializer on its first write exceeding the budget.
 pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
+    encode_with_capacity(value, max_bytes, 0)
+}
+
+pub(crate) fn encode_with_capacity<T: Serialize>(
+    value: &T,
+    max_bytes: usize,
+    capacity: usize,
+) -> Result<Vec<u8>> {
     struct BoundedWriter {
         bytes: Vec<u8>,
         limit: usize,
@@ -36,7 +44,7 @@ pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
         }
     }
     let mut writer = BoundedWriter {
-        bytes: Vec::new(),
+        bytes: Vec::with_capacity(capacity),
         limit: max_bytes,
         failure: None,
         depth: json::DepthScanner::default(),
@@ -49,6 +57,48 @@ pub fn encode<T: Serialize>(value: &T, max_bytes: usize) -> Result<Vec<u8>> {
     result.map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
     writer.bytes.push(b'\n');
     Ok(writer.bytes)
+}
+
+/// Private preflight for stable borrowed SDK records; public encode stays single-pass.
+pub(crate) fn measure<T: Serialize>(value: &T, max_bytes: usize) -> Result<usize> {
+    struct Counter {
+        size: usize,
+        limit: usize,
+        failure: Option<Error>,
+        depth: json::DepthScanner,
+    }
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if self.failure.is_none() {
+                self.failure = if bytes.len() > self.limit.saturating_sub(self.size) {
+                    Some(Error::Capacity("record bytes"))
+                } else {
+                    self.depth.scan(bytes).err()
+                };
+            }
+            if self.failure.is_some() {
+                return Err(std::io::Error::other("JSON output limit exceeded"));
+            }
+            self.size += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter {
+        size: 0,
+        limit: max_bytes,
+        failure: None,
+        depth: json::DepthScanner::default(),
+    };
+    let mut serializer = serde_json::Serializer::new(&mut counter);
+    let result = value.serialize(serde_stacker::Serializer::new(&mut serializer));
+    if let Some(error) = counter.failure {
+        return Err(error);
+    }
+    result.map_err(|_| Error::Protocol("cannot encode JSON".into()))?;
+    Ok(counter.size)
 }
 
 pub struct JsonlReader<R> {

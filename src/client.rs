@@ -69,6 +69,7 @@ impl Config {
 struct Pending {
     command: &'static str,
     response: oneshot::Sender<Result<Response>>,
+    _admission: OwnedSemaphorePermit,
 }
 struct State {
     pending: HashMap<String, Pending>,
@@ -121,6 +122,7 @@ pub struct PiClient {
     writer: mpsc::Sender<WriteMessage>,
     budget: Arc<Semaphore>,
     ids: Arc<AtomicU64>,
+    admission: Arc<Semaphore>,
 }
 /// Single consumer, ordered across all session events. Not a per-prompt stream.
 pub struct PiEvents {
@@ -182,6 +184,7 @@ impl PiConnection {
             writer,
             budget: Arc::new(Semaphore::new(config.max_writer_bytes)),
             ids: Arc::new(AtomicU64::new(1)),
+            admission: Arc::new(Semaphore::new(config.max_pending_commands)),
         };
         let (events, event_rx) = mpsc::channel(config.max_event_count);
         let event_budget = Arc::new(Semaphore::new(config.max_event_bytes));
@@ -284,30 +287,68 @@ impl Drop for PendingGuard {
         self.shared.state.lock().unwrap().pending.remove(&self.id);
     }
 }
+struct PreparedRecord {
+    slot: mpsc::OwnedPermit<WriteMessage>,
+    bytes: Vec<u8>,
+    budget: OwnedSemaphorePermit,
+}
+impl PreparedRecord {
+    // Caller holds the admission state lock and has checked closing/terminal.
+    fn enqueue(self) -> oneshot::Receiver<Result<()>> {
+        let (sent, rx) = oneshot::channel();
+        self.slot.send(WriteMessage::Record(Outbound {
+            bytes: self.bytes,
+            _budget: self.budget,
+            sent,
+        }));
+        rx
+    }
+}
 impl PiClient {
-    fn enqueue_locked(&self, bytes: Vec<u8>) -> Result<oneshot::Receiver<Result<()>>> {
-        let permit = self
+    fn check_open(&self) -> Result<()> {
+        let state = self.shared.state.lock().unwrap();
+        if let Some(error) = &state.terminal {
+            return Err(error.clone());
+        }
+        if state.closing {
+            return Err(Error::Closed);
+        }
+        Ok(())
+    }
+    fn prepare_record<T: serde::Serialize>(&self, value: &T) -> Result<PreparedRecord> {
+        let slot = self
+            .writer
+            .clone()
+            .try_reserve_owned()
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => Error::Capacity("writer records"),
+                mpsc::error::TrySendError::Closed(_) => Error::Closed,
+            })?;
+        let size = codec::measure(value, self.shared.config.max_record_bytes)?;
+        self.check_open()?;
+        let framed = size.checked_add(1).ok_or(Error::Capacity("writer bytes"))?;
+        let budget = self
             .budget
             .clone()
             .try_acquire_many_owned(
-                bytes
-                    .len()
+                framed
                     .try_into()
                     .map_err(|_| Error::Capacity("writer bytes"))?,
             )
             .map_err(|_| Error::Capacity("writer bytes"))?;
-        let (sent, rx) = oneshot::channel();
-        self.writer
-            .try_send(WriteMessage::Record(Outbound {
-                bytes,
-                _budget: permit,
-                sent,
-            }))
-            .map_err(|e| match e {
-                mpsc::error::TrySendError::Full(_) => Error::Capacity("writer records"),
-                mpsc::error::TrySendError::Closed(_) => Error::Closed,
-            })?;
-        Ok(rx)
+        // Allocate only after the entire framed output has been reserved. The
+        // second pass cannot grow beyond the measured size, even for test faults.
+        let bytes = codec::encode_with_capacity(value, size, framed)?;
+        if bytes.len() != framed {
+            return Err(Error::Protocol(
+                "record size changed during encoding".into(),
+            ));
+        }
+        Ok(PreparedRecord {
+            slot,
+            bytes,
+            budget,
+        })
     }
     /// No automatic retries. Capacity failure means not submitted. A timeout
     /// after local enqueue has an uncertain send/execution outcome.
@@ -339,19 +380,21 @@ impl PiClient {
                     return Err(Error::Capacity("pending commands"));
                 }
             }
+            let _admission = self
+                .admission
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| Error::Capacity("pending commands"))?;
             #[derive(serde::Serialize)]
             struct CommandRecord<'a> {
                 id: &'a str,
                 #[serde(flatten)]
                 command: &'a Command,
             }
-            let bytes = codec::encode(
-                &CommandRecord {
-                    id: &id,
-                    command: &command,
-                },
-                self.shared.config.max_record_bytes,
-            )?;
+            let prepared = self.prepare_record(&CommandRecord {
+                id: &id,
+                command: &command,
+            })?;
             let (response, rx) = oneshot::channel();
             let sent = {
                 let mut s = self.shared.state.lock().unwrap();
@@ -364,12 +407,13 @@ impl PiClient {
                 if s.pending.len() >= self.shared.config.max_pending_commands {
                     return Err(Error::Capacity("pending commands"));
                 }
-                let sent = self.enqueue_locked(bytes)?;
+                let sent = prepared.enqueue();
                 s.pending.insert(
                     id.clone(),
                     Pending {
                         command: name,
                         response,
+                        _admission,
                     },
                 );
                 sent
@@ -418,7 +462,7 @@ impl PiClient {
             }
         }
         let value = record()?;
-        let bytes = codec::encode(&value, self.shared.config.max_record_bytes)?;
+        let prepared = self.prepare_record(&value)?;
         let s = self.shared.state.lock().unwrap();
         if let Some(e) = &s.terminal {
             return Err(e.clone());
@@ -426,10 +470,23 @@ impl PiClient {
         if s.closing {
             return Err(Error::Closed);
         }
-        self.enqueue_locked(bytes)
+        Ok(prepared.enqueue())
     }
     /// Auto-replies share close's admission lock; late dialogs remain events.
     fn cancel_ui_if_open(&self, request: &UiRequest) -> Result<()> {
+        {
+            let state = self.shared.state.lock().unwrap();
+            if let Some(error) = &state.terminal {
+                return Err(error.clone());
+            }
+            if state.closing {
+                return Ok(());
+            }
+        }
+        let record = UiAnswer::Cancel;
+        let prepared = self.prepare_record(&record.wire_record(request)?);
+        // The final decision shares close's state lock. Closing skips automatic
+        // replies even if preparation raced with exhausted writer capacity.
         let state = self.shared.state.lock().unwrap();
         if let Some(error) = &state.terminal {
             return Err(error.clone());
@@ -437,13 +494,7 @@ impl PiClient {
         if state.closing {
             return Ok(());
         }
-        let bytes = codec::encode(
-            &UiAnswer::Cancel.wire_record(request)?,
-            self.shared.config.max_record_bytes,
-        )?;
-        // Only local admission is performed here; the continuous reader never
-        // waits for flush or registers a normal pending command for this reply.
-        self.enqueue_locked(bytes)?;
+        prepared?.enqueue();
         Ok(())
     }
     pub async fn prompt(&self, message: impl Into<String>) -> Result<PromptDisposition> {
@@ -769,6 +820,224 @@ async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn budget_fixture(config: Config) -> (PiClient, PiEvents, PiConnection) {
+        PiConnection::connect(
+            Transport::new(tokio::io::empty(), tokio::io::sink(), crate::PI_VERSION).unwrap(),
+            config,
+        )
+        .unwrap()
+    }
+
+    struct Counted<'a> {
+        calls: &'a std::sync::atomic::AtomicUsize,
+    }
+    impl serde::Serialize for Counted<'_> {
+        fn serialize<S: serde::Serializer>(
+            &self,
+            serializer: S,
+        ) -> std::result::Result<S::Ok, S::Error> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            serializer.serialize_bool(true)
+        }
+    }
+
+    #[tokio::test]
+    async fn dropped_unsubmitted_and_submitted_futures_release_pending_slots() {
+        let (local, _peer) = tokio::io::duplex(1);
+        let (r, w) = tokio::io::split(local);
+        let (client, _events, owner) = PiConnection::connect(
+            Transport::new(r, w, crate::PI_VERSION).unwrap(),
+            Config {
+                max_pending_commands: 1,
+                ..Config::default()
+            },
+        )
+        .unwrap();
+        drop(client.command(Command::GetState));
+        assert_eq!(client.admission.available_permits(), 1);
+        let mut command = Box::pin(client.command(Command::GetState));
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(command.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        assert_eq!(client.admission.available_permits(), 0);
+        assert_eq!(client.shared.state.lock().unwrap().pending.len(), 1);
+        drop(command);
+        assert_eq!(client.admission.available_permits(), 1);
+        assert!(client.shared.state.lock().unwrap().pending.is_empty());
+        // The admitted write still owns its budget after the waiter is dropped.
+        assert!(client.budget.available_permits() < client.shared.config.max_writer_bytes);
+        drop(owner);
+    }
+
+    #[tokio::test]
+    async fn queue_and_byte_rejection_precede_output_encoding() {
+        use std::sync::atomic::AtomicUsize;
+        let (client, _events, owner) = budget_fixture(Config {
+            max_writer_records: 1,
+            max_writer_bytes: 5,
+            ..Config::default()
+        });
+        let held = client.prepare_record(&true).unwrap();
+        let calls = AtomicUsize::new(0);
+        assert!(matches!(
+            client.prepare_record(&Counted { calls: &calls }),
+            Err(Error::Capacity("writer records"))
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        drop(held);
+        assert_eq!(client.budget.available_permits(), 5);
+        drop(owner);
+        let (client, _events, owner) = budget_fixture(Config {
+            max_writer_records: 2,
+            max_writer_bytes: 5,
+            ..Config::default()
+        });
+        let held = client.prepare_record(&true).unwrap();
+        assert!(matches!(
+            client.prepare_record(&Counted { calls: &calls }),
+            Err(Error::Capacity("writer bytes"))
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        drop(held);
+        assert_eq!(client.budget.available_permits(), 5);
+        assert_eq!(client.writer.capacity(), 2);
+        drop(owner);
+    }
+
+    #[tokio::test]
+    async fn framed_output_budget_includes_lf() {
+        let (client, _events, owner) = budget_fixture(Config {
+            max_record_bytes: 4,
+            max_writer_bytes: 4,
+            ..Config::default()
+        });
+        assert!(matches!(
+            client.prepare_record(&true),
+            Err(Error::Capacity("writer bytes"))
+        ));
+        assert_eq!(client.budget.available_permits(), 4);
+        drop(owner);
+        let (client, _events, owner) = budget_fixture(Config {
+            max_record_bytes: 4,
+            max_writer_bytes: 5,
+            ..Config::default()
+        });
+        let prepared = client.prepare_record(&true).unwrap();
+        assert_eq!(prepared.bytes, b"true\n");
+        assert_eq!(client.budget.available_permits(), 0);
+        drop(prepared);
+        assert_eq!(client.budget.available_permits(), 5);
+        drop(owner);
+    }
+
+    #[tokio::test]
+    async fn concurrent_encoding_holds_budget_before_serializer_runs() {
+        use std::sync::{Barrier, atomic::AtomicUsize};
+        struct Paused {
+            calls: AtomicUsize,
+            entered: Arc<Barrier>,
+            release: Arc<Barrier>,
+        }
+        impl serde::Serialize for Paused {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                if self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
+                    self.entered.wait();
+                    self.release.wait();
+                }
+                serializer.serialize_bool(true)
+            }
+        }
+        let (client, _events, owner) = budget_fixture(Config {
+            max_writer_bytes: 5,
+            max_writer_records: 2,
+            ..Config::default()
+        });
+        let entered = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let worker = {
+            let client = client.clone();
+            let entered = entered.clone();
+            let release = release.clone();
+            std::thread::spawn(move || {
+                client
+                    .prepare_record(&Paused {
+                        calls: AtomicUsize::new(0),
+                        entered,
+                        release,
+                    })
+                    .unwrap()
+            })
+        };
+        entered.wait();
+        assert_eq!(client.budget.available_permits(), 0);
+        let calls = AtomicUsize::new(0);
+        assert!(matches!(
+            client.prepare_record(&Counted { calls: &calls }),
+            Err(Error::Capacity("writer bytes"))
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        release.wait();
+        drop(worker.join().unwrap());
+        assert_eq!(client.budget.available_permits(), 5);
+        assert_eq!(client.writer.capacity(), 2);
+        drop(owner);
+    }
+
+    #[tokio::test]
+    async fn second_pass_failure_panic_size_change_and_close_refund_admission() {
+        use std::sync::atomic::AtomicUsize;
+        struct Fault<'a> {
+            calls: AtomicUsize,
+            mode: usize,
+            shared: &'a Shared,
+        }
+        impl serde::Serialize for Fault<'_> {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                if self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
+                    match self.mode {
+                        0 => return Err(serde::ser::Error::custom("injected encoding failure")),
+                        1 => panic!("injected encoding panic"),
+                        2 => return serializer.serialize_bool(false),
+                        3 => return serializer.serialize_u8(0),
+                        _ => self.shared.state.try_lock().unwrap().closing = true,
+                    }
+                }
+                serializer.serialize_bool(true)
+            }
+        }
+        for mode in 0..5 {
+            let (client, _events, owner) = budget_fixture(Config::default());
+            let before = client.budget.available_permits();
+            let slots = client.writer.capacity();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                client.send_one_way(|| {
+                    Ok(Fault {
+                        calls: AtomicUsize::new(0),
+                        mode,
+                        shared: &client.shared,
+                    })
+                })
+            }));
+            if mode == 1 {
+                assert!(result.is_err());
+            } else {
+                assert!(result.unwrap().is_err());
+            }
+            assert_eq!(client.budget.available_permits(), before);
+            assert_eq!(client.writer.capacity(), slots);
+            assert!(client.shared.state.lock().unwrap().pending.is_empty());
+            drop(owner);
+        }
+    }
 
     #[tokio::test]
     async fn one_way_admission_skips_construction_after_close_or_terminal() {
