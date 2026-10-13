@@ -86,10 +86,10 @@ async fn dropped_unsubmitted_and_submitted_futures_release_pending_slots() {
             .is_pending()
     );
     assert_eq!(client.admission.available_permits(), 0);
-    assert_eq!(client.shared.state.lock().unwrap().pending.len(), 1);
+    assert_eq!(client.shared.pending_count(), 1);
     drop(command);
     assert_eq!(client.admission.available_permits(), 1);
-    assert!(client.shared.state.lock().unwrap().pending.is_empty());
+    assert!(client.shared.pending_count() == 0);
     // The admitted write still owns its budget after the waiter is dropped.
     assert!(client.budget.available_permits() < client.shared.config.max_writer_bytes);
     drop(owner);
@@ -172,10 +172,7 @@ async fn write_and_flush_errors_return_reserved_bytes() {
         .unwrap();
         let prepared = client.prepare_record(&true).unwrap();
         assert_eq!(client.budget.available_permits(), 0);
-        let sent = {
-            let _state = client.shared.state.lock().unwrap();
-            prepared.enqueue()
-        };
+        let sent = client.shared.enqueue_reply(prepared).unwrap();
         let error = sent.await.unwrap().unwrap_err();
         assert!(matches!(&error, Error::Transport(_)));
         assert_eq!(owner.wait_terminal().await, error);
@@ -284,7 +281,10 @@ async fn second_pass_failure_panic_size_change_and_close_refund_admission() {
                     1 => panic!("injected encoding panic"),
                     2 => return serializer.serialize_bool(false),
                     3 => return serializer.serialize_u8(0),
-                    _ => self.shared.state.try_lock().unwrap().closing = true,
+                    _ => {
+                        self.shared.assert_unlocked();
+                        self.shared.begin_close();
+                    }
                 }
             }
             serializer.serialize_bool(true)
@@ -310,7 +310,7 @@ async fn second_pass_failure_panic_size_change_and_close_refund_admission() {
         }
         assert_eq!(client.budget.available_permits(), before);
         assert_eq!(client.writer.capacity(), slots);
-        assert!(client.shared.state.lock().unwrap().pending.is_empty());
+        assert!(client.shared.pending_count() == 0);
         drop(owner);
     }
 }
@@ -329,7 +329,7 @@ async fn one_way_admission_skips_construction_after_close_or_terminal() {
         if let Some(error) = terminal {
             client.shared.finish(error);
         } else {
-            client.shared.state.lock().unwrap().closing = true;
+            client.shared.begin_close();
         }
         assert_eq!(
             client
@@ -354,16 +354,11 @@ async fn one_way_admission_rechecks_close_and_terminal_after_serialization() {
         ) -> std::result::Result<S::Ok, S::Error> {
             // This callback deterministically puts the state change between
             // preflight and enqueue, and asserts encoding releases the lock.
-            let mut state = self
-                .shared
-                .state
-                .try_lock()
-                .expect("no lock during encoding");
+            self.shared.assert_unlocked();
             if let Some(error) = &self.terminal {
-                drop(state);
                 self.shared.finish(error.clone());
             } else {
-                state.closing = true;
+                self.shared.begin_close();
             }
             serializer.serialize_unit()
         }
@@ -390,7 +385,7 @@ async fn one_way_admission_rechecks_close_and_terminal_after_serialization() {
         );
         assert_eq!(client.writer.capacity(), records);
         assert_eq!(client.budget.available_permits(), bytes);
-        assert!(client.shared.state.lock().unwrap().pending.is_empty());
+        assert!(client.shared.pending_count() == 0);
         drop(owner);
     }
 }

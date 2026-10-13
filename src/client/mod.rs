@@ -6,9 +6,8 @@ use crate::{
 };
 use serde::de::DeserializeOwned;
 use std::{
-    collections::HashMap,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
     time::Duration,
@@ -27,7 +26,7 @@ mod tests;
 
 use outbound::WriteMessage;
 use runtime::{read_loop, write_loop};
-use state::{Pending, PendingGuard, Shared, State};
+use state::{PendingGuard, Shared};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiPolicy {
@@ -137,15 +136,7 @@ impl PiConnection {
     pub fn connect(transport: Transport, config: Config) -> Result<(PiClient, PiEvents, Self)> {
         config.validate()?;
         let (terminal, terminal_rx) = watch::channel(None);
-        let shared = Arc::new(Shared {
-            state: Mutex::new(State {
-                pending: HashMap::new(),
-                terminal: None,
-                closing: false,
-            }),
-            terminal,
-            config: config.clone(),
-        });
+        let shared = Arc::new(Shared::new(config.clone(), terminal));
         let (writer, writer_rx) = mpsc::channel(config.max_writer_records);
         let client = PiClient {
             shared: shared.clone(),
@@ -206,10 +197,7 @@ impl PiConnection {
     /// Excludes all submissions, drains already queued writes, shuts down stdin,
     /// and keeps reading until EOF or deadline. Does not issue abort/clear_queue.
     pub async fn close(&mut self) -> Error {
-        {
-            let mut s = self.client.shared.state.lock().unwrap();
-            s.closing = true;
-        }
+        self.client.shared.begin_close();
         let deadline = self.client.shared.config.close_timeout;
         let writer = self.client.writer.clone();
         let result = tokio::time::timeout(deadline, async {
@@ -265,18 +253,7 @@ impl PiClient {
             let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
             let name = command.name();
             // Avoid copying rejected or oversized prompts into a temporary Value.
-            {
-                let state = self.shared.state.lock().unwrap();
-                if let Some(error) = &state.terminal {
-                    return Err(error.clone());
-                }
-                if state.closing {
-                    return Err(Error::Closed);
-                }
-                if state.pending.len() >= self.shared.config.max_pending_commands {
-                    return Err(Error::Capacity("pending commands"));
-                }
-            }
+            self.shared.check_command_capacity()?;
             let _admission = self
                 .admission
                 .clone()
@@ -296,32 +273,10 @@ impl PiClient {
             // budgeted output exists; do not retain it while awaiting a reply.
             drop(command);
             let (response, rx) = oneshot::channel();
-            let sent = {
-                let mut s = self.shared.state.lock().unwrap();
-                if let Some(e) = &s.terminal {
-                    return Err(e.clone());
-                }
-                if s.closing {
-                    return Err(Error::Closed);
-                }
-                if s.pending.len() >= self.shared.config.max_pending_commands {
-                    return Err(Error::Capacity("pending commands"));
-                }
-                let sent = prepared.enqueue();
-                s.pending.insert(
-                    id.clone(),
-                    Pending {
-                        command: name,
-                        response,
-                        _admission,
-                    },
-                );
-                sent
-            };
-            let _guard = PendingGuard {
-                shared: self.shared.clone(),
-                id,
-            };
+            let sent = self
+                .shared
+                .enqueue_command(&id, name, response, _admission, prepared)?;
+            let _guard = PendingGuard::new(self.shared.clone(), id);
             tokio::time::timeout(timeout, async {
                 sent.await.map_err(|_| self.shared.reason())??;
                 rx.await.map_err(|_| self.shared.reason())?

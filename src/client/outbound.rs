@@ -33,16 +33,6 @@ impl PreparedRecord {
     }
 }
 impl PiClient {
-    pub(super) fn check_open(&self) -> Result<()> {
-        let state = self.shared.state.lock().unwrap();
-        if let Some(error) = &state.terminal {
-            return Err(error.clone());
-        }
-        if state.closing {
-            return Err(Error::Closed);
-        }
-        Ok(())
-    }
     pub(super) fn prepare_record<T: serde::Serialize>(&self, value: &T) -> Result<PreparedRecord> {
         let slot = self
             .writer
@@ -53,7 +43,7 @@ impl PiClient {
                 mpsc::error::TrySendError::Closed(_) => Error::Closed,
             })?;
         let size = codec::measure(value, self.shared.config.max_record_bytes)?;
-        self.check_open()?;
+        self.shared.check_open()?;
         let framed = size.checked_add(1).ok_or(Error::Capacity("writer bytes"))?;
         let budget = self
             .budget
@@ -94,49 +84,18 @@ impl PiClient {
     ) -> Result<oneshot::Receiver<Result<()>>> {
         // Check before validating/building the record, then serialize without
         // holding the state lock and check again atomically with queue admission.
-        {
-            let state = self.shared.state.lock().unwrap();
-            if let Some(error) = &state.terminal {
-                return Err(error.clone());
-            }
-            if state.closing {
-                return Err(Error::Closed);
-            }
-        }
+        self.shared.check_open()?;
         let value = record()?;
         let prepared = self.prepare_record(&value)?;
-        let s = self.shared.state.lock().unwrap();
-        if let Some(e) = &s.terminal {
-            return Err(e.clone());
-        }
-        if s.closing {
-            return Err(Error::Closed);
-        }
-        Ok(prepared.enqueue())
+        self.shared.enqueue_reply(prepared)
     }
     /// Auto-replies share close's admission lock; late dialogs remain events.
     pub(super) fn cancel_ui_if_open(&self, request: &UiRequest) -> Result<()> {
-        {
-            let state = self.shared.state.lock().unwrap();
-            if let Some(error) = &state.terminal {
-                return Err(error.clone());
-            }
-            if state.closing {
-                return Ok(());
-            }
+        if !self.shared.should_cancel_ui()? {
+            return Ok(());
         }
         let record = UiAnswer::Cancel;
         let prepared = self.prepare_record(&record.wire_record(request)?);
-        // The final decision shares close's state lock. Closing skips automatic
-        // replies even if preparation raced with exhausted writer capacity.
-        let state = self.shared.state.lock().unwrap();
-        if let Some(error) = &state.terminal {
-            return Err(error.clone());
-        }
-        if state.closing {
-            return Ok(());
-        }
-        prepared?.enqueue();
-        Ok(())
+        self.shared.enqueue_auto_reply(prepared)
     }
 }

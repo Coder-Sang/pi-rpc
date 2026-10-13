@@ -86,37 +86,17 @@ pub(super) async fn read_loop(
                     return Err(e);
                 }
             }
-            return Err(if client.shared.state.lock().unwrap().closing {
+            return Err(if client.shared.is_closing() {
                 Error::Closed
             } else {
                 Error::Eof
             });
         };
         let event = match decode_record(value)? {
-            Record::Response(r) => {
-                if let Some(id) = &r.id {
-                    let pending = client.shared.state.lock().unwrap().pending.remove(id);
-                    if let Some(p) = pending {
-                        if p.command != r.command {
-                            let e = Error::Protocol("response command does not match ID".into());
-                            let _ = p.response.send(Err(e.clone()));
-                            return Err(e);
-                        }
-                        let result = if r.success {
-                            Ok(r)
-                        } else {
-                            Err(Error::Rejected {
-                                command: r.command,
-                                message: r.error.unwrap_or_default(),
-                            })
-                        };
-                        let _ = p.response.send(result);
-                    }
-                    // Timed-out/cancelled futures and unsolicited IDs are ignored.
-                    continue;
-                }
-                Event::UncorrelatedResponse(r)
-            }
+            Record::Response(response) => match client.shared.dispatch_response(response)? {
+                Some(response) => Event::UncorrelatedResponse(response),
+                None => continue,
+            },
             Record::Event(e) => e,
         };
         if let Event::Ui(u) = &event {
