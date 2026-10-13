@@ -1,7 +1,10 @@
 use super::*;
 
-#[tokio::test]
-async fn bounded_writer_bytes_and_count_under_stalled_peer() {
+async fn assert_bounded_writer_under_stalled_peer() {
+    use std::{
+        future::{Future, poll_fn},
+        task::Poll,
+    };
     for (bytes, count, expected) in [(60, 128, "writer bytes"), (65536, 1, "writer records")] {
         let (local, mut remote) = tokio::io::duplex(1);
         let (r, w) = tokio::io::split(local);
@@ -20,10 +23,15 @@ async fn bounded_writer_bytes_and_count_under_stalled_peer() {
         let mut b = [0];
         remote.read_exact(&mut b).await.unwrap();
         let second = if count == 1 {
-            let a = c.clone();
-            let t = tokio::spawn(async move { a.abort().await });
-            tokio::task::yield_now().await;
-            Some(t)
+            let mut pending = Box::pin(c.abort());
+            // Drive submission ourselves. Pending proves admission succeeded and
+            // the command is awaiting the stalled writer, without scheduler guesses.
+            poll_fn(|cx| {
+                assert!(pending.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            Some(pending)
         } else {
             None
         };
@@ -31,10 +39,20 @@ async fn bounded_writer_bytes_and_count_under_stalled_peer() {
         drop(o);
         assert_eq!(first.await.unwrap(), Err(Error::Closed));
         if let Some(t) = second {
-            assert_eq!(t.await.unwrap(), Err(Error::Closed));
+            assert_eq!(t.await, Err(Error::Closed));
         }
     }
 }
+#[tokio::test]
+async fn bounded_writer_bytes_and_count_under_stalled_peer() {
+    assert_bounded_writer_under_stalled_peer().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn bounded_writer_under_stalled_peer_on_multiple_threads() {
+    assert_bounded_writer_under_stalled_peer().await;
+}
+
 #[tokio::test]
 async fn oversized_record_and_unterminated_eof_are_protocol_errors() {
     for (bytes, max) in [
