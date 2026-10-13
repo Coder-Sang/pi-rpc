@@ -1,8 +1,7 @@
 use super::*;
 
-#[test]
-fn every_command_round_trips_with_correct_wire_name_and_casing() {
-    let fixtures = vec![
+pub(super) fn command_fixtures() -> Vec<Value> {
+    vec![
         json!({"type":"prompt","message":"x","streamingBehavior":"followUp","images":[{"type":"image","data":"AA==","mimeType":"image/png"}]}),
         json!({"type":"steer","message":"x"}),
         json!({"type":"follow_up","message":"x"}),
@@ -36,7 +35,12 @@ fn every_command_round_trips_with_correct_wire_name_and_casing() {
         json!({"type":"set_session_name","name":"n"}),
         json!({"type":"get_messages"}),
         json!({"type":"get_commands"}),
-    ];
+    ]
+}
+
+#[test]
+fn every_command_round_trips_with_correct_wire_name_and_casing() {
+    let fixtures = command_fixtures();
     assert_eq!(fixtures.len(), 33);
     for v in fixtures {
         let c: Command = serde_json::from_value(v.clone()).unwrap();

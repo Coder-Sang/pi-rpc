@@ -23,3 +23,6 @@ mod message;
 mod response;
 #[path = "protocol/ui.rs"]
 mod ui;
+
+#[path = "protocol/response_negative.rs"]
+mod response_negative;

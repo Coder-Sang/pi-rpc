@@ -69,10 +69,9 @@ fn last_assistant_text_accepts_empty_session_omission_but_rejects_bad_types() {
         .is_err()
     );
 }
-#[test]
-fn all_33_success_response_data_schemas_are_covered() {
+pub(super) fn success_fixtures() -> Vec<(&'static str, Option<Value>)> {
     let state = json!({"thinkingLevel":"off","isStreaming":false,"isCompacting":false,"steeringMode":"all","followUpMode":"all","sessionId":"s","autoCompactionEnabled":true,"messageCount":0,"pendingMessageCount":0});
-    let fixtures = vec![
+    vec![
         ("prompt", Some(json!({"disposition":"started"}))),
         ("steer", Some(json!({"disposition":"queued"}))),
         ("follow_up", Some(json!({"disposition":"handled"}))),
@@ -120,7 +119,12 @@ fn all_33_success_response_data_schemas_are_covered() {
         ("set_session_name", None),
         ("get_messages", Some(json!({"messages":[]}))),
         ("get_commands", Some(json!({"commands":[]}))),
-    ];
+    ]
+}
+
+#[test]
+fn all_33_success_response_data_schemas_are_covered() {
+    let fixtures = success_fixtures();
     assert_eq!(fixtures.len(), 33);
     for (command, data) in fixtures {
         let mut wire = json!({"type":"response","command":command,"success":true});
