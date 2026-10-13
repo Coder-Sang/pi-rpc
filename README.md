@@ -100,6 +100,34 @@ Session events generally have **no command ID**. Only direct bash output can rep
 
 Event-channel closure can race ahead of the I/O supervisor's terminal publication. `PiEvents::recv` waits for the authoritative terminal watch after draining the channel, rather than returning premature `None`. This wait is cancellation-safe. Reader-task panic, transport EOF and owner drop all publish terminal reasons, so consumers do not need to call `wait_terminal` first. If the terminal authority itself disappears without publishing, the defensive fallback is one `Closed` error, then `None`.
 
+Model failures are native message outcomes: inspect `message_end.message.fields["stopReason"]` and `errorMessage`. Pi's normal agent loop turns provider `done`/`error` into message boundaries; waiting only for a nested `AssistantEvent::Error` or a connection error misses model failures. Keep consuming through retries and `agent_settled`:
+
+```rust,no_run
+use pi_rpc::PiEvents;
+use pi_rpc::protocol::{AssistantEvent, Event, KnownEvent};
+
+async fn consume(mut events: PiEvents) -> pi_rpc::Result<()> {
+    while let Some(record) = events.recv().await {
+        match record? {
+            Event::Known(KnownEvent::MessageUpdate {
+                assistant_message_event: AssistantEvent::TextDelta { content_index, delta }, ..
+            }) => println!("block {content_index}: {delta}"),
+            Event::Known(KnownEvent::MessageEnd { message }) => {
+                let reason = message.fields.get("stopReason").and_then(|value| value.as_str());
+                if message.role == "assistant" && matches!(reason, Some("error" | "aborted")) {
+                    eprintln!("model outcome: {reason:?}"); // The connection remains usable.
+                }
+                // Replace the accumulated message with this authoritative snapshot.
+            }
+            _ => { /* Handle thinking, tools, custom messages and UI in the host. */ }
+        }
+    }
+    Ok(())
+}
+```
+
+See the [event consumption guide](docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
+
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 
 ## Bounds and backpressure
