@@ -1,5 +1,5 @@
 //! Extension UI requests, answer validation and wire replies.
-use super::Extra;
+use super::{Extra, milliseconds::deserialize_optional_milliseconds};
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,18 +19,24 @@ pub enum UiMethod {
     Select {
         title: String,
         options: Vec<String>,
+        /// Wire fractions are truncated; missing/null remains None. Pi owns the timer.
+        #[serde(default, deserialize_with = "deserialize_optional_milliseconds")]
         timeout: Option<u64>,
     },
     #[serde(rename = "confirm")]
     Confirm {
         title: String,
         message: String,
+        /// Wire fractions are truncated; missing/null remains None. Pi owns the timer.
+        #[serde(default, deserialize_with = "deserialize_optional_milliseconds")]
         timeout: Option<u64>,
     },
     #[serde(rename = "input")]
     Input {
         title: String,
         placeholder: Option<String>,
+        /// Wire fractions are truncated; missing/null remains None. Pi owns the timer.
+        #[serde(default, deserialize_with = "deserialize_optional_milliseconds")]
         timeout: Option<u64>,
     },
     #[serde(rename = "editor")]

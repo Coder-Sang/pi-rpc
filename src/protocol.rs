@@ -24,6 +24,7 @@ mod command;
 mod decode;
 mod event;
 mod message;
+mod milliseconds;
 mod response;
 mod session;
 mod ui;
