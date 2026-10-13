@@ -14,7 +14,7 @@ The package checker enforces `publish = ["crates-io"]` in both original and norm
 - Source-breaking changes, including variants added to exhaustively matched public enums, require a new minor series such as **0.2.0** and migration notes in the [changelog](../CHANGELOG.md). A protocol upgrade or higher MSRV must be reviewed explicitly and documented before release.
 - Pi compatibility remains **1.1.0**, verified against its fixed source commit; this is not a multi-version SDK. Remote transports still rely on the host's declared Pi version.
 - Version **0.1.0** is not reserved by a dry-run. The public crates.io API returned no existing `pi-rpc` crate on 2026-10-14; availability and registry-side authorization remain subject to the eventual upload.
-- Once an upload is separately authorized and confirmed, record the actual publication date, change the README's candidate status, and create/push **v0.1.0** pointing to the uploaded commit. Verify registry installation and the all-feature docs.rs build before marking the release complete.
+- Finalize package-facing release text on the clean release commit **before** a separately authorized upload, following the checklist below. After the upload is confirmed, create/push **v0.1.0** pointing to that exact uploaded commit and verify registry installation and docs.rs. Updating Git afterwards cannot replace text already inside the uploaded 0.1.0 source archive.
 
 ## Completed source and content review
 
@@ -24,6 +24,18 @@ The package checker enforces `publish = ["crates-io"]` in both original and norm
 - [x] Review current files and reachable Git history using bounded credential patterns. Zero matches were found; historical personal-path findings are recorded without rewriting history. Existing public commit identity is retained.
 - [x] Add the initial [CHANGELOG](../CHANGELOG.md), preview/API policy and post-upload tag plan.
 - [x] Maintain four-feature Linux/macOS/Windows CI on stable and exact Rust 1.85.0, fake-only stress rounds, focused Debug/Release regressions, package checks and fresh independent consumers.
+
+## Before a separately authorized upload
+
+This preparation authorizes fixes, tests and source pushes only. The current README and changelog intentionally retain candidate status; no publication date or successful upload is claimed.
+
+- [ ] Obtain separate authorization for the actual crates.io upload.
+- [ ] On the final release commit, replace candidate/unpublished wording in the README, put the registry installation example first and retain Git as an alternative. Use neutral version/technical-preview wording rather than claiming that an unperformed upload succeeded.
+- [ ] Finalize the **0.1.0** changelog heading and intended release date before packaging. If the intended date changes before upload, update the release commit and recheck it. Record actual upload confirmation separately afterwards.
+- [ ] Update this preparation status or make its historical date explicit. Preserve dated verification/provenance records without presenting historical candidate status as the current release status.
+- [ ] Commit all package-facing documentation, then run the complete verification, packaging, dry-run and independent-consumer checks below against that clean commit. Record its SHA and archive digest outside the archive itself.
+
+The package must contain the final release text when uploaded. A post-upload README/changelog correction in Git does not rewrite the already published version; source corrections require another crate version.
 
 ## Final verification before upload
 
@@ -61,7 +73,9 @@ The latest hosted outcomes are available in [Verify workflow runs](https://githu
 
 - [ ] Confirm `pi-rpc` **0.1.0** appears in the registry and a fresh registry consumer builds on Rust 1.85.0.
 - [ ] Confirm docs.rs builds with all features and optional APIs are visible.
-- [ ] Update release status/date and push the matching **v0.1.0** tag.
+- [ ] Record the actual upload confirmation and validation results in a release record, and push **v0.1.0** pointing to the exact uploaded commit. A follow-up bookkeeping commit must not be substituted as the tag target.
+
+Do not defer package-facing README/changelog changes to this stage. If verification fails after upload, correct the package in a new version and describe the outcome; the source archive for the uploaded version cannot be overwritten.
 
 ## Opt-in live acceptance
 

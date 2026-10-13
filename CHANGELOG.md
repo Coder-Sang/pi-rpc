@@ -2,7 +2,7 @@
 
 ## 0.1.0 — release candidate, not uploaded
 
-Initial technical preview, pinned to Pi **1.1.0**. Publication preparation was completed on 2026-10-14; that date is not a registry release date. See the [stability and release policy](docs/publishing.md#version-and-release-policy).
+Initial technical preview, pinned to Pi **1.1.0**. Publication preparation was recorded on 2026-10-14; that date is not a registry release date. After upload is separately authorized, finalize this candidate heading and intended release date **before** packaging the release commit, following the [pre-upload checklist](docs/publishing.md#before-a-separately-authorized-upload). See the [stability and release policy](docs/publishing.md#version-and-release-policy).
 
 - Typed access to 33 RPC commands, 24 known events, 12 assistant stream variants and nine extension UI methods, with open custom messages and unknown events preserved.
 - Tokio transport injection, default local subprocess ownership, ordered event delivery and deterministic close/terminal handling.
