@@ -62,6 +62,7 @@ class PackageChecks(unittest.TestCase):
         self.archive = Path(self.temp.name) / "fixture.crate"
         self.files = {name: b"" for name in REQUIRED_FILES}
         manifest = (b'[package]\nname="pi-rpc"\nversion="0.1.0"\nlicense="Apache-2.0"\npublish=["crates-io"]\n'
+                    b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"\n'
                     b'edition="2024"\nrust-version="1.85"\nreadme="README.md"\n'
                     b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
@@ -169,6 +170,34 @@ class PackageChecks(unittest.TestCase):
         self.write_archive()
         with self.assertRaisesRegex(CheckError, "versions differ"):
             check_package(self.archive)
+
+    def test_description_required_nonblank_and_string_in_both_manifests(self):
+        root = self.source_root()
+        description = b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"\n'
+        for name in ["Cargo.toml", "Cargo.toml.orig"]:
+            saved = self.files[name]
+            for replacement in [b'', b'description=""\n', b'description=" \\t "\n',
+                                b'description=false\n', b'description=1\n', b'description=[]\n',
+                                b'description={summary="x"}\n']:
+                with self.subTest(name=name, replacement=replacement):
+                    self.files[name] = saved.replace(description, replacement)
+                    self.write_archive()
+                    for options in [{}, {"source_root": root, "expected_commit": "expected"}]:
+                        with self.assertRaisesRegex(CheckError, "description"):
+                            check_package(self.archive, **options)
+            self.files[name] = saved
+
+    def test_manifest_descriptions_must_agree_but_allow_matching_updates(self):
+        description = b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"'
+        replacement = b'description="Updated nonempty package description"'
+        self.files["Cargo.toml"] = self.files["Cargo.toml"].replace(description, replacement)
+        self.write_archive()
+        with self.assertRaisesRegex(CheckError, "descriptions differ"):
+            check_package(self.archive)
+        self.files["Cargo.toml.orig"] = self.files["Cargo.toml.orig"].replace(description, replacement)
+        root = self.source_root()
+        self.write_archive()
+        check_package(self.archive, source_root=root, expected_commit="expected")
 
     def consumer_source_root(self):
         root = self.source_root()

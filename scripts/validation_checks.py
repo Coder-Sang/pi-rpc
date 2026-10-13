@@ -173,6 +173,9 @@ def check_package_metadata(metadata, name):
     require(isinstance(metadata, dict), f"{name}: missing or invalid package table")
     require(isinstance(metadata.get("version"), str) and bool(metadata["version"]),
             f"{name}: missing or invalid version")
+    description = metadata.get("description")
+    require(isinstance(description, str) and bool(description.strip()),
+            f"{name}: missing or invalid description")
     for key, expected in PACKAGE_METADATA.items():
         actual = metadata.get(key)
         require(type(actual) is type(expected) and actual == expected,
@@ -198,6 +201,7 @@ def check_package_contents(prefix, files, source_root=None, expected_commit=None
         check_package_metadata(metadata, name)
     require(prefix == f"{manifest['name']}-{manifest['version']}", "package root does not match manifest")
     require(manifest["version"] == original.get("version"), "manifest versions differ")
+    require(manifest["description"] == original["description"], "manifest descriptions differ")
     require(hashlib.sha256(files["LICENSE"]).hexdigest() == APACHE_SHA256, "LICENSE is not exact official Apache-2.0 text")
     notice = files["THIRD_PARTY_NOTICES.md"].partition(b"```text\n")[2].partition(b"\n```")[0]
     require(hashlib.sha256(notice).hexdigest() == PI_MIT_SHA256, "missing or changed pinned Pi MIT notice")
