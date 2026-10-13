@@ -3,15 +3,19 @@
 import io
 import json
 import os
+from contextlib import redirect_stderr
 from pathlib import Path
 import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 from validation_checks import CheckError, REQUIRED_FILES, check_documents, check_package, read_archive, unwanted_package_file
+from prepare_consumer import prepare_consumer
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -165,6 +169,116 @@ class PackageChecks(unittest.TestCase):
         self.write_archive()
         with self.assertRaisesRegex(CheckError, "versions differ"):
             check_package(self.archive)
+
+    def consumer_source_root(self):
+        root = self.source_root()
+        for name, data in self.files.items():
+            if name in {"Cargo.toml", "Cargo.toml.orig", ".cargo_vcs_info.json"}:
+                continue
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return root
+
+    def consumer_process(self, root, target):
+        def run(args, **kwargs):
+            if args[0] == "cargo":
+                self.assertIn("--locked", args)
+                self.assertIn("--offline", args)
+                self.assertEqual(Path(args[-1]).resolve(), (root / "Cargo.toml").resolve())
+                metadata = {"packages": [{"name": "pi-rpc", "version": "0.1.0", "manifest_path": str(root / "Cargo.toml")}],
+                            "target_directory": str(target)}
+                return subprocess.CompletedProcess(args, 0, json.dumps(metadata), "")
+            self.assertEqual(args, ["git", "-C", str(root.resolve()), "rev-parse", "HEAD"])
+            return subprocess.CompletedProcess(args, 0, "expected\n", "")
+        return run
+
+    def prepare_fixture_consumer(self, root, target, destination, archive=None):
+        with patch("prepare_consumer.subprocess.run", side_effect=self.consumer_process(root, target)), redirect_stderr(io.StringIO()):
+            return prepare_consumer(root, destination, archive)
+
+    def test_consumer_uses_cargo_target_directory_with_stale_default_package(self):
+        root = self.consumer_source_root()
+        stale = root / "target/package/pi-rpc-0.1.0"
+        stale.mkdir(parents=True)
+        (stale / "Cargo.toml").write_text('[package]\nname="pi-rpc"\nversion="0.0.9"\n', encoding="utf-8")
+        for index, target in enumerate([Path(self.temp.name) / "env target", Path(self.temp.name) / "config target 中文"]):
+            with self.subTest(target=target):
+                target.joinpath("package").mkdir(parents=True)
+                self.archive = target / "package/pi-rpc-0.1.0.crate"
+                self.write_archive()
+                destination = Path(self.temp.name) / f"consumer {index} 🚀"
+                destination.mkdir()
+                output = self.prepare_fixture_consumer(root, target, destination)
+                self.assertEqual(output, target.resolve() / "independent-consumer")
+                generated = tomllib.loads((destination / "consumer/Cargo.toml").read_text(encoding="utf-8"))
+                dependency = generated["dependencies"]["pi-rpc"]
+                self.assertEqual(dependency["version"], "=0.1.0")
+                self.assertEqual(Path(dependency["path"]), (destination / "package/pi-rpc-0.1.0").resolve())
+                self.assertFalse((destination / "consumer/Cargo.lock").exists())
+
+    def test_consumer_explicit_archive_ignores_old_extracted_directory(self):
+        root = self.consumer_source_root()
+        target = Path(self.temp.name) / "configured-target"
+        stale = target / "package/pi-rpc-0.1.0/src/lib.rs"
+        stale.parent.mkdir(parents=True)
+        stale.write_bytes(b"stale source")
+        self.write_archive()
+        destination = Path(self.temp.name) / "consumer"
+        destination.mkdir()
+        self.prepare_fixture_consumer(root, target, destination, self.archive)
+        self.assertEqual((destination / "package/pi-rpc-0.1.0/src/lib.rs").read_bytes(), self.files["src/lib.rs"])
+        self.assertEqual(stale.read_bytes(), b"stale source")
+
+    def test_consumer_rejects_stale_commit_dirty_package_and_wrong_version(self):
+        root = self.consumer_source_root()
+        destination = Path(self.temp.name) / "consumer"
+        destination.mkdir()
+        mutations = [(".cargo_vcs_info.json", json.dumps({"git": {"sha1": "old"}}).encode()),
+                     (".cargo_vcs_info.json", json.dumps({"git": {"sha1": "expected", "dirty": True}}).encode()),
+                     ("Cargo.toml", self.files["Cargo.toml"].replace(b'version="0.1.0"', b'version="0.0.9"'))]
+        for name, data in mutations:
+            saved = self.files[name]
+            with self.subTest(name=name, data=data):
+                self.files[name] = data
+                self.write_archive()
+                with self.assertRaises(CheckError):
+                    self.prepare_fixture_consumer(root, Path(self.temp.name), destination, self.archive)
+                self.assertEqual(list(destination.iterdir()), [])
+            self.files[name] = saved
+
+    def test_consumer_rejects_archive_source_tampering_before_extraction(self):
+        root = self.consumer_source_root()
+        self.files["src/lib.rs"] = b"changed source with unchanged VCS claim"
+        self.write_archive()
+        destination = Path(self.temp.name) / "consumer"
+        destination.mkdir()
+        with self.assertRaisesRegex(CheckError, "archive differs from source file"):
+            self.prepare_fixture_consumer(root, Path(self.temp.name), destination, self.archive)
+        self.assertEqual(list(destination.iterdir()), [])
+
+    def test_consumer_rejects_unsafe_windows_paths_before_extraction(self):
+        root = self.consumer_source_root()
+        destination = Path(self.temp.name) / "consumer"
+        destination.mkdir()
+        for name in ["C:/escape", "src/lib.rs:stream"]:
+            with self.subTest(name=name):
+                self.files[name] = b"fixture"
+                self.write_archive()
+                with self.assertRaisesRegex(CheckError, "unsafe extraction path"):
+                    self.prepare_fixture_consumer(root, Path(self.temp.name), destination, self.archive)
+                self.assertEqual(list(destination.iterdir()), [])
+                del self.files[name]
+
+    def test_consumer_rejects_nonempty_destination(self):
+        root = self.consumer_source_root()
+        self.write_archive()
+        destination = Path(self.temp.name) / "consumer"
+        destination.mkdir()
+        (destination / "keep").write_bytes(b"caller data")
+        with self.assertRaisesRegex(CheckError, "destination must be empty"):
+            self.prepare_fixture_consumer(root, Path(self.temp.name), destination, self.archive)
+        self.assertEqual((destination / "keep").read_bytes(), b"caller data")
 
     def test_package_table_and_version_required(self):
         for name in ["Cargo.toml", "Cargo.toml.orig"]:

@@ -18,6 +18,7 @@ PI_MIT_SHA256 = "0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c4
 REQUIRED_FILES = {
     "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", "LICENSE", "README.md", ".gitignore",
     "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "scripts/verify-consumer.sh",
+    "scripts/prepare_consumer.py", "tests/public_paths.rs", "examples/injected.rs", "examples/native_session.rs",
     "src/lib.rs", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md",
     "tests/fixtures/fake_pi.rs", "tests/fixtures/rpc_acceptance_extension.ts",
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
@@ -185,6 +186,11 @@ def check_package_metadata(metadata, name):
 
 def check_package(path, source_root=None, expected_commit=None):
     prefix, files = read_archive(path)
+    return check_package_contents(prefix, files, source_root, expected_commit)
+
+
+def check_package_contents(prefix, files, source_root=None, expected_commit=None):
+    """Validate the same in-memory archive snapshot that a consumer will use."""
     require(REQUIRED_FILES <= files.keys(), f"missing package files: {sorted(REQUIRED_FILES - files.keys())}")
     manifest = tomllib.loads(files["Cargo.toml"].decode("utf-8")).get("package")
     original = tomllib.loads(files["Cargo.toml.orig"].decode("utf-8")).get("package")

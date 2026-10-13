@@ -41,14 +41,17 @@ python3 scripts/check-docs.py .
 cargo package --locked --list
 cargo package --locked
 cargo publish --dry-run --locked --registry crates-io
-python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
-python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
+python3 scripts/check-package.py --source-root . --expected-commit "$(git rev-parse HEAD)"
 bash scripts/verify-consumer.sh
 RUSTUP_TOOLCHAIN=1.85.0 bash scripts/verify-consumer.sh
 git diff --check
 ```
 
-`cargo package --locked` explicitly refreshes the standard archive used by the checker; Cargo versions can put the publishing rehearsal's archive in a temporary subdirectory instead. `--dry-run` packages and verifies without uploading; it does not establish registry acceptance, reserve a name, or prove future docs.rs success. No bare `cargo publish` is part of this preparation. The consumer script uses the extracted package rather than the source checkout, creates a new lockfile without copying the SDK's, checks public paths in all four feature configurations, runs the in-memory example four times and the native-session example twice. Neither example executes Pi.
+`cargo package --locked` explicitly refreshes the standard archive used by the checker; Cargo versions can put the publishing rehearsal's archive in a temporary subdirectory instead. Without an explicit archive argument, archive checking and consumer preparation use Cargo metadata to resolve the package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and use `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.1.0.crate`.
+
+The consumer verifies the archive's current clean VCS identity, version, metadata, notices, links and every archived source file before unpacking that exact snapshot into a new temporary directory. Existing unpacked package directories are ignored. It creates its own lockfile, checks public paths in all four feature configurations, runs the in-memory example four times and the native-session example twice. Neither example executes Pi. Its build output uses the effective target directory's `independent-consumer` subdirectory. The checker already covers archive-local Markdown links, so no default-target extraction path is assumed by the release commands.
+
+`--dry-run` packages and verifies without uploading; it does not establish registry acceptance, reserve a name, or prove future docs.rs success. No bare `cargo publish` is part of this preparation.
 
 Development requires stable Rust with rustfmt/Clippy, separately installed exact **1.85.0**, Bash, Git, **Python 3.11+** and a native C/assembly compiler. Windows uses Git Bash, MSVC and the Windows SDK. Python checker tests invoke Git; document/archive checking otherwise uses standard-library modules. The archive checks do not extract arbitrary member paths or follow archive symlinks.
 

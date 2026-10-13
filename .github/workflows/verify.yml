@@ -68,7 +68,7 @@ jobs:
         run: cargo package --locked
       - name: Inspect the actual crate archive
         run: |
-          python scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
+          python scripts/check-package.py --source-root . --expected-commit "$(git rev-parse HEAD)"
       - name: Fresh independent consumer from the packaged crate
         run: bash scripts/verify-consumer.sh
 
