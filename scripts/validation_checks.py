@@ -14,14 +14,16 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 APACHE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+PI_MIT_SHA256 = "0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48"
 REQUIRED_FILES = {
     "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", "LICENSE", "README.md", ".gitignore",
+    "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "scripts/verify-consumer.sh",
     "src/lib.rs", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md",
     "tests/fixtures/fake_pi.rs", "tests/fixtures/rpc_acceptance_extension.ts",
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
 }
 PACKAGE_METADATA = {
-    "name": "pi-rpc", "license": "Apache-2.0", "publish": False,
+    "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
     "edition": "2024", "rust-version": "1.85", "readme": "README.md",
     "repository": "https://github.com/Coder-Sang/pi-rpc",
     "keywords": ["pi", "rpc", "jsonl", "tokio", "async"],
@@ -96,7 +98,8 @@ def heading_anchors(text, name):
 
 def check_documents(files):
     """Check a mapping of POSIX relative names to bytes, never host targets."""
-    names = ["README.md", *sorted(n for n in files if n.startswith("docs/") and n.endswith(".md"))]
+    names = [*(n for n in ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md") if n in files),
+             *sorted(n for n in files if n.startswith("docs/") and n.endswith(".md"))]
     require("README.md" in files, "missing README.md")
     links = 0
     for name in names:
@@ -125,7 +128,7 @@ def read_root(root):
     require(root.is_dir(), f"not a directory: {root}")
     files = {}
     # Include potential local link destinations, but skip build/Git/private folders.
-    for name in ["README.md", "LICENSE", "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".gitignore"]:
+    for name in ["README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "LICENSE", "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".gitignore"]:
         path = root / name
         if path.is_file():
             require(not path.is_symlink(), f"symlink target not accepted: {name}")
@@ -190,12 +193,14 @@ def check_package(path, source_root=None, expected_commit=None):
     require(prefix == f"{manifest['name']}-{manifest['version']}", "package root does not match manifest")
     require(manifest["version"] == original.get("version"), "manifest versions differ")
     require(hashlib.sha256(files["LICENSE"]).hexdigest() == APACHE_SHA256, "LICENSE is not exact official Apache-2.0 text")
+    notice = files["THIRD_PARTY_NOTICES.md"].partition(b"```text\n")[2].partition(b"\n```")[0]
+    require(hashlib.sha256(notice).hexdigest() == PI_MIT_SHA256, "missing or changed pinned Pi MIT notice")
     check_ignore_policy(files[".gitignore"])
     require(not any(unwanted_package_file(n) for n in files), "unexpected sensitive/build file in package")
     documents, links = check_documents(files)
     if source_root:
         root, source = read_root(source_root)
-        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", "README.md", ".gitignore", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md"}
+        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", "README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md"}
         require(required_source <= source.keys(), f"missing source comparison files: {sorted(required_source - source.keys())}")
         require({n for n in source if n.startswith("docs/")} == {n for n in files if n.startswith("docs/")},
                 "package/source docs inventory differs")

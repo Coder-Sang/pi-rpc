@@ -26,6 +26,15 @@ class DocumentChecks(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(CheckError):
                 check_documents({"README.md": text.encode()})
 
+    def test_release_documents_local_links_checked(self):
+        for name in ["CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]:
+            with self.subTest(name=name):
+                files = {"README.md": b"# Readme\n", name: b"[readme](README.md#readme)\n"}
+                self.assertEqual(check_documents(files), (2, 1))
+                files[name] = b"[missing](absent.md)\n"
+                with self.assertRaisesRegex(CheckError, "missing local link target"):
+                    check_documents(files)
+
     def test_explicit_root_cli_ignores_cwd_and_git(self):
         with tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR")) as tmp:
             root = Path(tmp) / "package"
@@ -48,7 +57,7 @@ class PackageChecks(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.archive = Path(self.temp.name) / "fixture.crate"
         self.files = {name: b"" for name in REQUIRED_FILES}
-        manifest = (b'[package]\nname="pi-rpc"\nversion="0.1.0"\nlicense="Apache-2.0"\npublish=false\n'
+        manifest = (b'[package]\nname="pi-rpc"\nversion="0.1.0"\nlicense="Apache-2.0"\npublish=["crates-io"]\n'
                     b'edition="2024"\nrust-version="1.85"\nreadme="README.md"\n'
                     b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
@@ -59,6 +68,8 @@ class PackageChecks(unittest.TestCase):
                            "README.md": b"[license](LICENSE)\n[docs](docs/compatibility.md#scope)\n",
                            "docs/compatibility.md": b"# Scope\n",
                            ".cargo_vcs_info.json": json.dumps({"git": {"sha1": "expected"}}).encode()})
+        notice = (ROOT / "THIRD_PARTY_NOTICES.md").read_bytes().partition(b"```text\n")[2].partition(b"\n```")[0]
+        self.files["THIRD_PARTY_NOTICES.md"] = b"```text\n" + notice + b"\n```\n"
 
     def write_archive(self, extras=()):
         with tarfile.open(self.archive, "w:gz") as archive:
@@ -71,7 +82,7 @@ class PackageChecks(unittest.TestCase):
 
     def test_complete_package(self):
         self.write_archive()
-        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (4, 2))
+        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (7, 2))
 
     def test_missing_archive_target_never_falls_back_to_worktree(self):
         del self.files["LICENSE"]
@@ -79,10 +90,20 @@ class PackageChecks(unittest.TestCase):
         with self.assertRaises(CheckError):
             check_package(self.archive)
 
+    def test_release_materials_required_in_archive(self):
+        for name in ["CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "scripts/verify-consumer.sh"]:
+            saved = self.files.pop(name)
+            with self.subTest(name=name):
+                self.write_archive()
+                with self.assertRaisesRegex(CheckError, "missing package files"):
+                    check_package(self.archive)
+            self.files[name] = saved
+
     def test_changed_license_and_metadata(self):
         for name, replacement in [("LICENSE", b"changed"),
+                                  ("THIRD_PARTY_NOTICES.md", self.files["THIRD_PARTY_NOTICES.md"].replace(b'Mario Zechner', b'Changed attribution')),
                                   ("Cargo.toml", self.files["Cargo.toml"].replace(b'Apache-2.0', b'MIT')),
-                                  ("Cargo.toml.orig", self.files["Cargo.toml.orig"].replace(b'false', b'true'))]:
+                                  ("Cargo.toml.orig", self.files["Cargo.toml.orig"].replace(b'publish=["crates-io"]', b'publish=true'))]:
             with self.subTest(name=name):
                 saved = self.files[name]
                 self.files[name] = replacement
@@ -97,6 +118,20 @@ class PackageChecks(unittest.TestCase):
             self.write_archive()
             with self.assertRaises(CheckError):
                 check_package(self.archive, expected_commit="expected")
+
+    def test_publish_restriction_requires_only_crates_io_in_both_manifests(self):
+        for name in ["Cargo.toml", "Cargo.toml.orig"]:
+            saved = self.files[name]
+            for replacement in [b'', b'publish=false\n', b'publish=true\n', b'publish=[]\n',
+                                b'publish="crates-io"\n', b'publish=[false]\n',
+                                b'publish=["private"]\n', b'publish=["crates-io","private"]\n',
+                                b'publish=["crates-io","crates-io"]\n']:
+                with self.subTest(name=name, replacement=replacement):
+                    self.files[name] = saved.replace(b'publish=["crates-io"]\n', replacement)
+                    self.write_archive()
+                    with self.assertRaisesRegex(CheckError, "publish"):
+                        check_package(self.archive)
+            self.files[name] = saved
 
     def test_required_metadata_missing_wrong_or_wrong_type(self):
         mutations = [
@@ -147,7 +182,7 @@ class PackageChecks(unittest.TestCase):
     def source_root(self):
         root = Path(self.temp.name) / "source"
         root.mkdir(exist_ok=True)
-        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", ".gitignore", *sorted(n for n in self.files if n.startswith("docs/"))]:
+        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", ".gitignore", *sorted(n for n in self.files if n.startswith("docs/"))]:
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(self.files[name])
@@ -156,7 +191,7 @@ class PackageChecks(unittest.TestCase):
     def test_source_mismatch(self):
         root = self.source_root()
         self.write_archive()
-        for name in ["README.md", ".gitignore"]:
+        for name in ["README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md"]:
             with self.subTest(name=name):
                 path = root / name
                 saved = path.read_bytes()
@@ -169,7 +204,7 @@ class PackageChecks(unittest.TestCase):
         root = self.source_root()
         self.write_archive()
         check_package(self.archive, source_root=root)
-        for name in ["LICENSE", "Cargo.lock", "README.md", ".gitignore", "docs/verification.md"]:
+        for name in ["LICENSE", "Cargo.lock", "README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "docs/verification.md"]:
             with self.subTest(name=name):
                 path = root / name
                 saved = path.read_bytes()

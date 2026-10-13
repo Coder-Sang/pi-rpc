@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
     try:
         files, documents, links = check_package(args.archive, args.source_root, args.expected_commit)
-        print(f"PASS archive={args.archive.resolve()}: {files} files, Apache-2.0/publish=false, {documents} Markdown documents, {links} archive-local links/anchors")
+        print(f"PASS archive={args.archive.resolve()}: {files} files, Apache-2.0/publish=[crates-io], {documents} Markdown documents, {links} archive-local links/anchors")
     except (CheckError, OSError, UnicodeError, tarfile.TarError, KeyError, ValueError) as error:
         parser.exit(1, f"FAIL: {error}\n")
 

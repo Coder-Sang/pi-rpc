@@ -4,12 +4,33 @@ Current target: **Pi 1.1.0**, upgraded on 2026-10-09. The sections below are dat
 
 ## Current status summary
 
-- Four-feature offline check/test/strict-clippy matrix: PASS on 2026-10-12, **418 test executions** across four feature configurations. Strict docs and examples also passed.
+- Four-feature offline check/test/strict-clippy matrix: latest completed baseline PASS, **530 test executions** across four feature configurations. Strict docs and examples also passed; preparation results are recorded below.
 - Real Pi 1.1.0: **33/33 command names executed**, with real Opus 4.6 queue/tool/abort/manual-compaction evidence and session/bash/export effects. Not all variants, state transitions or events are covered.
 - Retry and automatic compaction: real Pi with **synthetic provider errors/usage and an extension summary**, not production Anthropic fault or automatic Opus-summary evidence.
-- Rust **1.85.0**: exact minimum compiler passed four-feature all-targets check/test on 2026-10-12 (**418 test executions**); earlier checks remain recorded below. Native Linux ARM64 execution supplements the earlier Linux x64 cross-check. Hosted Linux, macOS and Windows jobs also passed on both stable and exact 1.85.0, including Debug/Release boundary regressions and three stress rounds.
-- Packaging: `cargo package --locked --offline` creates and verifies the source archive. The project is licensed under **[Apache-2.0](../LICENSE)** and retains `publish=false`; the manifest now declares the public repository, keywords and all-feature docs.rs metadata. The source was pushed to the public `Coder-Sang/pi-rpc` GitHub repository with user authorization; all six hosted OS/toolchain jobs passed, including packaging/checker steps on stable. No crate publication was attempted.
+- Rust **1.85.0**: exact minimum compiler passed the latest completed four-feature all-targets check/test (**530 executions**); earlier checks remain recorded below. Native Linux ARM64 execution supplements the earlier Linux x64 cross-check. Hosted Linux, macOS and Windows jobs also passed on both stable and exact 1.85.0, including Debug/Release boundary regressions and three stress rounds.
+- Packaging: the project is licensed under **[Apache-2.0](../LICENSE)**, with retained [Pi MIT notices](../THIRD_PARTY_NOTICES.md). The manifest permits only crates.io publishing and declares the public repository, keywords and all-feature docs.rs metadata. Version **0.1.0** is an unuploaded technical-preview candidate; the [release checklist](publishing.md) and [provenance review](provenance.md) distinguish preparation from upload. All six jobs passed on the preceding commit **a17786d** in [run 38380352820](https://github.com/Coder-Sang/pi-rpc/actions/runs/38380352820); current hosted results are in [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml).
 - Safety incident: early state tests persisted four global settings without recording their previous values. The incident and subsequent isolated checks are preserved [below](#isolation-incident-and-subsequent-safeguards).
+
+## Crates.io publication preparation (2026-10-14)
+
+Version **0.1.0** now allows only `crates-io`, with matching original/normalized manifest checks and negative regressions. The [changelog](../CHANGELOG.md), [stability policy](publishing.md#version-and-release-policy), [retained MIT notice](../THIRD_PARTY_NOTICES.md) and [source/package review](provenance.md) are shipped. Production Rust files, public paths, Cargo feature definitions and `Cargo.lock` are unchanged.
+
+Local macOS fake-only verification completed successfully:
+
+| Check | Stable | Exact Rust 1.85.0 |
+|---|---|---|
+| Four-feature matrix | 530 passing test executions, strict lint/docs/examples | 530 passing test executions and all-targets checks |
+| Three stress rounds | 228 passing executions | 228 passing executions |
+| Focused Debug/Release regressions | 262 passing executions | 262 passing executions |
+| Independent packaged consumer | 16 passing public-path tests, four in-memory runs, two native-session runs | Same, with a newly generated consumer lockfile |
+
+All **24** Python checker tests passed, including registry restriction, required release files, retained-license changes, new root-document links and source mismatch regressions. Source/archive document checks cover **nine Markdown documents**. The reviewed `.crate` contains **97 files**, with every one of the **95 source files** byte-compared and only the two expected Cargo-generated metadata files added.
+
+`cargo publish --dry-run --locked --registry crates-io` completed package creation and the verification build and reported **“aborting upload due to dry run”**. The initial pre-commit rehearsal included `--allow-dirty`; the final release procedure repeats it from a clean commit and checks archive VCS identity with `--expected-commit`. The first clean archive check caught the earlier package because this Cargo writes dry-run archives under temporary package subdirectories; the procedure now explicitly refreshes the standard archive with `cargo package --locked`. This does not prove registry-side acceptance or docs.rs hosting.
+
+The independent consumer uses the extracted crate, not the working source or SDK lockfile. It forwards the existing features, compiles all original public paths, and runs packaged in-memory/native examples. Fresh registry resolution passed on both compilers. All six hosted jobs now build/check the package and run this consumer using their selected compiler; final hosted outcomes are available in [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml). The preceding six-job success is [run 38380352820](https://github.com/Coder-Sang/pi-rpc/actions/runs/38380352820).
+
+Local logs use `pi-rpc-release-prep-{verify,msrv,stress,msrv-stress,regressions,msrv-regressions,python,docs,archive,consumer,msrv-consumer,dry-run}.log` under the temporary directory. No registry upload, release tag, history rewrite, real Pi or paid-model request was performed.
 
 ## Client/protocol follow-up invariants (2026-10-13)
 

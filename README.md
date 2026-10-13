@@ -1,12 +1,12 @@
 # pi-rpc
 
-Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). This is a new, unpublished library. Licensed under **[Apache-2.0](./LICENSE)**. This license covers this project's original code and documentation, not separately licensed dependencies or the Pi executable. `publish=false` remains set. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
+Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). Version **0.1.0** is a technical preview prepared for crates.io; it has **not been uploaded**. Licensed under **[Apache-2.0](./LICENSE)** for this project's original code and documentation, with [third-party notices](THIRD_PARTY_NOTICES.md) for upstream material. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
 Declared minimum Rust: **1.85** (edition 2024). Native Linux, macOS and Windows CI passed all four feature configurations on stable and exact **1.85.0**, plus three stress rounds and Debug/Release boundary regressions; see the latest [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) and the [dated hosted verification evidence](docs/verification.md#hosted-six-job-cross-platform-acceptance-2026-10-11). Local macOS and Linux ARM64 checks supplement those results. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
 
 ## Installation
 
-The crate is not published on crates.io. Add a Git dependency to your application's `Cargo.toml`:
+Until 0.1.0 is uploaded to crates.io, add a Git dependency to your application's `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -15,6 +15,12 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
 This follows the development branch. Commit your application's `Cargo.lock` to retain the resolved Git revision, and update it deliberately when adopting newer changes. You can replace `branch` with `rev` to select a specific verified commit from the linked workflow runs. Rust imports use `pi_rpc`. For a sibling local checkout, replace the Git dependency with `pi-rpc = { path = "../pi-rpc" }`.
+
+After the registry release is available, replace the Git dependency with `pi-rpc = "0.1.0"`. The registry dependency supports the same feature options below. The publishing allowlist is restricted to `crates-io`; enabling it does not upload the crate.
+
+### Version and stability policy
+
+The **0.1.x** series keeps the documented public paths, feature names and Rust **1.85** minimum. Patch releases preserve the public Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. Pi compatibility remains pinned to **1.1.0** until a separately reviewed protocol upgrade. Technical-preview status means deployment experience is still limited to the evidence in the verification document. See the [changelog](CHANGELOG.md) and [release policy](docs/publishing.md#version-and-release-policy).
 
 ### Cargo features
 
@@ -207,7 +213,7 @@ Required-but-nullable fields distinguish absence from explicit null: cycle respo
 
 ## Development
 
-See [verification](docs/verification.md#current-status-summary) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. This package has `publish = false`, and no remote repository is required.
+See [verification](docs/verification.md#current-status-summary) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. Registry publishing is allowed only to crates.io; local verification requires no registry upload or remote repository.
 
 Development requires stable Rust with rustfmt/Clippy, separately installed exact Rust **1.85.0**, **Bash**, **Git**, **Python 3.11+**, and a native C/assembly toolchain. On Windows use Git Bash plus MSVC with the Windows SDK. Python checker unit tests invoke Git; standalone document/archive checks use only the Python standard library. Commands below run from a clean Git checkout at the repository root; Windows users can use `python` if `python3` is unavailable.
 
@@ -224,7 +230,7 @@ python3 scripts/check-package.py target/package/pi-rpc-0.1.0.crate --source-root
 python3 scripts/check-docs.py target/package/pi-rpc-0.1.0
 ```
 
-Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. All six CI combinations (Linux/macOS/Windows, stable/exact 1.85.0) run the feature matrix, three stress rounds including floating-point regressions, and focused Debug/Release UI, float, stack and close regressions. The separate opt-in macOS/Linux real-release smoke remains disabled by default; these normal checks use only the test fake. Configuring CI is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
+Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. All six CI combinations (Linux/macOS/Windows, stable/exact 1.85.0) run the feature matrix, three stress rounds including floating-point regressions, focused Debug/Release UI, float, stack and close regressions, and a fresh independent consumer of the packaged crate. After `cargo package --locked`, run `bash scripts/verify-consumer.sh` with stable and `RUSTUP_TOOLCHAIN=1.85.0`; it checks all four features without copying the SDK lockfile. The separate opt-in macOS/Linux real-release smoke remains disabled by default; these normal checks use only the test fake. Configuring CI is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
 
 The fake-only image tests cover four near-limit images, a 15 MiB original represented as 20 MiB Base64, exact record/envelope limits, image event replay and complete history overflow. For an informational seven-sample Release comparison of single-pass versus reserved two-pass encoding, run `cargo test --locked --release --all-features --lib image_encoding_measurement -- --ignored --nocapture`. It prints elapsed medians and reserved output bytes, not process RSS, and has no timing threshold.
 
