@@ -1,5 +1,61 @@
 use super::*;
 
+#[tokio::test]
+async fn fractional_retry_delays_keep_pending_commands_and_following_events_alive() {
+    let (client, mut events, mut owner, mut reader, mut writer) = setup(Config::default());
+    let command = tokio::spawn(async move { client.abort().await });
+    let request = next(&mut reader).await;
+    // Pi's retryDelayMs returns a fractional maxAgentDelayMs cap unchanged.
+    let retries = [
+        json!({"type":"auto_retry_start","attempt":1,"maxAttempts":3,"delayMs":1500.5,"errorMessage":"synthetic"}),
+        json!({"type":"summarization_retry_scheduled","attempt":1,"maxAttempts":3,"delayMs":0.75,"errorMessage":"synthetic"}),
+    ];
+    let mut batch = Vec::new();
+    for retry in &retries {
+        batch.extend(codec::encode(retry, 65536).unwrap());
+    }
+    batch.extend(
+        codec::encode(
+            &json!({"type":"response","id":request["id"],"command":"abort","success":true}),
+            65536,
+        )
+        .unwrap(),
+    );
+    batch.extend_from_slice(b"{\"type\":\"agent_start\"}\r\n");
+    for chunk in batch.chunks(3) {
+        writer.write_all(chunk).await.unwrap();
+    }
+    tokio::time::timeout(Duration::from_secs(2), command)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    for (kind, expected) in [
+        ("auto_retry_start", 1500),
+        ("summarization_retry_scheduled", 0),
+    ] {
+        let Some(Ok(Event::Known(event))) = bounded_event(&mut events).await else {
+            panic!("expected retry event");
+        };
+        let delay = match &event {
+            KnownEvent::AutoRetryStart { delay_ms, .. }
+            | KnownEvent::SummarizationRetryScheduled { delay_ms, .. } => *delay_ms,
+            _ => panic!("expected retry delay"),
+        };
+        assert_eq!(delay, expected);
+        assert_eq!(serde_json::to_value(event).unwrap()["type"], kind);
+    }
+    assert_eq!(
+        bounded_event(&mut events).await,
+        Some(Ok(Event::Known(KnownEvent::AgentStart)))
+    );
+    assert!(owner.terminal_reason().is_none());
+    writer.shutdown().await.unwrap();
+    assert_eq!(bounded_event(&mut events).await, Some(Err(Error::Eof)));
+    assert_eq!(bounded_event(&mut events).await, None);
+    assert_eq!(owner.wait_terminal().await, Error::Eof);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn event_consumer_gets_exactly_one_terminal_before_waiting_for_owner_3000_runs() {
     for iteration in 0..3000 {

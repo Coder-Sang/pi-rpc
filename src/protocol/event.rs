@@ -1,7 +1,7 @@
 //! Known session events and assistant message deltas.
 use super::{
     CompactionResult, ContentBlock, Extra, Message, SessionEntry, ThinkingLevel, Usage,
-    optional_number,
+    milliseconds::deserialize_milliseconds, optional_number,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -171,6 +171,8 @@ pub enum KnownEvent {
     AutoRetryStart {
         attempt: u64,
         max_attempts: u64,
+        /// Wire fractions are truncated to retain the existing integer millisecond API.
+        #[serde(deserialize_with = "deserialize_milliseconds")]
         delay_ms: u64,
         error_message: String,
     },
@@ -184,6 +186,8 @@ pub enum KnownEvent {
     SummarizationRetryScheduled {
         attempt: u64,
         max_attempts: u64,
+        /// Wire fractions are truncated to retain the existing integer millisecond API.
+        #[serde(deserialize_with = "deserialize_milliseconds")]
         delay_ms: u64,
         error_message: String,
     },

@@ -1,6 +1,64 @@
 use super::*;
 
 #[test]
+fn retry_delays_accept_fractional_milliseconds_and_preserve_integer_boundaries() {
+    for kind in ["auto_retry_start", "summarization_retry_scheduled"] {
+        for (number, expected) in [
+            ("0", 0),
+            ("-0.0", 0),
+            ("0.75", 0),
+            ("1500.5", 1500),
+            ("1.5e3", 1500),
+            ("9007199254740993", 9_007_199_254_740_993),
+            ("18446744073709551615", u64::MAX),
+            ("18446744073709549568.0", u64::MAX - 2047),
+        ] {
+            let wire = json!({"type":kind,"attempt":1,"maxAttempts":3,"delayMs":serde_json::from_str::<Value>(number).unwrap(),"errorMessage":"synthetic"});
+            for event in [
+                serde_json::from_value::<KnownEvent>(wire.clone()).unwrap(),
+                match decode_record(wire).unwrap() {
+                    Record::Event(Event::Known(event)) => event,
+                    _ => panic!("expected known retry event"),
+                },
+            ] {
+                let delay = match &event {
+                    KnownEvent::AutoRetryStart { delay_ms, .. }
+                    | KnownEvent::SummarizationRetryScheduled { delay_ms, .. } => *delay_ms,
+                    _ => panic!("expected retry delay"),
+                };
+                assert_eq!(delay, expected, "{kind}: {number}");
+                assert_eq!(serde_json::to_value(event).unwrap()["delayMs"], expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn retry_delays_remain_required_and_reject_invalid_durations() {
+    for kind in ["auto_retry_start", "summarization_retry_scheduled"] {
+        let base = json!({"type":kind,"attempt":1,"maxAttempts":3,"errorMessage":"synthetic"});
+        for bad in [
+            None,
+            Some(Value::Null),
+            Some(json!(-0.25)),
+            Some(json!(-1)),
+            Some(json!("1500.5")),
+            Some(json!(true)),
+            Some(json!([])),
+            Some(json!({})),
+            Some(serde_json::from_str("18446744073709551616").unwrap()),
+        ] {
+            let mut wire = base.clone();
+            if let Some(bad) = bad {
+                wire["delayMs"] = bad;
+            }
+            assert!(serde_json::from_value::<KnownEvent>(wire.clone()).is_err());
+            assert!(matches!(decode_record(wire), Err(Error::Protocol(_))));
+        }
+    }
+}
+
+#[test]
 fn required_open_tool_payloads_allow_null_but_reject_absence_and_bad_nested_updates() {
     for (kind, key) in [
         ("tool_execution_start", "args"),
