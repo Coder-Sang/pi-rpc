@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn native_custom_messages_require_their_fields_and_preserve_details() {
+    let base = json!({"role":"custom","customType":"extension.review","content":"中文😀","display":false,"timestamp":123,"details":{"opaque":[null,42.25]}});
+    let message: Message = serde_json::from_value(base.clone()).unwrap();
+    assert_eq!(serde_json::to_value(message).unwrap(), base);
+    for key in ["customType", "content", "display", "timestamp"] {
+        for missing in [false, true] {
+            let mut invalid = base.clone();
+            if missing {
+                invalid.as_object_mut().unwrap().remove(key);
+            } else {
+                invalid[key] = Value::Null;
+            }
+            assert!(serde_json::from_value::<Message>(invalid.clone()).is_err());
+            assert!(matches!(
+                decode_record(json!({"type":"message_end","message":invalid})),
+                Err(Error::Protocol(_))
+            ));
+        }
+    }
+}
+
+#[test]
 fn native_message_durations_survive_rpc_and_session_entries_but_reject_bad_types() {
     for base in [assistant(), tool_result()] {
         for duration in [None, Some(json!(0)), Some(json!(42.25))] {

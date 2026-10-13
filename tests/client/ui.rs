@@ -3,10 +3,11 @@ use super::*;
 #[tokio::test]
 async fn fractional_dialog_timeouts_keep_responses_and_events_readable() {
     for ui_policy in [pi_rpc::UiPolicy::Cancel, pi_rpc::UiPolicy::Manual] {
-        let (client, mut events, mut owner, mut reader, mut writer) = setup(Config {
-            ui_policy,
-            ..Config::default()
-        });
+        let (client, mut events, mut owner, mut reader, mut writer) =
+            super::streaming::setup_fragmented(Config {
+                ui_policy,
+                ..Config::default()
+            });
         let command = tokio::spawn(async move { client.abort().await });
         let request = next(&mut reader).await;
         let dialogs = [

@@ -8,6 +8,59 @@ fn comparable<T: Debug + Clone + PartialEq>() {}
 fn same_type<T>(_: Option<T>, _: Option<T>) {}
 
 #[test]
+fn ui_timeouts_and_retry_delays_keep_the_original_u64_public_fields() {
+    use pi_rpc::protocol::{KnownEvent, UiMethod};
+    let timeout = Some(1500_u64);
+    for method in [
+        UiMethod::Select {
+            title: "t".into(),
+            options: vec![],
+            timeout,
+        },
+        UiMethod::Confirm {
+            title: "t".into(),
+            message: "m".into(),
+            timeout,
+        },
+        UiMethod::Input {
+            title: "t".into(),
+            placeholder: None,
+            timeout,
+        },
+    ] {
+        let value: Option<u64> = match method {
+            UiMethod::Select { timeout, .. }
+            | UiMethod::Confirm { timeout, .. }
+            | UiMethod::Input { timeout, .. } => timeout,
+            _ => unreachable!(),
+        };
+        assert_eq!(value, timeout);
+    }
+    let delay = 1500_u64;
+    for event in [
+        KnownEvent::AutoRetryStart {
+            attempt: 1,
+            max_attempts: 3,
+            delay_ms: delay,
+            error_message: "synthetic".into(),
+        },
+        KnownEvent::SummarizationRetryScheduled {
+            attempt: 1,
+            max_attempts: 3,
+            delay_ms: delay,
+            error_message: "synthetic".into(),
+        },
+    ] {
+        let value: u64 = match event {
+            KnownEvent::AutoRetryStart { delay_ms, .. }
+            | KnownEvent::SummarizationRetryScheduled { delay_ms, .. } => delay_ms,
+            _ => unreachable!(),
+        };
+        assert_eq!(value, delay);
+    }
+}
+
+#[test]
 fn all_original_protocol_paths_and_wire_traits_remain_available() {
     macro_rules! wire_types {
         ($($name:ident),+ $(,)?) => {

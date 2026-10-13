@@ -62,6 +62,7 @@ fn retry_delays_remain_required_and_reject_invalid_durations() {
 fn required_open_tool_payloads_allow_null_but_reject_absence_and_bad_nested_updates() {
     for (kind, key) in [
         ("tool_execution_start", "args"),
+        ("tool_execution_update", "args"),
         ("tool_execution_update", "partialResult"),
         ("tool_execution_end", "result"),
     ] {
@@ -134,10 +135,9 @@ fn tool_duration_is_optional_numeric_and_keeps_open_payloads() {
         assert!(matches!(decode_record(wire), Err(Error::Protocol(_))));
     }
 }
-#[test]
-fn all_known_event_shapes_decode_and_required_fields_are_not_unknown() {
+fn known_event_fixtures() -> Vec<Value> {
     let entry = json!({"type":"custom","id":"e","parentId":null,"timestamp":"2026-10-02T00:00:00Z","customType":"x","data":{"arbitrary":true}});
-    let fixtures = vec![
+    vec![
         json!({"type":"agent_start"}),
         json!({"type":"agent_end","messages":[user()],"willRetry":false}),
         json!({"type":"agent_settled","aborted":false}),
@@ -162,14 +162,49 @@ fn all_known_event_shapes_decode_and_required_fields_are_not_unknown() {
         json!({"type":"summarization_retry_finished"}),
         json!({"type":"bash_execution_update","id":"cmd","delta":"output"}),
         json!({"type":"extension_error","extensionPath":"path","event":"tool_call","error":"x"}),
-    ];
-    // There are 24 wire event kinds, counting all three tool lifecycle kinds.
-    assert_eq!(fixtures.len(), 24);
+    ]
+}
+
+#[test]
+fn all_known_event_shapes_decode_and_required_fields_are_not_unknown() {
+    let fixtures = known_event_fixtures();
+    // Golden set from the pinned Pi 1.1.0 AgentSessionEvent and RPC mode.
+    assert_fixture_names(
+        &fixtures,
+        "type",
+        &[
+            "agent_start",
+            "agent_end",
+            "agent_settled",
+            "turn_start",
+            "turn_end",
+            "message_start",
+            "message_update",
+            "message_end",
+            "tool_execution_start",
+            "tool_execution_update",
+            "tool_execution_end",
+            "queue_update",
+            "entry_appended",
+            "session_info_changed",
+            "thinking_level_changed",
+            "compaction_start",
+            "compaction_end",
+            "auto_retry_start",
+            "auto_retry_end",
+            "summarization_retry_scheduled",
+            "summarization_retry_attempt_start",
+            "summarization_retry_finished",
+            "bash_execution_update",
+            "extension_error",
+        ],
+    );
     for v in fixtures {
-        assert!(matches!(
-            decode_record(v).unwrap(),
-            Record::Event(Event::Known(_))
-        ));
+        let kind = v["type"].clone();
+        let Record::Event(Event::Known(event)) = decode_record(v).unwrap() else {
+            panic!("expected known event");
+        };
+        assert_eq!(serde_json::to_value(event).unwrap()["type"], kind);
     }
     assert!(
         decode_record(json!({"type":"summarization_retry_attempt_start","source":"compaction"}))
@@ -182,9 +217,10 @@ fn all_known_event_shapes_decode_and_required_fields_are_not_unknown() {
         Record::Event(Event::Unknown(raw))
     );
 }
-#[test]
-fn every_delta_only_assistant_update_decodes_without_partial_snapshot() {
-    let fixtures = vec![
+fn assistant_update_fixtures() -> Vec<Value> {
+    let mut aborted = assistant();
+    aborted["stopReason"] = "aborted".into();
+    vec![
         json!({"type":"start"}),
         json!({"type":"text_start","contentIndex":0}),
         json!({"type":"text_delta","contentIndex":0,"delta":"x"}),
@@ -196,14 +232,115 @@ fn every_delta_only_assistant_update_decodes_without_partial_snapshot() {
         json!({"type":"toolcall_delta","contentIndex":2,"delta":"{}"}),
         json!({"type":"toolcall_end","contentIndex":2,"toolCall":{"type":"toolCall","id":"call","name":"futureTool","arguments":{"anything":true}}}),
         json!({"type":"done","reason":"stop","message":assistant()}),
-        json!({"type":"error","reason":"aborted","error":assistant()}),
-    ];
-    assert_eq!(fixtures.len(), 12);
+        json!({"type":"error","reason":"aborted","error":aborted}),
+    ]
+}
+
+#[test]
+fn every_delta_only_assistant_update_decodes_without_partial_snapshot() {
+    let fixtures = assistant_update_fixtures();
+    assert_fixture_names(
+        &fixtures,
+        "type",
+        &[
+            "start",
+            "text_start",
+            "text_delta",
+            "text_end",
+            "thinking_start",
+            "thinking_delta",
+            "thinking_end",
+            "toolcall_start",
+            "toolcall_delta",
+            "toolcall_end",
+            "done",
+            "error",
+        ],
+    );
     for v in fixtures {
         let wire = json!({"type":"message_update","usage":usage(),"assistantMessageEvent":v});
-        assert!(matches!(
-            decode_record(wire).unwrap(),
-            Record::Event(Event::Known(KnownEvent::MessageUpdate { .. }))
-        ));
+        let Record::Event(Event::Known(KnownEvent::MessageUpdate {
+            assistant_message_event,
+            ..
+        })) = decode_record(wire).unwrap()
+        else {
+            panic!("expected assistant update");
+        };
+        assert_eq!(serde_json::to_value(assistant_message_event).unwrap(), v);
+    }
+}
+
+#[test]
+fn known_event_required_fields_reject_absence_and_explicit_null() {
+    for fixture in known_event_fixtures() {
+        let kind = fixture["type"].as_str().unwrap();
+        let keys: &[&str] = match kind {
+            "agent_start"
+            | "turn_start"
+            | "session_info_changed"
+            | "summarization_retry_finished" => &[],
+            "agent_end" => &["messages", "willRetry"],
+            "agent_settled" => &["aborted"],
+            "turn_end" => &["message", "toolResults"],
+            "message_start" | "message_end" => &["message"],
+            "message_update" => &["usage", "assistantMessageEvent"],
+            "tool_execution_start" => &["toolCallId", "toolName", "args"],
+            "tool_execution_update" => &["toolCallId", "toolName", "args", "partialResult"],
+            "tool_execution_end" => &["toolCallId", "toolName", "result", "isError"],
+            "queue_update" => &["steering", "followUp"],
+            "entry_appended" => &["entry"],
+            "thinking_level_changed" => &["level"],
+            "compaction_start" => &["reason"],
+            "compaction_end" => &["reason", "aborted", "willRetry"],
+            "auto_retry_start" | "summarization_retry_scheduled" => {
+                &["attempt", "maxAttempts", "delayMs", "errorMessage"]
+            }
+            "auto_retry_end" => &["success", "attempt"],
+            "summarization_retry_attempt_start" => &["source", "reason"],
+            "bash_execution_update" => &["delta"],
+            "extension_error" => &["extensionPath", "event", "error"],
+            other => panic!("missing negative-field coverage: {other}"),
+        };
+        for key in keys {
+            let mut missing = fixture.clone();
+            missing.as_object_mut().unwrap().remove(*key);
+            assert!(
+                matches!(decode_record(missing), Err(Error::Protocol(_))),
+                "{kind}: missing {key}"
+            );
+            let mut null = fixture.clone();
+            null[*key] = Value::Null;
+            let result = decode_record(null);
+            if matches!(*key, "args" | "partialResult" | "result") {
+                assert!(result.is_ok(), "{kind}: opaque {key} must accept null");
+            } else {
+                assert!(
+                    matches!(result, Err(Error::Protocol(_))),
+                    "{kind}: null {key}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn assistant_updates_reject_missing_required_properties() {
+    for fixture in assistant_update_fixtures() {
+        for key in fixture
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|key| key.as_str() != "type")
+        {
+            let mut missing = fixture.clone();
+            missing.as_object_mut().unwrap().remove(key);
+            let wire =
+                json!({"type":"message_update","usage":usage(),"assistantMessageEvent":missing});
+            assert!(
+                matches!(decode_record(wire), Err(Error::Protocol(_))),
+                "{}: missing {key}",
+                fixture["type"]
+            );
+        }
     }
 }

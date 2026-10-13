@@ -2,7 +2,8 @@ use super::*;
 
 #[tokio::test]
 async fn fractional_retry_delays_keep_pending_commands_and_following_events_alive() {
-    let (client, mut events, mut owner, mut reader, mut writer) = setup(Config::default());
+    let (client, mut events, mut owner, mut reader, mut writer) =
+        super::streaming::setup_fragmented(Config::default());
     let command = tokio::spawn(async move { client.abort().await });
     let request = next(&mut reader).await;
     // Pi's retryDelayMs returns a fractional maxAgentDelayMs cap unchanged.

@@ -14,6 +14,65 @@ fn timeout(request: &UiRequest) -> Option<u64> {
 }
 
 #[test]
+fn all_nine_ui_methods_have_distinct_fixtures_and_required_properties() {
+    let fixtures = [
+        json!({"method":"select","title":"t","options":["ok"]}),
+        json!({"method":"confirm","title":"t","message":"m"}),
+        json!({"method":"input","title":"t"}),
+        json!({"method":"editor","title":"t"}),
+        json!({"method":"notify","message":"m"}),
+        json!({"method":"setStatus","statusKey":"k"}),
+        json!({"method":"setWidget","widgetKey":"k"}),
+        json!({"method":"setTitle","title":"t"}),
+        json!({"method":"set_editor_text","text":"t"}),
+    ]
+    .map(|mut value| {
+        value["type"] = "extension_ui_request".into();
+        value["id"] = "u".into();
+        value
+    });
+    assert_fixture_names(
+        &fixtures,
+        "method",
+        &[
+            "select",
+            "confirm",
+            "input",
+            "editor",
+            "notify",
+            "setStatus",
+            "setWidget",
+            "setTitle",
+            "set_editor_text",
+        ],
+    );
+    for fixture in &fixtures {
+        let Record::Event(Event::Ui(request)) = decode_record(fixture.clone()).unwrap() else {
+            panic!("expected UI event");
+        };
+        assert_eq!(
+            serde_json::to_value(request.method).unwrap()["method"],
+            fixture["method"]
+        );
+        for key in fixture.as_object().unwrap().keys() {
+            for replacement in [None, Some(Value::Null)] {
+                let mut invalid = fixture.clone();
+                if let Some(value) = replacement {
+                    invalid[key] = value;
+                } else {
+                    invalid.as_object_mut().unwrap().remove(key);
+                }
+                assert!(
+                    matches!(decode_record(invalid), Err(Error::Protocol(_))),
+                    "{}: invalid {key}",
+                    fixture["method"]
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn dialog_timeouts_accept_fractional_milliseconds_without_losing_integer_precision() {
     for method in ["select", "confirm", "input"] {
         for (number, expected) in [

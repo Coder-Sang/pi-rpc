@@ -1,7 +1,7 @@
 use pi_rpc::{
     Config, Error, PI_VERSION, PiConnection, Transport, UiPolicy,
     codec::JsonlReader,
-    protocol::{Event, KnownEvent, UiAnswer},
+    protocol::{Event, KnownEvent, UiAnswer, UiMethod},
 };
 use serde_json::{Value, json};
 use std::{future::Future, task::Poll, time::Duration};
@@ -35,9 +35,9 @@ async fn dialogs_after_stdin_shutdown_preserve_responses_events_and_terminal() {
         );
         let mut wire = Vec::new();
         for (index, mut dialog) in [
-            json!({"method":"confirm","title":"t","message":"m"}),
-            json!({"method":"select","title":"t","options":["a"]}),
-            json!({"method":"input","title":"t"}),
+            json!({"method":"confirm","title":"t","message":"m","timeout":42.9}),
+            json!({"method":"select","title":"t","options":["a"],"timeout":1500.5}),
+            json!({"method":"input","title":"t","timeout":0.75}),
             json!({"method":"editor","title":"t"}),
         ]
         .into_iter()
@@ -69,6 +69,14 @@ async fn dialogs_after_stdin_shutdown_preserve_responses_events_and_terminal() {
                 panic!("dialog must survive close")
             };
             assert_eq!(dialog.id, format!("ui-{index}"));
+            let timeout = match &dialog.method {
+                UiMethod::Select { timeout, .. }
+                | UiMethod::Confirm { timeout, .. }
+                | UiMethod::Input { timeout, .. } => *timeout,
+                UiMethod::Editor { .. } => None,
+                _ => panic!("expected dialog"),
+            };
+            assert_eq!(timeout, [Some(42), Some(1500), Some(0), None][index]);
             assert_eq!(
                 client.respond_ui(&dialog, UiAnswer::Cancel).await,
                 Err(Error::Closed)

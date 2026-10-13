@@ -82,5 +82,7 @@ mod events;
 mod lifecycle;
 #[path = "client/requests.rs"]
 mod requests;
+#[path = "client/streaming.rs"]
+mod streaming;
 #[path = "client/ui.rs"]
 mod ui;

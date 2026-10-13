@@ -1,5 +1,13 @@
 use pi_rpc::{Error, protocol::*};
 use serde_json::{Value, json};
+fn assert_fixture_names(fixtures: &[Value], key: &str, expected: &[&str]) {
+    let names: std::collections::BTreeSet<_> = fixtures
+        .iter()
+        .map(|fixture| fixture[key].as_str().unwrap())
+        .collect();
+    assert_eq!(names.len(), fixtures.len(), "duplicate {key} fixture");
+    assert_eq!(names, expected.iter().copied().collect());
+}
 fn usage() -> Value {
     json!({"input":1,"output":2,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"reasoning":1,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}})
 }
