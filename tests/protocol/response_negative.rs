@@ -76,6 +76,41 @@ fn every_data_response_rejects_absence_and_wrong_outer_types() {
     assert_eq!(checked, 24);
 }
 
+#[test]
+fn cycle_model_requires_model_presence_but_keeps_null_and_opaque_values() {
+    reject_data(
+        "cycle_model",
+        json!({"thinkingLevel":"max","isScoped":true}),
+    );
+    // Presence is required, while the model's value remains open JSON.
+    for model in [
+        Value::Null,
+        json!(true),
+        json!(42),
+        json!("future"),
+        json!([null, {"opaque":true}]),
+        json!({"future":{"provider":true}}),
+    ] {
+        let data = json!({"model":model,"thinkingLevel":"max","isScoped":true});
+        let response = Response {
+            id: None,
+            command: "cycle_model".into(),
+            success: true,
+            data: Some(data.clone()),
+            error: None,
+        };
+        assert_eq!(response.validate(), Ok(()));
+        let direct = response.decode::<Option<ModelCycle>>().unwrap().unwrap();
+        assert_eq!(direct.model, model);
+        let Record::Response(decoded) = decode_record(envelope("cycle_model", data)).unwrap()
+        else {
+            panic!("expected response");
+        };
+        let from_record = decoded.decode::<Option<ModelCycle>>().unwrap().unwrap();
+        assert_eq!(from_record, direct);
+    }
+}
+
 fn required_fields(command: &str) -> &'static [&'static str] {
     match command {
         "prompt" | "steer" | "follow_up" => &["disposition"],
