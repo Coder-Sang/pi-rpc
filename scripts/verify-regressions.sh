@@ -13,6 +13,6 @@ for profile in debug release; do
   echo "UI, float, stack and close regressions: $profile"
   cargo test --locked --all-features ${flags[@]+"${flags[@]}"} \
     --lib --test ui_reply --test ui_close --test client --test subprocess \
-    --test protocol --test json_depth --test encoding_limits --test image_capacity --test capacity_defaults \
+    --test protocol --test public_paths --test json_depth --test encoding_limits --test image_capacity --test capacity_defaults \
     --test session_depth --test session_encoding_limits --test session_numbers
 done
