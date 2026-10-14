@@ -2,7 +2,7 @@
 
 ## Current decision
 
-pi-rpc **0.1.0** is a **technical preview**, pinned to exactly Pi **1.1.0**, with Rust **1.85** as the minimum. The owner selected [Apache-2.0](../LICENSE) on 2026-10-09 and authorized the actual crates.io release on **2026-10-14**. Cargo permits publishing only to `crates-io`. Upload requires complete local verification and all six hosted CI jobs to pass on the exact release commit. Actual upload, registry-consumer, docs.rs and tag results are recorded in [verification](verification.md#current-status-summary) after they complete.
+pi-rpc **0.1.0** was published to [crates.io](https://crates.io/crates/pi-rpc/0.1.0) on **2026-10-14** as a **technical preview**, pinned to exactly Pi **1.1.0**, with Rust **1.85** as the minimum. The owner selected [Apache-2.0](../LICENSE) on 2026-10-09 and authorized the release on 2026-10-14. Cargo permits publishing only to `crates-io`. Complete local verification and all six hosted CI jobs passed on the uploaded commit **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Registry consumption on exact Rust 1.85.0, [docs.rs](https://docs.rs/pi-rpc/0.1.0/pi_rpc/) and the pushed **v0.1.0** tag are confirmed in [verification](verification.md#current-status-summary). The tag points to that uploaded commit; this later release-record update does not change the uploaded archive.
 
 The package declares its public [repository](https://github.com/Coder-Sang/pi-rpc), description, README, license, keywords and all-feature docs.rs configuration. A separate homepage/documentation URL is not declared; the repository and docs.rs use their standard locations. The [README](../README.md#installation) puts registry installation first and retains Git/local alternatives.
 
@@ -33,7 +33,7 @@ The owner authorized the actual **0.1.0** release on **2026-10-14**. Final relea
 - [x] Replace candidate/unpublished wording in the README, put the registry installation example first and retain Git as an alternative. Use neutral version/technical-preview wording rather than claiming that an unperformed upload succeeded.
 - [x] Finalize the **0.1.0** changelog heading and intended release date, **2026-10-14**, before packaging. If the intended date changes before upload, update the release commit and recheck it. Record actual upload confirmation separately afterwards.
 - [x] Update the current release status. Preserve dated verification/provenance records as historical evidence.
-- [ ] Commit all package-facing documentation, then run the complete verification, packaging, dry-run and independent-consumer checks below against that clean commit. Record its SHA and archive digest outside the archive itself.
+- [x] Commit all package-facing documentation, then run the complete verification, packaging, dry-run and independent-consumer checks below against that clean commit. Record its SHA and archive digest outside the archive itself.
 
 The package must contain the final release text when uploaded. A post-upload README/changelog correction in Git does not rewrite the already published version; source corrections require another crate version.
 
@@ -71,9 +71,9 @@ The latest hosted outcomes are available in [Verify workflow runs](https://githu
 
 ## After a separately authorized upload
 
-- [ ] Confirm `pi-rpc` **0.1.0** appears in the registry and a fresh registry consumer builds on Rust 1.85.0.
-- [ ] Confirm docs.rs builds with all features and optional APIs are visible.
-- [ ] Record the actual upload confirmation and validation results in a release record, and push **v0.1.0** pointing to the exact uploaded commit. A follow-up bookkeeping commit must not be substituted as the tag target.
+- [x] Confirm `pi-rpc` **0.1.0** appears in the registry and a fresh registry consumer builds on Rust 1.85.0.
+- [x] Confirm docs.rs builds with all features and optional APIs are visible.
+- [x] Record the actual upload confirmation and validation results in a release record, and push **v0.1.0** pointing to the exact uploaded commit. A follow-up bookkeeping commit must not be substituted as the tag target.
 
 Do not defer package-facing README/changelog changes to this stage. If verification fails after upload, correct the package in a new version and describe the outcome; the source archive for the uploaded version cannot be overwritten.
 
