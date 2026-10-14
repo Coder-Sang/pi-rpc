@@ -1,22 +1,22 @@
 # pi-rpc
 
-Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). Version **0.1.0** is a technical preview prepared for crates.io; it has **not been uploaded**. Licensed under **[Apache-2.0](./LICENSE)** for this project's original code and documentation, with [third-party notices](THIRD_PARTY_NOTICES.md) for upstream material. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
+Rust import: `pi_rpc`. A Tokio async JSONL client pinned to **Pi 1.1.0**, official commit [`abe508e1b89912adde45528136c3221eb69acdd7`](https://github.com/earendil-works/pi/tree/abe508e1b89912adde45528136c3221eb69acdd7). Version **0.1.0** is a technical preview. Licensed under **[Apache-2.0](./LICENSE)** for this project's original code and documentation, with [third-party notices](THIRD_PARTY_NOTICES.md) for upstream material. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
 Declared minimum Rust: **1.85** (edition 2024). Native Linux, macOS and Windows CI passed all four feature configurations on stable and exact **1.85.0**, plus three stress rounds and Debug/Release boundary regressions; see the latest [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) and the [dated hosted verification evidence](docs/verification.md#hosted-six-job-cross-platform-acceptance-2026-10-11). Local macOS and Linux ARM64 checks supplement those results. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
 
 ## Installation
 
-Until 0.1.0 is uploaded to crates.io, add a Git dependency to your application's `Cargo.toml`:
+Add the crates.io dependency to your application's `Cargo.toml`:
 
 ```toml
 [dependencies]
-pi-rpc = { git = "https://github.com/Coder-Sang/pi-rpc", branch = "main" }
+pi-rpc = "0.1.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-This follows the development branch. Commit your application's `Cargo.lock` to retain the resolved Git revision, and update it deliberately when adopting newer changes. You can replace `branch` with `rev` to select a specific verified commit from the linked workflow runs. Rust imports use `pi_rpc`. For a sibling local checkout, replace the Git dependency with `pi-rpc = { path = "../pi-rpc" }`.
+Rust imports use `pi_rpc`. Commit your application's `Cargo.lock` to retain resolved versions, and update it deliberately when adopting newer changes. The same feature options below apply to registry, Git and local dependencies.
 
-After the registry release is available, replace the Git dependency with `pi-rpc = "0.1.0"`. The registry dependency supports the same feature options below. The publishing allowlist is restricted to `crates-io`; enabling it does not upload the crate. Candidate wording and release installation text are finalized on the release commit before a separately authorized upload; see the [pre-upload checklist](docs/publishing.md#before-a-separately-authorized-upload).
+For development, use `pi-rpc = { git = "https://github.com/Coder-Sang/pi-rpc", branch = "main" }`. This follows the development branch; replace `branch` with `rev` to select a specific verified commit from the linked workflow runs. For a sibling local checkout, use `pi-rpc = { path = "../pi-rpc" }`.
 
 ### Version and stability policy
 
