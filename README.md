@@ -9,7 +9,7 @@ A bounded Tokio async JSONL client for **Pi 1.1.0 through 1.2.0**. Rust imports 
 
 [All six CI jobs passed](https://github.com/Coder-Sang/pi-rpc/actions/runs/38849645478) for commit `a556aa7`: Linux, macOS and Windows on stable and exact Rust **1.88.0**, including feature matrices, stress/boundary regressions and packaged consumers. Real Pi acceptance is recorded separately in [verification](docs/verification.md); Pi is a separately installed executable.
 
-The latest reviewed Pi source baseline is **1.2.0**. See [compatibility](docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](LICENSE), with retained [third-party notices](THIRD_PARTY_NOTICES.md).
+The latest reviewed Pi source baseline is **1.2.0**. See [compatibility](docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](./LICENSE), with retained [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Installation
 
