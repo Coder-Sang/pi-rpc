@@ -3,11 +3,21 @@ use pi_rpc::{Error, PI_VERSION, PiProcess, ProcessOptions};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> pi_rpc::Result<()> {
-    let executable = std::env::args_os()
-        .nth(1)
-        .expect("usage: release_smoke /absolute/path/to/pi");
+    let mut args = std::env::args_os().skip(1);
+    let executable = args
+        .next()
+        .expect("usage: release_smoke /absolute/path/to/pi [exact-pi-version]");
+    let expected_version = args
+        .next()
+        .map(|value| value.into_string().expect("Pi version must be UTF-8"))
+        .unwrap_or_else(|| PI_VERSION.into());
+    assert!(args.next().is_none(), "unexpected arguments");
+    // Acceptance must identify a concrete release, not merely admit a range.
+    if expected_version == pi_rpc::PI_VERSION_REQUIREMENT {
+        return Err(Error::Version);
+    }
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
-        expected_version: pi_rpc::PI_VERSION.into(),
+        expected_version: expected_version.clone(),
         executable: executable.into(),
         args: [
             "--no-session",
@@ -49,7 +59,7 @@ async fn main() -> pi_rpc::Result<()> {
     assert_eq!(reason, Error::ProcessExit(Some(0)));
     assert_eq!(consumer.await.unwrap(), Some(reason));
     println!(
-        "Pi {PI_VERSION}: 10 read-only RPCs passed; clean exit and terminal delivery verified"
+        "Pi {expected_version}: 10 read-only RPCs passed; clean exit and terminal delivery verified"
     );
     Ok(())
 }

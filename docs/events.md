@@ -1,12 +1,12 @@
-# Consuming Pi 1.1.0 events
+# Consuming Pi 1.1.0–1.2.0 events
 
-`PiConnection::connect` returns a `PiClient`, a single `PiEvents` consumer and the connection owner. `PiEvents::recv().await` returns `Option<Result<Event>>`. Events remain ordered across the whole session and are not scoped to the latest prompt. The host adapter owns conversation/SSE correlation and run-outcome policy. See the [README](../README.md) for connection ownership and the [compatibility contract](compatibility.md) for the pinned source and limits.
+`PiConnection::connect` returns a `PiClient`, a single `PiEvents` consumer and the connection owner. `PiEvents::recv().await` returns `Option<Result<Event>>`. Events remain ordered across the whole session and are not scoped to the latest prompt. The host adapter owns conversation/SSE correlation and run-outcome policy. See the [README](../README.md) for connection ownership and the [compatibility contract](compatibility.md) for the supported version range, reviewed sources and limits.
 
 ## Event families
 
 | Outer variant | Meaning |
 |---|---|
-| `Event::Known` | One of the 24 supported ordinary Pi 1.1.0 event types |
+| `Event::Known` | One of the 24 supported ordinary Pi 1.1.0–1.2.0 event types |
 | `Event::Ui` | An extension UI request, including one-way notifications |
 | `Event::Unknown` | A record with an unrecognized string `type`; its complete JSON is preserved |
 | `Event::UncorrelatedResponse` | A validated command response with no ID |
@@ -25,9 +25,11 @@ The ordinary types are:
 
 Matching-ID command responses resolve their command futures. Valid responses with an ID but no pending waiter, including late responses after cancellation/timeout, are ignored. A wrong command for a pending ID is a terminal protocol error. Ordinary events generally carry no originating command ID; bash output may carry one.
 
+Pi 1.2.0 marks a run busy while `before_agent_start` hooks prepare it, before prompt acceptance and before `agent_start`. A `get_state` response can therefore report `isStreaming=true` with no start event yet. State commands, UI requests and abort remain multiplexed with the pending prompt. The extension hook itself is not an RPC event; its new user/custom discriminator does not add a `KnownEvent` variant. Pi applies an abort requested during startup when the agent begins. Hosts must use the actual responses/events and retain admission policy during this interval.
+
 ## Text, thinking and tool calls
 
-Pi's [wire transformation](https://github.com/earendil-works/pi/blob/abe508e1b89912adde45528136c3221eb69acdd7/packages/coding-agent/src/modes/json-event.ts) removes cumulative assistant `message` and `partial` snapshots from `message_update`. The wire retains cumulative `usage` and an `assistantMessageEvent` with `contentIndex` and the current block update.
+Pi's [wire transformation](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/modes/json-event.ts) removes cumulative assistant `message` and `partial` snapshots from `message_update`. The wire retains cumulative `usage` and an `assistantMessageEvent` with `contentIndex` and the current block update.
 
 Maintain separate content blocks by `contentIndex`, including multiple text blocks in the same message:
 
@@ -35,17 +37,21 @@ Maintain separate content blocks by `contentIndex`, including multiple text bloc
 - `toolcall_start` provides the block's `id` and `toolName`. `toolcall_delta` appends serialized argument fragments; each fragment need not be valid standalone JSON. `toolcall_end.toolCall` replaces the reconstructed tool-call block with its complete arguments and metadata.
 - `message_end.message` replaces the complete accumulated message. Preserve native content fields such as text/thinking signatures, redaction flags, tool namespace and provider metadata. The SDK delivers these records and does not assemble an application-level response.
 
-The exported Assistant update enum admits 12 shapes: `start`, the three text shapes, the three thinking shapes, the three tool-call shapes, `done` and `error`. The normal [agent loop](https://github.com/earendil-works/pi/blob/abe508e1b89912adde45528136c3221eb69acdd7/packages/agent/src/agent-loop.ts#L416) translates provider `start`/`done`/`error` into native message boundaries. Most normal streamed updates are the nine block shapes. A provider can fail before its first delta and still produce `message_start` followed by `message_end`.
+The exported Assistant update enum admits 12 shapes: `start`, the three text shapes, the three thinking shapes, the three tool-call shapes, `done` and `error`. The normal [agent loop](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/agent/src/agent-loop.ts#L416) translates provider `start`/`done`/`error` into native message boundaries. Most normal streamed updates are the nine block shapes. A provider can fail before its first delta and still produce `message_start` followed by `message_end`.
 
 Tool-call content and actual tool execution have separate lifecycles. Tool execution events preserve `toolCallId`, optional `parentToolCallId`, open args/results and extension fields. Execution completion order may differ from tool-call content order. Correlate by IDs rather than adjacency. `tool_execution_end.isError` reports a tool outcome; it does not end the connection. Tool result payloads can include images and opaque details.
 
 ## Custom messages
 
-Pi's [custom-message ingestion](https://github.com/earendil-works/pi/blob/abe508e1b89912adde45528136c3221eb69acdd7/packages/coding-agent/src/core/agent-session.ts#L2293) emits native `message_start` and `message_end` records for appended custom messages. Read `Message.role == "custom"` and its open `fields`: `customType`, `content`, `display`, `details`, `timestamp` and extension metadata. Content may be a string or an array of text/image blocks, including an empty array.
+Pi's [custom-message ingestion](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/core/agent-session.ts#L2318) emits native `message_start` and `message_end` records for appended custom messages. Read `Message.role == "custom"` and its open `fields`: `customType`, `content`, `display`, `details`, `timestamp` and extension metadata. Content may be a string or an array of text/image blocks, including an empty array.
 
 The SDK delivers both `display=true` and `display=false` messages. The host chooses its presentation policy; `display=false` is not a transport filter. Additional extension-defined message roles are preserved as native messages too.
 
 `entry_appended` carries native session entries. A `custom` entry stores extension data; a `custom_message` entry stores a custom message. Handle these entry variants separately from the message boundary events, and use entry IDs when maintaining history. The SDK forwards only records actually emitted by Pi; it does not synthesize an entry event for every message.
+
+## Active context and native history
+
+`get_messages` returns Pi's active agent context. After compaction it can contain a `compactionSummary` and the retained recent turns while omitting older user messages. `get_entries` and `get_tree` expose native session history, including those summarized inputs and the compaction entry. An absent older user message in the active context does not imply its native history was deleted. When checking fork/switch restoration, compare the saved active-context snapshot and native entries independently.
 
 ## UI requests
 
@@ -57,7 +63,7 @@ Closing skips automatic replies while continuing to deliver late UI events and f
 
 ## Millisecond fields
 
-The public integer types remain `UiMethod.timeout: Option<u64>`, `KnownEvent::AutoRetryStart.delay_ms: u64` and `KnownEvent::SummarizationRetryScheduled.delay_ms: u64`. Pi can emit fractional milliseconds: dialog options use `number`, and a fractional retry delay cap can be returned by [retryDelayMs](https://github.com/earendil-works/pi/blob/abe508e1b89912adde45528136c3221eb69acdd7/packages/ai/src/utils/retry.ts#L128).
+The public integer types remain `UiMethod.timeout: Option<u64>`, `KnownEvent::AutoRetryStart.delay_ms: u64` and `KnownEvent::SummarizationRetryScheduled.delay_ms: u64`. Pi can emit fractional milliseconds: dialog options use `number`, and a fractional retry delay cap can be returned by [retryDelayMs](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/ai/src/utils/retry.ts#L129).
 
 | Wire value | Public integer value |
 |---|---|

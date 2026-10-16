@@ -183,13 +183,49 @@ async fn exercise(
         compact.usage.map(|u| u.cost.total)
     );
 
+    // Compaction removes summarized messages from the active context, while
+    // native entries retain the original user inputs.
+    for marker in ["PI_STEER_OK", "PI_FOLLOWUP_OK"] {
+        assert!(
+            entries.entries.iter().any(|entry| matches!(
+                &entry.data, EntryData::Message { message }
+                if message.role == "user" && message.fields.get("content")
+                    .is_some_and(|content| content.to_string().contains(marker))
+            )),
+            "native history lost an accepted input"
+        );
+    }
+    let compacted_messages = client.get_messages().await?;
+    assert!(
+        compacted_messages
+            .messages
+            .iter()
+            .any(|message| message.role == "compactionSummary")
+    );
+    verify_fork_and_switch(
+        client,
+        &original.session_id,
+        &original_file,
+        &compacted_messages,
+        &entries,
+    )
+    .await
+}
+
+async fn verify_fork_and_switch(
+    client: &PiClient,
+    original_id: &str,
+    original_file: &str,
+    expected_messages: &Messages,
+    expected_entries: &Entries,
+) -> pi_rpc::Result<()> {
     let fork_messages = client.get_fork_messages().await?;
     let selected = fork_messages.messages.first().expect("real user entry");
     let fork = client.fork(&selected.entry_id).await?;
     assert!(!fork.cancelled);
     assert_eq!(fork.text, selected.text);
     let forked = client.get_state().await?;
-    assert_ne!(forked.session_id, original.session_id);
+    assert_ne!(forked.session_id, original_id);
     assert_eq!(forked.pending_message_count, 0);
     assert!(
         !client
@@ -201,14 +237,15 @@ async fn exercise(
     );
     let switched: SessionChange = client
         .typed(Command::SwitchSession {
-            session_path: original_file,
+            session_path: original_file.to_owned(),
         })
         .await?;
     assert!(!switched.cancelled);
-    assert_eq!(client.get_state().await?.session_id, original.session_id);
-    assert!(has_user(&client.get_messages().await?, "PI_FOLLOWUP_OK"));
+    assert_eq!(client.get_state().await?.session_id, original_id);
+    assert_eq!(&client.get_messages().await?, expected_messages);
+    assert_eq!(&client.get_entries(None).await?, expected_entries);
     println!(
-        "PASS fork selected real user entry and text, branch excludes selected input, switch restores original session"
+        "PASS fork selected real user entry and text, branch excludes selected input, switch restores complete compacted context and native history"
     );
     Ok(())
 }
@@ -292,4 +329,94 @@ async fn main() -> pi_rpc::Result<()> {
     assert_eq!(terminal, Some(reason));
     println!("PASS clean exit and exactly one terminal event");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pi_rpc::{PiConnection, Transport, codec::JsonlReader};
+    use serde_json::json;
+    use tokio::io::AsyncWriteExt;
+
+    #[tokio::test]
+    async fn fork_switch_distinguishes_compacted_context_from_native_history() {
+        // The summarized user is absent from get_messages but retained in native
+        // get_entries; the latest user turn remains in the compacted context.
+        // Each corruption must still fail the real acceptance step.
+        for corruption in [None, Some("context"), Some("entries")] {
+            let summary = json!({"role":"compactionSummary","summary":"PI_SUMMARY","tokensBefore":42,"timestamp":0});
+            let latest_user = json!({"role":"user","content":"PI_ACTIVE_ABORT","timestamp":1});
+            let messages = json!({"messages":[summary,latest_user.clone()]});
+            let entries = json!({"entries":[
+                {"type":"message","id":"u","parentId":null,"timestamp":"2026-10-16T00:00:00Z","message":{"role":"user","content":"PI_FOLLOWUP_OK","timestamp":0}},
+                {"type":"message","id":"latest","parentId":"u","timestamp":"2026-10-16T00:00:01Z","message":latest_user},
+                {"type":"compaction","id":"c","parentId":"latest","timestamp":"2026-10-16T00:00:02Z","summary":"PI_SUMMARY","tokensBefore":42,"firstKeptEntryId":"latest"}
+            ],"leafId":"c"});
+            let expected_messages: Messages = serde_json::from_value(messages.clone()).unwrap();
+            let expected_entries: Entries = serde_json::from_value(entries.clone()).unwrap();
+            let (local, remote) = tokio::io::duplex(65536);
+            let (read, write) = tokio::io::split(local);
+            let (client, _events, mut owner) = PiConnection::connect(
+                Transport::new(read, write, pi_rpc::PI_VERSION).unwrap(),
+                Config::default(),
+            )
+            .unwrap();
+            let peer = tokio::spawn(async move {
+                let (read, mut write) = tokio::io::split(remote);
+                let mut reader = JsonlReader::new(read, 65536);
+                let mut forked = false;
+                while let Some((command, _)) = reader.next().await.unwrap() {
+                    let data = match command["type"].as_str().unwrap() {
+                        "get_fork_messages" => {
+                            json!({"messages":[{"entryId":"u","text":"PI_FOLLOWUP_OK"}]})
+                        }
+                        "fork" => {
+                            forked = true;
+                            json!({"cancelled":false,"text":"PI_FOLLOWUP_OK"})
+                        }
+                        "switch_session" => {
+                            forked = false;
+                            json!({"cancelled":false})
+                        }
+                        "get_state" => {
+                            json!({"thinkingLevel":"off","isStreaming":false,"isCompacting":false,"steeringMode":"all","followUpMode":"all","sessionId":if forked {"fork"} else {"original"},"autoCompactionEnabled":false,"messageCount":0,"pendingMessageCount":0})
+                        }
+                        "get_messages" if forked => json!({"messages":[]}),
+                        "get_messages" if corruption == Some("context") => json!({"messages":[]}),
+                        "get_messages" => messages.clone(),
+                        "get_entries" if corruption == Some("entries") => {
+                            json!({"entries":[],"leafId":null})
+                        }
+                        "get_entries" => entries.clone(),
+                        _ => panic!("unexpected acceptance command"),
+                    };
+                    let response = json!({"type":"response","id":command["id"],"command":command["type"],"success":true,"data":data});
+                    write
+                        .write_all(&pi_rpc::codec::encode(&response, 65536).unwrap())
+                        .await
+                        .unwrap();
+                }
+            });
+            let verification = tokio::spawn(async move {
+                verify_fork_and_switch(
+                    &client,
+                    "original",
+                    "/scratch/original.jsonl",
+                    &expected_messages,
+                    &expected_entries,
+                )
+                .await
+            });
+            let result = tokio::time::timeout(Duration::from_secs(3), verification)
+                .await
+                .unwrap();
+            if corruption.is_none() {
+                result.unwrap().unwrap();
+            } else {
+                assert!(result.unwrap_err().is_panic());
+            }
+            assert_eq!(owner.close().await, Error::Closed);
+            peer.await.unwrap();
+        }
+    }
 }

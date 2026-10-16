@@ -101,7 +101,7 @@ async fn main() -> pi_rpc::Result<()> {
     let mut args = std::env::args_os().skip(1);
     let executable: PathBuf = args
         .next()
-        .expect("usage: model_smoke /path/to/pi /isolated/work [provider]")
+        .expect("usage: model_smoke /path/to/pi /isolated/work [provider] [exact-pi-version]")
         .into();
     let cwd: PathBuf = args
         .next()
@@ -110,8 +110,16 @@ async fn main() -> pi_rpc::Result<()> {
     let provider = args
         .next()
         .map(|value| value.into_string().expect("provider must be UTF-8"));
+    let expected_version = args
+        .next()
+        .map(|value| value.into_string().expect("Pi version must be UTF-8"))
+        .unwrap_or_else(|| pi_rpc::PI_VERSION.into());
+    assert!(args.next().is_none(), "unexpected arguments");
+    if expected_version == pi_rpc::PI_VERSION_REQUIREMENT {
+        return Err(Error::Version);
+    }
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
-        expected_version: pi_rpc::PI_VERSION.into(),
+        expected_version: expected_version.clone(),
         executable,
         cwd: Some(cwd),
         args: [
@@ -202,7 +210,7 @@ async fn main() -> pi_rpc::Result<()> {
         let duration = message.fields.get("durationMs").and_then(Value::as_f64);
         assert!(duration.is_some_and(|value| value >= 0.0));
         println!(
-            "Reply={EXPECTED}; updates={}; durationMs={}; agent_settled.aborted=false; clean exit and terminal delivery PASS",
+            "Pi {expected_version}: Reply={EXPECTED}; updates={}; durationMs={}; agent_settled.aborted=false; clean exit and terminal delivery PASS",
             observation.updates,
             duration.unwrap()
         );

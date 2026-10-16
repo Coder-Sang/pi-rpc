@@ -6,8 +6,8 @@ case "$(uname -s)" in
   Darwin|Linux) ;;
   *) echo "Real Pi release verification supports macOS/Linux only" >&2; exit 2 ;;
 esac
-if [ "$#" -ne 1 ]; then
-  echo "usage: bash scripts/verify-release.sh /absolute/path/to/pi" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: bash scripts/verify-release.sh /absolute/path/to/pi [exact-pi-version]" >&2
   exit 2
 fi
 case "$1" in
@@ -15,6 +15,10 @@ case "$1" in
   *) echo "Pi executable path must be absolute" >&2; exit 2 ;;
 esac
 test -x "$executable"
+runner_args=("$executable")
+if [ "$#" -eq 2 ]; then
+  runner_args+=("$2")
+fi
 # Pin both output directory and host target so Cargo config/CARGO_BUILD_TARGET
 # cannot redirect the fresh build while an older runner is executed.
 host=$(rustc -vV | awk '/^host: / { print $2 }')
@@ -34,4 +38,4 @@ esac
 cd "$isolation/work"
 env -i HOME="$isolation/home" PI_CODING_AGENT_DIR="$isolation/agent" \
   TMPDIR="$isolation/tmp" PATH="$isolation/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-  "$runner" "$executable"
+  "$runner" "${runner_args[@]}"
