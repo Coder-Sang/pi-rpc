@@ -55,6 +55,12 @@ fn fixture() -> PathBuf {
         .1
         .clone()
 }
+fn link_fixture(path: &std::path::Path) {
+    // Aliases and the fixture share tempfile's filesystem. Reuse the immutable
+    // executable inode: a concurrent Unix fork can briefly inherit a copy's
+    // writable descriptor and make exec fail with ETXTBSY, even after copy exits.
+    std::fs::hard_link(fixture(), path).unwrap();
+}
 fn options(mode: &str) -> ProcessOptions {
     ProcessOptions {
         executable: fixture(),
@@ -280,7 +286,7 @@ async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        std::fs::copy(fixture(), &path).unwrap();
+        link_fixture(&path);
         let result = PiProcess::spawn(ProcessOptions {
             executable: path.clone(),
             startup_timeout: if name == "probe-hang" {
@@ -321,7 +327,7 @@ async fn default_range_and_exact_locks_run_supported_versions() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        std::fs::copy(fixture(), &path).unwrap();
+        link_fixture(&path);
         let actual = match name {
             "previous-version" | "padded-version" => "1.1.0",
             "intermediate-version" => "1.1.1",
@@ -353,16 +359,15 @@ async fn exact_lock_mismatch_never_launches_rpc() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        std::fs::copy(fixture(), &path).unwrap();
-        assert!(matches!(
-            PiProcess::spawn(ProcessOptions {
-                executable: path.clone(),
-                expected_version: expected.into(),
-                ..Default::default()
-            })
-            .await,
-            Err(Error::Version)
-        ));
+        link_fixture(&path);
+        let error = PiProcess::spawn(ProcessOptions {
+            executable: path.clone(),
+            expected_version: expected.into(),
+            ..Default::default()
+        })
+        .await
+        .err();
+        assert_eq!(error, Some(Error::Version), "{name}");
         assert!(path.with_extension("probe-started").exists());
         assert!(!path.with_extension("rpc-started").exists());
     }
@@ -374,7 +379,7 @@ async fn invalid_expectations_fail_before_executable_probe() {
     let path = dir
         .path()
         .join(format!("current-version{}", std::env::consts::EXE_SUFFIX));
-    std::fs::copy(fixture(), &path).unwrap();
+    link_fixture(&path);
     for expected in [
         "",
         "*",

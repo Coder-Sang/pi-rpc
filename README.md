@@ -2,7 +2,7 @@
 
 Rust import: `pi_rpc`. A Tokio async JSONL client supporting **Pi >=1.1.0, <=1.2.0**, with latest reviewed release **1.2.0**, official commit [`06a466935536f8c9bcacb2d5efc0fc021be1bdff`](https://github.com/earendil-works/pi/tree/06a466935536f8c9bcacb2d5efc0fc021be1bdff). Version **0.2.0** is in development and has not been published. Licensed under **[Apache-2.0](./LICENSE)** for this project's original code and documentation, with [third-party notices](THIRD_PARTY_NOTICES.md) for upstream material. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
 
-Declared minimum Rust: **1.88** (edition 2024). The CI matrix is configured for native Linux, macOS and Windows on stable and exact **1.88.0**, including all four feature configurations, three stress rounds and Debug/Release boundary regressions. Hosted results recorded for 0.1.0 apply to Rust 1.85 and Pi 1.1.0; they do not establish 0.2.0 acceptance. See the latest [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) and the [dated hosted verification evidence](docs/verification.md#hosted-ci). Historical local macOS and Linux ARM64 checks apply to their recorded versions. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
+Declared minimum Rust: **1.88** (edition 2024). The CI matrix is configured for native Linux, macOS and Windows on stable and exact **1.88.0**, including all four feature configurations, three stress rounds and Debug/Release boundary regressions. See the latest [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) and the [hosted CI record](docs/verification.md#hosted-ci) for completed jobs. Historical 0.1.0 results apply to its Rust 1.85/Pi 1.1.0 contract. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
 
 ## Installation
 
@@ -16,7 +16,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 Rust imports use `pi_rpc`. Commit your application's `Cargo.lock` to retain resolved versions, and update it deliberately when adopting newer changes. The same feature options below apply to registry, Git and local dependencies.
 
-The local path must point to this 0.2.0 checkout. Once the upgrade is pushed, a Git dependency may select its reviewed commit with `rev`; the current published registry dependency `pi-rpc = "0.1.0"` targets Pi 1.1.0. Switch to the 0.2.0 registry dependency only after that version is released.
+The local path must point to this 0.2.0 checkout. A Git dependency may select a reviewed upgrade commit with `rev`; the current published registry dependency `pi-rpc = "0.1.0"` targets Pi 1.1.0. Switch to the 0.2.0 registry dependency only after that version is released.
 
 ### Version and stability policy
 

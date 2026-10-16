@@ -43,7 +43,7 @@ These local observations do not establish exhaustive model/event-variant coverag
 
 The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/1.88.0**, six jobs. Each executes its feature matrix, three stress rounds, native Debug/Release regressions, archive inspection and a fresh packaged consumer. The manual real-Pi job remains opt-in and disabled on normal pushes.
 
-Hosted results for this upgrade are pending the source push. Configuration alone is not evidence that native Windows, Linux or MSRV jobs passed.
+Hosted verification for this upgrade is in progress. Configuration alone is not evidence that native Windows, Linux or MSRV jobs passed.
 
 ## 0.1.0 release (2026-10-14)
 
