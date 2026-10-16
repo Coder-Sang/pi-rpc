@@ -30,7 +30,7 @@ The [provenance review](provenance.md) describes package contents and license de
 - [ ] Obtain authorization for the actual **0.2.0** upload and release tag.
 - [ ] Finalize the README's registry installation example and remove development/unuploaded wording before packaging. Keep version claims neutral until upload confirmation.
 - [ ] Finalize the **0.2.0** changelog heading and intended release date before packaging. Recheck if the date or any source text changes.
-- [ ] Commit all package-facing files and run the complete checks below against that clean release commit, then confirm all six hosted jobs. Record the commit SHA and archive SHA-256 outside the archive.
+- [ ] Commit all package-facing files and run the complete checks below against that clean release commit, then confirm all six hosted jobs. Preserve the candidate JSON and its six-job run link outside the archive, following the [evidence procedure](verification.md#candidate-evidence).
 
 ## Final verification before upload
 
@@ -49,6 +49,7 @@ cargo publish --dry-run --locked --registry crates-io
 python3 scripts/check-package.py --source-root . --expected-commit "$(git rev-parse HEAD)"
 bash scripts/verify-consumer.sh
 RUSTUP_TOOLCHAIN=1.88.0 bash scripts/verify-consumer.sh
+python3 scripts/record-evidence.py
 git diff --check
 ```
 
@@ -57,6 +58,10 @@ Use offline mode only after dependencies/toolchains are downloaded. The fresh co
 Archive selection uses Cargo metadata to resolve the current package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and consumer, for example `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.2.0.crate`.
 
 The consumer checks clean VCS identity, version, metadata, notices, links and every archived source byte before extracting that exact snapshot into a fresh directory. It ignores stale unpacked directories and creates its own lockfile. All four feature configurations compile/run the public-path tests and in-memory example; both session configurations also run the native-session example. No Pi process is executed.
+
+The recorder writes `verification/release-evidence.json` under Cargo's effective target directory. CI uploads a separate `release-evidence-<os>-<toolchain>` artifact after each job's required checks. Confirm all six conclusions for the same commit; the JSON itself reports only archive/source inspection. Preserve the chosen upload platform's record before artifact expiration. The record includes no absolute paths or private runtime payloads. Different Cargo versions/platforms need not produce identical archive digests.
+
+README guide links currently target repository `main` so they work before a release exists. Before packaging a formal release, decide whether to pin them to its planned version tag, then verify the corresponding source files/anchors. Confirm the tag links after pushing the exact uploaded commit's tag.
 
 After every local check and all six hosted jobs pass for the authorized clean release commit, record its SHA/digest and upload with `cargo publish --locked --registry crates-io`. Do not use `--allow-dirty` or skip package verification. Compare the actual registry archive checksum and `.cargo_vcs_info.json` with the recorded evidence.
 

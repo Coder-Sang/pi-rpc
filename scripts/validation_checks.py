@@ -5,6 +5,7 @@ not a general Markdown parser, secret scanner, or filesystem sandbox.
 """
 
 import hashlib
+import io
 import posixpath
 import re
 import tarfile
@@ -24,6 +25,7 @@ REQUIRED_FILES = {
     "tests/fixtures/fake_pi.rs", "tests/fixtures/rpc_acceptance_extension.ts",
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
     "scripts/check-rustdoc.py",
+    "scripts/record-evidence.py",
 }
 PACKAGE_METADATA = {
     "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
@@ -239,7 +241,8 @@ def read_root(root):
 def read_archive(path):
     files, prefix = {}, None
     # Never extract archive paths or follow archive symlinks.
-    with tarfile.open(path, "r:gz") as archive:
+    options = {"fileobj": path} if hasattr(path, "read") else {"name": path}
+    with tarfile.open(mode="r:gz", **options) as archive:
         for member in archive:
             parts = PurePosixPath(member.name).parts
             require(not member.name.startswith("/") and ".." not in parts and "\\" not in member.name,
@@ -317,3 +320,40 @@ def check_package_contents(prefix, files, source_root=None, expected_commit=None
         require(vcs.get("git", {}).get("sha1") == expected_commit, "package commit differs from expected commit")
         require(not vcs.get("git", {}).get("dirty", False), "package built from dirty tree")
     return len(files), documents, links
+
+
+def release_evidence(archive, source_root, expected_commit, rustc_version, ci=None):
+    """Record the exact inspected bytes, without claiming unexecuted test gates."""
+    with Path(archive).open("rb") as source_archive:
+        data = source_archive.read(64 * 1024 * 1024 + 1)
+    require(len(data) <= 64 * 1024 * 1024, "evidence archive exceeds local check size limit")
+    prefix, files = read_archive(io.BytesIO(data))
+    counts = check_package_contents(prefix, files, source_root, expected_commit)
+    root = Path(source_root).resolve(strict=True)
+    hashes = {}
+    for name, content in files.items():
+        if name in {"Cargo.toml", ".cargo_vcs_info.json"}:
+            continue
+        source_name = "Cargo.toml" if name == "Cargo.toml.orig" else name
+        source = root / source_name
+        require(source.is_file() and not source.is_symlink() and source.read_bytes() == content,
+                f"evidence archive differs from source: {source_name}")
+        hashes[source_name] = hashlib.sha256(content).hexdigest()
+    manifest = tomllib.loads(files["Cargo.toml"].decode("utf-8"))["package"]
+    if ci is not None:
+        require(isinstance(ci, dict) and set(ci) == {"run_id", "os", "toolchain"}, "invalid CI evidence fields")
+        require(isinstance(ci["run_id"], str) and re.fullmatch(r"[1-9][0-9]*", ci["run_id"]), "invalid CI run ID")
+        require(isinstance(ci["os"], str) and ci["os"] in {"ubuntu-latest", "macos-latest", "windows-latest"}, "invalid CI platform")
+        require(isinstance(ci["toolchain"], str) and ci["toolchain"] in {"stable", "1.88.0"}, "invalid CI toolchain")
+        require(ci["toolchain"] != "1.88.0" or rustc_version.startswith("rustc 1.88.0 "),
+                "CI toolchain differs from the actual compiler")
+        ci = ci | {"run_url": f"https://github.com/Coder-Sang/pi-rpc/actions/runs/{ci['run_id']}"}
+    return {
+        "schema_version": 1,
+        "package": {key: manifest[key] for key in ["name", "version", "rust-version"]},
+        "source": {"commit": expected_commit, "files_sha256": dict(sorted(hashes.items()))},
+        "archive": {"name": Path(archive).name, "sha256": hashlib.sha256(data).hexdigest(),
+                    "bytes": len(data), "files": counts[0]},
+        "verification": {"archive_and_source": "passed", "rustc": rustc_version},
+        "ci": ci,
+    }

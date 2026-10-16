@@ -8,7 +8,7 @@ Version 0.2.0 has not been uploaded to crates.io. This record separates local ve
 
 ## Local verification (2026-10-16)
 
-The following checks passed on **macOS aarch64**, using stable **Rust 1.97.1** and exact **Rust 1.88.0**:
+The following checks passed at completed baseline **`c7d4f718e888f6237e9ff956c80f51f4d38d3f25`** on **macOS aarch64**, using stable **Rust 1.97.1** and exact **Rust 1.88.0**:
 
 | Check | Stable | Rust 1.88.0 |
 |---|---|---|
@@ -43,7 +43,24 @@ These local observations do not establish exhaustive model/event-variant coverag
 
 The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/1.88.0**, six jobs. Each executes its feature matrix, three stress rounds, native Debug/Release regressions, archive inspection and a fresh packaged consumer. The manual real-Pi job remains opt-in and disabled on normal pushes.
 
-The [2026-10-16 upgrade run](https://github.com/Coder-Sang/pi-rpc/actions/runs/38848703348) passed all six jobs for source commit `462ee71d018f006fa459504eb0edf6ce5c7f01b9`, including native Windows stable and exact Rust 1.88.0. Per-commit conclusions are available in the linked workflow history. Acceptance requires success from all six jobs for the reviewed revision; configuration alone is not evidence that native Windows, Linux or MSRV jobs passed.
+The [completed baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/38857092619) passed all six jobs for **`c7d4f718e888f6237e9ff956c80f51f4d38d3f25`**, including Windows stable and exact Rust 1.88.0. This is the same historical baseline identified in the README. Subsequent candidate conclusions and evidence are published by the workflow; the baseline is not a claim that later commits have already passed.
+
+## Candidate evidence
+
+The current gates also check generated Rustdoc HTML on every feature configuration with stable and exact 1.88.0. Local HTML file/fragment targets and project guide URLs are validated against the generated output and source snapshot; source line ranges and Rustdoc's encoded generic anchors are supported. External sites are not fetched by this check.
+
+Each successful matrix job uploads **`release-evidence-<os>-<toolchain>`**, containing `release-evidence.json`. It records:
+
+- `source.commit` and SHA-256 digests of every archived source file, mapped back to original source names.
+- The package version/MSRV and actual compiler version.
+- The inspected archive's name, byte count, file count and SHA-256.
+- The CI run URL and matrix identity. Local records have `ci: null`.
+
+The recorder checks metadata, licenses, archive safety, clean VCS identity and every archived source byte before writing the record. It reads one archive snapshot for both inspection and hashing. No absolute paths, authentication/configuration payloads or model traces are included. Locally, run `python3 scripts/record-evidence.py` after the [complete release checks](publishing.md#final-verification-before-upload); it honors Cargo's effective target directory and supports `--archive` / `--output` overrides outside packaged source.
+
+A record attests only to its archive/source inspection, not to tests it did not execute. For CI acceptance, confirm **all six jobs succeeded for the same `source.commit`** and inspect their preceding test steps. Keep the relevant JSON and complete run link outside the crate archive, preserving them before CI artifact retention expires. Different platforms/Cargo versions can produce different archive digests; compare the eventual upload with the selected upload platform's archive, not with an assumed universal digest.
+
+The candidate's own commit and digest are recorded after it exists, outside the package. Documentation therefore records a completed baseline and the evidence procedure, rather than changing its own SHA after every verification run. Real-Pi observations above remain separately dated and scoped; these fake-only gates do not rerun or extend them.
 
 ## 0.1.0 release (2026-10-14)
 

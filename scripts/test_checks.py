@@ -3,7 +3,9 @@
 import io
 import json
 import os
-from contextlib import redirect_stderr
+import hashlib
+import runpy
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import subprocess
 import sys
@@ -14,7 +16,7 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from validation_checks import CheckError, PACKAGE_METADATA, REQUIRED_FILES, check_documents, check_package, check_rustdoc, read_archive, unwanted_package_file
+from validation_checks import CheckError, PACKAGE_METADATA, REQUIRED_FILES, check_documents, check_package, check_rustdoc, read_archive, release_evidence, unwanted_package_file
 from prepare_consumer import prepare_consumer
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -186,6 +188,83 @@ class PackageChecks(unittest.TestCase):
     def test_complete_package(self):
         self.write_archive()
         self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (7, 2))
+
+    def test_evidence_binds_exact_archive_source_and_ci_without_private_paths(self):
+        root = self.consumer_source_root()
+        self.write_archive()
+        ci = {"run_id": "123", "os": "windows-latest", "toolchain": "1.88.0"}
+        record = release_evidence(self.archive, root, "expected", "rustc 1.88.0 (fixture)", ci)
+        self.assertEqual(record["source"]["commit"], "expected")
+        self.assertEqual(record["archive"]["sha256"], hashlib.sha256(self.archive.read_bytes()).hexdigest())
+        self.assertEqual(record["source"]["files_sha256"]["src/lib.rs"], hashlib.sha256(self.files["src/lib.rs"]).hexdigest())
+        self.assertEqual(record["archive"]["files"], len(self.files))
+        self.assertEqual(record["ci"]["run_url"], "https://github.com/Coder-Sang/pi-rpc/actions/runs/123")
+        self.assertNotIn(str(Path(self.temp.name)), json.dumps(record))
+        self.assertNotIn("Cargo.toml.orig", record["source"]["files_sha256"])
+        self.assertEqual(record["verification"]["archive_and_source"], "passed")
+        self.assertNotIn("all_tests", record["verification"])
+        self.assertIsNone(release_evidence(self.archive, root, "expected", "rustc 1.88.0 (fixture)")["ci"])
+
+    def test_evidence_rejects_stale_dirty_and_changed_source(self):
+        root = self.consumer_source_root()
+        saved = self.files[".cargo_vcs_info.json"]
+        for git in [{"sha1": "old"}, {"sha1": "expected", "dirty": True}]:
+            with self.subTest(git=git):
+                self.files[".cargo_vcs_info.json"] = json.dumps({"git": git}).encode()
+                self.write_archive()
+                with self.assertRaises(CheckError):
+                    release_evidence(self.archive, root, "expected", "rustc 1.88.0 (fixture)")
+        self.files[".cargo_vcs_info.json"] = saved
+        self.write_archive()
+        (root / "src/lib.rs").write_bytes(b"changed runtime")
+        with self.assertRaisesRegex(CheckError, "evidence archive differs from source"):
+            release_evidence(self.archive, root, "expected", "rustc 1.88.0 (fixture)")
+
+    def test_evidence_rejects_incomplete_or_mismatched_ci_claims(self):
+        root = self.consumer_source_root()
+        self.write_archive()
+        ci = {"run_id": "123", "os": "windows-latest", "toolchain": "1.88.0"}
+        invalid = [{"run_id": "123"}, ci | {"run_id": "0"}, ci | {"run_id": "123\n"},
+                   ci | {"run_id": 123}, ci | {"os": "other"}, ci | {"toolchain": "1.85.0"}]
+        for value in invalid:
+            with self.subTest(ci=value), self.assertRaises(CheckError):
+                release_evidence(self.archive, root, "expected", "rustc 1.88.0 (fixture)", value)
+        with self.assertRaisesRegex(CheckError, "actual compiler"):
+            release_evidence(self.archive, root, "expected", "rustc 1.97.1 (fixture)", ci)
+
+    def test_evidence_cli_custom_target_and_clean_source_gate(self):
+        root = self.consumer_source_root()
+        target = Path(self.temp.name) / "target 中文"
+        (target / "package").mkdir(parents=True)
+        self.archive = target / "package/pi-rpc-0.2.0.crate"
+        self.write_archive()
+        main = runpy.run_path(str(ROOT / "scripts/record-evidence.py"))["main"]
+        output = target / "verification/release-evidence.json"
+        for dirty in [True, False]:
+            def command(args, **kwargs):
+                if args[-1] == "HEAD":
+                    return "expected\n"
+                if args[-1] == "--porcelain":
+                    return " M README.md\n" if dirty else ""
+                self.assertEqual(args, ["rustc", "--version"])
+                return "rustc 1.88.0 (fixture)\n"
+            with patch.dict(main.__globals__, {"cargo_package_location": lambda _: ({"name": "pi-rpc", "version": "0.2.0"}, target)}), \
+                 patch.object(sys, "argv", ["record-evidence.py", "--source-root", str(root)]), \
+                 patch("subprocess.check_output", side_effect=command), redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                if dirty:
+                    with self.assertRaises(SystemExit) as raised:
+                        main()
+                    self.assertEqual(raised.exception.code, 1)
+                    self.assertFalse(output.exists())
+                else:
+                    main()
+                    self.assertEqual(json.loads(output.read_text())["source"]["commit"], "expected")
+        forbidden = root / "evidence.json"
+        with patch.dict(main.__globals__, {"cargo_package_location": lambda _: ({"name": "pi-rpc", "version": "0.2.0"}, target)}), \
+             patch.object(sys, "argv", ["record-evidence.py", "--source-root", str(root), "--output", str(forbidden)]), \
+             redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            main()
+        self.assertFalse(forbidden.exists())
 
     def test_missing_archive_target_never_falls_back_to_worktree(self):
         del self.files["LICENSE"]

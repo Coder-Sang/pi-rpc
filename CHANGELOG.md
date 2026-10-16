@@ -8,6 +8,7 @@
 - Add the public `PI_VERSION_REQUIREMENT` constant and default subprocess range admission; retain concrete `expected_version` exact locks. Reject out-of-range, malformed, prerelease and build-metadata versions. Add version admission, model-metadata preservation and startup state/UI/abort multiplexing regressions. Update CI, fresh-consumer and package metadata checks to Rust 1.88.
 - Use immutable hard-linked fake executables in Linux subprocess version tests to avoid executable-copy races; retain executable copies on other platforms.
 - Correct opt-in fork/switch acceptance to compare compaction-aware context and native history separately, with a no-model Transport regression that also rejects lost context or history.
+- Publish per-job candidate evidence outside the crate archive, binding clean source, exact archive bytes, compiler and CI run without private payloads.
 - Fix guide/license navigation in generated Rustdoc and add generated-HTML link checks for every feature configuration on stable and Rust 1.88.0.
 - Pi 1.2.0 may report a busy run during extension startup before prompt acceptance or `agent_start`. Extensions must discriminate user/custom `before_agent_start` hooks. See the [upgrade notes](docs/compatibility.md#upgrade-from-pi-110-to-120).
 

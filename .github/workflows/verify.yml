@@ -71,6 +71,21 @@ jobs:
           python scripts/check-package.py --source-root . --expected-commit "$(git rev-parse HEAD)"
       - name: Fresh independent consumer from the packaged crate
         run: bash scripts/verify-consumer.sh
+      - name: Record inspected candidate and CI provenance
+        env:
+          EVIDENCE_RUN: ${{ github.run_id }}
+          EVIDENCE_OS: ${{ matrix.os }}
+          EVIDENCE_TOOLCHAIN: ${{ matrix.toolchain }}
+        run: |
+          python scripts/record-evidence.py --output target/verification/release-evidence.json \
+            --ci-run-id "$EVIDENCE_RUN" --ci-os "$EVIDENCE_OS" --ci-toolchain "$EVIDENCE_TOOLCHAIN"
+      # actions/upload-artifact v4.6.2, resolved from the official immutable tag.
+      - name: Preserve candidate evidence outside the source archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-evidence-${{ matrix.os }}-${{ matrix.toolchain }}
+          path: target/verification/release-evidence.json
+          if-no-files-found: error
 
   release-smoke:
     name: Manual Pi 1.2.0 / ${{ matrix.os }}
