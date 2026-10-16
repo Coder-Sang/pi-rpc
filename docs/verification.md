@@ -4,7 +4,7 @@
 
 **pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0** and requires **Rust 1.88**. Pi **1.2.0**, commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
 
-Registry upload and hosted docs.rs confirmation are recorded after publication. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+The [0.2.0 release](#020-release-2026-10-16) is published and its hosted documentation is verified. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
 
 ## Local verification (2026-10-16)
 
@@ -61,6 +61,18 @@ The recorder checks metadata, licenses, archive safety, clean VCS identity and e
 A record attests only to its archive/source inspection, not to tests it did not execute. For CI acceptance, confirm **all six jobs succeeded for the same `source.commit`** and inspect their preceding test steps. Keep the relevant JSON and complete run link outside the crate archive, preserving them before CI artifact retention expires. Different platforms/Cargo versions can produce different archive digests; compare the eventual upload with the selected upload platform's archive, not with an assumed universal digest.
 
 The candidate's own commit and digest are recorded after it exists, outside the package. Documentation therefore records a completed baseline and the evidence procedure, rather than changing its own SHA after every verification run. Real-Pi observations above remain separately dated and scoped; these fake-only gates do not rerun or extend them.
+
+## 0.2.0 release (2026-10-16)
+
+Published [pi-rpc 0.2.0](https://crates.io/crates/pi-rpc/0.2.0) supports **Pi 1.1.0 through 1.2.0 / Rust 1.88**. The immutable [v0.2.0 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.2.0) points to the actual uploaded commit **`b9a015df8a72052d49f7d422a9dd11ff6651b3d1`**. Later documentation bookkeeping commits do not replace that release source.
+
+- The [six release CI jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/38873074039) passed on Linux/macOS/Windows with stable and exact **1.88.0**. Six candidate artifacts identify that same release commit.
+- The clean release commit passed the complete local stable/MSRV feature, stress and Debug/Release boundary checks, 50 Python regressions, Markdown/generated-HTML checks, strict packaging, publication dry-run and fresh packaged consumers. All 99 tracked source hashes stayed unchanged during acceptance.
+- The downloaded registry archive matches the pre-upload inspected archive byte for byte: **101 files**, SHA-256 **`41eac29dd93e69e8854aa72cb7a301b01262e7c982436536af34802d83cb5943`**. Its clean `.cargo_vcs_info.json` identifies the uploaded commit above.
+- A fresh **Rust 1.88.0** registry consumer resolved exactly `pi-rpc = "=0.2.0"`, checked its registry source/checksum, and passed public-path tests and in-memory examples in all four feature configurations; both session configurations also passed the native-session example. No Pi process or model was invoked.
+- [docs.rs 0.2.0](https://docs.rs/pi-rpc/0.2.0/pi_rpc/) is available. Its crate index, `SessionFileBuilder`, `PiProcess`, `ProcessOptions` and `PI_VERSION_REQUIREMENT` pages were checked. All eight distinct README guide/license targets under `v0.2.0` are accessible and match the release source. The hosted docs.rs compiler is separate from the exact-MSRV consumer evidence.
+
+The release checks did not rerun real Pi or paid-model acceptance. Earlier real-Pi observations retain their separately recorded scope.
 
 ## 0.1.0 release (2026-10-14)
 
