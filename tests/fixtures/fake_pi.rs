@@ -10,6 +10,11 @@ fn main() {
         .unwrap()
         .to_string_lossy();
     if args.iter().any(|a| a == "--version") {
+        std::fs::write(
+            std::path::Path::new(&args[0]).with_extension("probe-started"),
+            b"probe",
+        )
+        .unwrap();
         if name.contains("probe-hang") {
             std::thread::sleep(Duration::from_secs(60));
         }
@@ -17,16 +22,43 @@ fn main() {
             println!("{}", "x".repeat(100_000));
             return;
         }
+        if name.contains("invalid-utf8-version") {
+            io::stdout().write_all(b"\xff\n").unwrap();
+            return;
+        }
         println!(
             "{}",
             if name.contains("wrong-version") {
                 "0.99.2"
-            } else {
+            } else if name.contains("below-version") {
+                "1.0.4"
+            } else if name.contains("previous-version") {
                 "1.1.0"
+            } else if name.contains("intermediate-version") {
+                "1.1.1"
+            } else if name.contains("numeric-version") {
+                "1.1.10"
+            } else if name.contains("future-version") {
+                "1.2.1"
+            } else if name.contains("prerelease-version") {
+                "1.2.0-rc.1"
+            } else if name.contains("metadata-version") {
+                "1.2.0+build"
+            } else if name.contains("leading-zero-version") {
+                "1.01.0"
+            } else if name.contains("padded-version") {
+                " \t1.1.0\r\n "
+            } else {
+                "1.2.0"
             }
         );
         return;
     }
+    std::fs::write(
+        std::path::Path::new(&args[0]).with_extension("rpc-started"),
+        b"rpc",
+    )
+    .unwrap();
     assert!(args.windows(2).any(|w| w == ["--mode", "rpc"]));
     let mode = args
         .windows(2)

@@ -7,6 +7,7 @@ async fn main() -> pi_rpc::Result<()> {
         .nth(1)
         .expect("usage: release_smoke /absolute/path/to/pi");
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+        expected_version: pi_rpc::PI_VERSION.into(),
         executable: executable.into(),
         args: [
             "--no-session",

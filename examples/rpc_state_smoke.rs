@@ -1,8 +1,8 @@
-//! No-prompt Pi 1.1.0 acceptance using existing Pi authentication.
+//! No-prompt Pi 1.2.0 acceptance using existing Pi authentication.
 //! Usage: PI_CODING_AGENT_DIR=/scratch/root/agent cargo run --example
 //! rpc_state_smoke -- /path/pi /scratch/root
 //! Prepare opaque private auth/models copies in root/agent if needed. Bash-only
-//! sessions cannot persist in Pi 1.1.0, so export/clone/switch are native boundaries.
+//! sessions cannot persist in Pi 1.2.0, so export/clone/switch are native boundaries.
 //! Pi itself owns configuration/authentication. This example never reads either.
 use pi_rpc::{
     Config, Error, PiClient, PiProcess, ProcessOptions,
@@ -114,7 +114,7 @@ async fn exercise(
         assert_eq!(client.get_state().await?.auto_compaction_enabled, enabled);
         pass("set_auto_compaction + state");
         client.set_auto_retry(enabled).await?;
-        pass("set_auto_retry (ack only: Pi 1.1.0 get_state omits autoRetryEnabled)");
+        pass("set_auto_retry (ack only: Pi 1.2.0 get_state omits autoRetryEnabled)");
     }
     client.abort_retry().await?;
     assert!(!client.get_state().await?.is_streaming);
@@ -239,7 +239,7 @@ async fn exercise(
         pass("switch_session restores name/history");
     } else {
         println!(
-            "BOUNDARY persistence/switch_session: Pi 1.1.0 only flushes user/assistant conversations; bash-only history remains in memory. No prompt sent."
+            "BOUNDARY persistence/switch_session: Pi 1.2.0 only flushes user/assistant conversations; bash-only history remains in memory. No prompt sent."
         );
     }
     println!("SKIP fork: no user entry can be created without prompt/model turn.");
@@ -288,6 +288,7 @@ async fn main() -> SmokeResult<()> {
     .collect();
     cli.push(root.join("sessions").into_os_string());
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+        expected_version: pi_rpc::PI_VERSION.into(),
         executable,
         args: cli,
         cwd: Some(root.join("work")),

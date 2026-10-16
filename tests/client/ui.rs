@@ -1,6 +1,62 @@
 use super::*;
 
 #[tokio::test]
+async fn starting_run_allows_state_ui_and_abort_before_prompt_acceptance() {
+    // Pi 1.2 marks the run busy while before_agent_start is still preparing it.
+    // This synthetic wire trace verifies multiplexing, not Pi's hook execution.
+    let (client, mut events, mut owner, mut reader, mut writer) = setup(Config::default());
+    let prompt_client = client.clone();
+    let prompt_task = tokio::spawn(async move { prompt_client.prompt("synthetic").await });
+    let prompt = next(&mut reader).await;
+    assert_eq!(prompt["type"], "prompt");
+    assert!(!prompt_task.is_finished());
+
+    let state_client = client.clone();
+    let state_task = tokio::spawn(async move { state_client.get_state().await });
+    let state = next(&mut reader).await;
+    assert_eq!(state["type"], "get_state");
+    send(&mut writer, json!({"type":"extension_ui_request","id":"startup-ui","method":"confirm","title":"startup","message":"synthetic","timeout":0.75})).await;
+    reply(&mut writer, &state, Some(json!({"thinkingLevel":"off","isStreaming":true,"isCompacting":false,"steeringMode":"all","followUpMode":"all","sessionId":"s","autoCompactionEnabled":true,"messageCount":0,"pendingMessageCount":0}))).await;
+    assert_eq!(
+        next(&mut reader).await,
+        json!({"type":"extension_ui_response","id":"startup-ui","cancelled":true})
+    );
+    let state = state_task.await.unwrap().unwrap();
+    assert!(state.is_streaming);
+    assert_eq!(state.message_count, 0);
+    assert!(!prompt_task.is_finished());
+    let Some(Ok(Event::Ui(ui))) = bounded_event(&mut events).await else {
+        panic!("expected startup UI request");
+    };
+    assert_eq!(ui.id, "startup-ui");
+
+    let abort_task = tokio::spawn(async move { client.abort().await });
+    let abort = next(&mut reader).await;
+    assert_eq!(abort["type"], "abort");
+    reply(&mut writer, &prompt, Some(json!({"disposition":"started"}))).await;
+    send(&mut writer, json!({"type":"agent_start"})).await;
+    send(&mut writer, json!({"type":"agent_settled","aborted":true})).await;
+    reply(&mut writer, &abort, None).await;
+    assert_eq!(
+        prompt_task.await.unwrap().unwrap(),
+        PromptDisposition::Started
+    );
+    abort_task.await.unwrap().unwrap();
+    assert_eq!(
+        bounded_event(&mut events).await,
+        Some(Ok(Event::Known(KnownEvent::AgentStart)))
+    );
+    assert_eq!(
+        bounded_event(&mut events).await,
+        Some(Ok(Event::Known(KnownEvent::AgentSettled { aborted: true })))
+    );
+    writer.shutdown().await.unwrap();
+    assert_eq!(bounded_event(&mut events).await, Some(Err(Error::Eof)));
+    assert_eq!(bounded_event(&mut events).await, None);
+    assert_eq!(owner.wait_terminal().await, Error::Eof);
+}
+
+#[tokio::test]
 async fn fractional_dialog_timeouts_keep_responses_and_events_readable() {
     for ui_policy in [pi_rpc::UiPolicy::Cancel, pi_rpc::UiPolicy::Manual] {
         let (client, mut events, mut owner, mut reader, mut writer) =

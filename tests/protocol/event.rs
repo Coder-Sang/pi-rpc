@@ -168,7 +168,7 @@ fn known_event_fixtures() -> Vec<Value> {
 #[test]
 fn all_known_event_shapes_decode_and_required_fields_are_not_unknown() {
     let fixtures = known_event_fixtures();
-    // Golden set from the pinned Pi 1.1.0 AgentSessionEvent and RPC mode.
+    // Golden set from the pinned Pi 1.2.0 AgentSessionEvent and RPC mode.
     assert_fixture_names(
         &fixtures,
         "type",

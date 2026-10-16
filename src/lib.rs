@@ -1,4 +1,4 @@
-//! Async, bounded Pi 1.1.0 RPC. See the README for lifecycle and gateway policy.
+//! Async, bounded Pi 1.1.0–1.2.0 RPC. See the README for lifecycle and gateway policy.
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 pub mod client;
@@ -11,14 +11,19 @@ pub mod session_file;
 #[cfg(feature = "subprocess")]
 pub mod subprocess;
 pub mod transport;
+mod version;
 
 pub use client::{Config, PiClient, PiConnection, PiEvents, UiPolicy};
 #[cfg(feature = "subprocess")]
 pub use subprocess::{PiProcess, ProcessOptions};
 pub use transport::Transport;
 
-pub const PI_VERSION: &str = "1.1.0";
-pub const SOURCE_COMMIT: &str = "abe508e1b89912adde45528136c3221eb69acdd7";
+/// Latest reviewed Pi release; not the entire supported version range.
+pub const PI_VERSION: &str = "1.2.0";
+/// Inclusive supported range of canonical three-component Pi releases.
+pub const PI_VERSION_REQUIREMENT: &str = ">=1.1.0, <=1.2.0";
+/// Upstream commit of the latest reviewed release, [`PI_VERSION`].
+pub const SOURCE_COMMIT: &str = "06a466935536f8c9bcacb2d5efc0fc021be1bdff";
 
 /// Terminal errors are also delivered to every outstanding command and the owner.
 /// Error messages never include inbound records or submitted prompts.
@@ -46,7 +51,7 @@ pub enum Error {
     CloseTimeout,
     #[error("process terminated by owner")]
     Terminated,
-    #[error("unsupported Pi version (required {PI_VERSION})")]
+    #[error("unsupported or mismatched Pi version (supported {PI_VERSION_REQUIREMENT})")]
     Version,
 }
 pub type Result<T> = std::result::Result<T, Error>;

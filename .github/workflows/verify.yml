@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_smoke:
-        description: 'Run isolated Pi 1.1.0 read-only smoke (no auth or model requests)'
+        description: 'Run isolated Pi 1.2.0 read-only smoke (no auth or model requests)'
         type: boolean
         default: false
 
@@ -73,7 +73,7 @@ jobs:
         run: bash scripts/verify-consumer.sh
 
   release-smoke:
-    name: Manual Pi 1.1.0 / ${{ matrix.os }}
+    name: Manual Pi 1.2.0 / ${{ matrix.os }}
     if: github.event_name == 'workflow_dispatch' && inputs.release_smoke
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -83,10 +83,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: pi-linux-x64.tar.gz
-            sha256: 3faa94666cd3849d37af320ff749407d0271b07a9b94f420c87e30866e10e289
+            sha256: 00fc36cffdebceea5a48230da62cf3fb463178f8fe185766652f96002a246847
           - os: macos-14
             artifact: pi-darwin-arm64.tar.gz
-            sha256: 3455b13de35c15a5893cdebc922678199e90a7ce99b06cbc23f37860e90d63c7
+            sha256: abddf7688b4b6781d9113f63cd578e3c01dcdb87e71f66e7ec1c9ec6c76178d1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -95,9 +95,9 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-      # Digests observed 2026-10-09 from the official GitHub release assets API:
-      # https://api.github.com/repos/earendil-works/pi/releases/tags/v1.1.0
-      # Linux asset 619962805, macOS asset 619962801. Never trust a downloaded checksum alone.
+      # Digests observed 2026-10-16 from the official GitHub release assets API:
+      # https://api.github.com/repos/earendil-works/pi/releases/tags/v1.2.0
+      # Linux asset 635209977, macOS asset 635209981. Never trust a downloaded checksum alone.
       - name: Download and verify official release before extraction
         env:
           ARTIFACT: ${{ matrix.artifact }}
@@ -106,7 +106,7 @@ jobs:
           directory="$RUNNER_TEMP/pi-release"
           mkdir -p "$directory"
           curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
-            "https://github.com/earendil-works/pi/releases/download/v1.1.0/$ARTIFACT" \
+            "https://github.com/earendil-works/pi/releases/download/v1.2.0/$ARTIFACT" \
             --output "$directory/$ARTIFACT"
           if command -v sha256sum >/dev/null 2>&1; then
             actual=$(sha256sum "$directory/$ARTIFACT")

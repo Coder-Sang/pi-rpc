@@ -69,7 +69,7 @@ class PackageChecks(unittest.TestCase):
         self.archive = Path(self.temp.name) / "fixture.crate"
         self.files = {name: b"" for name in REQUIRED_FILES}
         manifest = (b'[package]\nname="pi-rpc"\nversion="0.2.0"\nlicense="Apache-2.0"\npublish=["crates-io"]\n'
-                    b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"\n'
+                    b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.2.0"\n'
                     b'edition="2024"\nrust-version="1.88"\nreadme="README.md"\n'
                     b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
@@ -181,7 +181,7 @@ class PackageChecks(unittest.TestCase):
 
     def test_description_required_nonblank_and_string_in_both_manifests(self):
         root = self.source_root()
-        description = b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"\n'
+        description = b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.2.0"\n'
         for name in ["Cargo.toml", "Cargo.toml.orig"]:
             saved = self.files[name]
             for replacement in [b'', b'description=""\n', b'description=" \\t "\n',
@@ -196,7 +196,7 @@ class PackageChecks(unittest.TestCase):
             self.files[name] = saved
 
     def test_manifest_descriptions_must_agree_but_allow_matching_updates(self):
-        description = b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"'
+        description = b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.2.0"'
         replacement = b'description="Updated nonempty package description"'
         self.files["Cargo.toml"] = self.files["Cargo.toml"].replace(description, replacement)
         self.write_archive()

@@ -509,6 +509,7 @@ async fn main() -> pi_rpc::Result<()> {
     }
     for policy in [Some(UiPolicy::Manual), Some(UiPolicy::Cancel), None] {
         let mut options = ProcessOptions {
+            expected_version: pi_rpc::PI_VERSION.into(),
             executable: executable.clone(),
             cwd: Some(cwd.clone()),
             args: [
@@ -545,7 +546,7 @@ async fn main() -> pi_rpc::Result<()> {
         run(options, policy).await?;
     }
     println!(
-        "Pi 1.1.0 real extension UI and synthetic retry acceptance: no paid request; clean exits PASS"
+        "Pi 1.2.0 real extension UI and synthetic retry acceptance: no paid request; clean exits PASS"
     );
     Ok(())
 }

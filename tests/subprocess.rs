@@ -266,13 +266,23 @@ async fn event_overflow_notifies_owner_and_cleans_local_process() {
 #[tokio::test]
 async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
     let dir = tempfile::tempdir().unwrap();
-    for name in ["wrong-version", "probe-hang", "probe-large"] {
+    for name in [
+        "wrong-version",
+        "below-version",
+        "future-version",
+        "prerelease-version",
+        "metadata-version",
+        "leading-zero-version",
+        "invalid-utf8-version",
+        "probe-hang",
+        "probe-large",
+    ] {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
         std::fs::copy(fixture(), &path).unwrap();
         let result = PiProcess::spawn(ProcessOptions {
-            executable: path,
+            executable: path.clone(),
             startup_timeout: if name == "probe-hang" {
                 Duration::from_millis(100)
             } else {
@@ -281,14 +291,118 @@ async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
             ..Default::default()
         })
         .await;
-        if name == "wrong-version" {
+        if name.ends_with("version") {
             match result {
                 Err(error) => assert_eq!(error, Error::Version),
-                Ok(_) => panic!("wrong-version fixture unexpectedly started RPC"),
+                Ok(_) => panic!("{name} fixture unexpectedly started RPC"),
             }
         } else {
             assert!(result.is_err());
         }
+        // The intentionally short hang deadline may expire before main starts.
+        if name != "probe-hang" {
+            assert!(path.with_extension("probe-started").exists(), "{name}");
+        }
+        assert!(!path.with_extension("rpc-started").exists());
+    }
+}
+
+#[tokio::test]
+async fn default_range_and_exact_locks_run_supported_versions() {
+    let dir = tempfile::tempdir().unwrap();
+    // Intermediate profiles are synthetic range tests, not published Pi versions.
+    for name in [
+        "current-version",
+        "previous-version",
+        "intermediate-version",
+        "numeric-version",
+        "padded-version",
+    ] {
+        let path = dir
+            .path()
+            .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+        std::fs::copy(fixture(), &path).unwrap();
+        let actual = match name {
+            "previous-version" | "padded-version" => "1.1.0",
+            "intermediate-version" => "1.1.1",
+            "numeric-version" => "1.1.10",
+            _ => "1.2.0",
+        };
+        for expected in [pi_rpc::PI_VERSION_REQUIREMENT, actual] {
+            let (client, mut events, mut owner) = PiProcess::spawn(ProcessOptions {
+                executable: path.clone(),
+                expected_version: expected.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+            ready(&mut events).await;
+            assert_eq!(client.get_state().await.unwrap().session_id, "fake");
+            assert!(client.get_messages().await.unwrap().messages.is_empty());
+            assert_eq!(owner.close().await, Error::ProcessExit(Some(0)));
+            terminal_once(&mut events, Error::ProcessExit(Some(0))).await;
+            assert_eq!(client.abort().await, Err(Error::ProcessExit(Some(0))));
+        }
+    }
+}
+
+#[tokio::test]
+async fn exact_lock_mismatch_never_launches_rpc() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, expected) in [("previous-version", "1.2.0"), ("current-version", "1.1.0")] {
+        let path = dir
+            .path()
+            .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+        std::fs::copy(fixture(), &path).unwrap();
+        assert!(matches!(
+            PiProcess::spawn(ProcessOptions {
+                executable: path.clone(),
+                expected_version: expected.into(),
+                ..Default::default()
+            })
+            .await,
+            Err(Error::Version)
+        ));
+        assert!(path.with_extension("probe-started").exists());
+        assert!(!path.with_extension("rpc-started").exists());
+    }
+}
+
+#[tokio::test]
+async fn invalid_expectations_fail_before_executable_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join(format!("current-version{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(fixture(), &path).unwrap();
+    for expected in [
+        "",
+        "*",
+        "^1.1.0",
+        ">=1.1.0",
+        ">=1.1.0,<=1.2.0",
+        "1.0.4",
+        "1.2.1",
+        "1.1.0-rc.1",
+        "1.2.0+build",
+        "1.01.0",
+        "1.1",
+        "1.1.18446744073709551616",
+    ] {
+        assert!(
+            matches!(
+                PiProcess::spawn(ProcessOptions {
+                    executable: path.clone(),
+                    expected_version: expected.into(),
+                    ..Default::default()
+                })
+                .await,
+                Err(Error::Version)
+            ),
+            "{expected}"
+        );
+        assert!(!path.with_extension("probe-started").exists());
+        assert!(!path.with_extension("rpc-started").exists());
     }
 }
 #[cfg(unix)]

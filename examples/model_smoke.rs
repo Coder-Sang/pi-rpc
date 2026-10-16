@@ -111,6 +111,7 @@ async fn main() -> pi_rpc::Result<()> {
         .next()
         .map(|value| value.into_string().expect("provider must be UTF-8"));
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+        expected_version: pi_rpc::PI_VERSION.into(),
         executable,
         cwd: Some(cwd),
         args: [

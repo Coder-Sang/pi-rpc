@@ -238,6 +238,7 @@ async fn main() -> pi_rpc::Result<()> {
     .unwrap();
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rpc_live_tool.ts");
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+        expected_version: pi_rpc::PI_VERSION.into(),
         executable,
         cwd: Some(cwd.clone()),
         args: vec![

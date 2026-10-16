@@ -1,5 +1,39 @@
 use super::*;
 
+#[tokio::test]
+async fn supported_endpoints_share_command_event_and_close_delivery() {
+    for version in ["1.1.0", "1.2.0"] {
+        let (local, remote) = tokio::io::duplex(65536);
+        let (reader, writer) = tokio::io::split(local);
+        let (client, mut events, mut owner) = PiConnection::connect(
+            Transport::new(reader, writer, version).unwrap(),
+            Config::default(),
+        )
+        .unwrap();
+        let (reader, mut writer) = tokio::io::split(remote);
+        let mut reader = JsonlReader::new(reader, 65536);
+        let command_client = client.clone();
+        let command = tokio::spawn(async move { command_client.abort().await });
+        let request = next(&mut reader).await;
+        send(&mut writer, json!({"type":"agent_start"})).await;
+        reply(&mut writer, &request, None).await;
+        command.await.unwrap().unwrap();
+        assert_eq!(
+            bounded_event(&mut events).await,
+            Some(Ok(Event::Known(KnownEvent::AgentStart)))
+        );
+        let peer = tokio::spawn(async move {
+            assert!(reader.next().await.unwrap().is_none());
+            drop(writer);
+        });
+        assert_eq!(owner.close().await, Error::Closed);
+        peer.await.unwrap();
+        assert_eq!(bounded_event(&mut events).await, Some(Err(Error::Closed)));
+        assert_eq!(bounded_event(&mut events).await, None);
+        assert_eq!(client.abort().await, Err(Error::Closed));
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn event_first_eof_and_panicking_reader_do_not_hang_with_live_owner() {
     struct Panics;

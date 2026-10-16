@@ -1,6 +1,51 @@
 use super::*;
 
 #[test]
+fn pi_1_2_model_schema_metadata_remains_open_and_lossless() {
+    // Pi 1.2 extracts these definitions to model-schema.ts/compat-schema.ts.
+    // The RPC still returns open model objects, including key-scoped limits.
+    let model = json!({
+        "id":"synthetic", "name":"Synthetic", "api":"openai-completions",
+        "provider":"openrouter", "baseUrl":"https://example.invalid/v1",
+        "input":["text","image"], "contextWindow":8192, "maxTokens":1024,
+        "inputLimits":{"maxRequestBytes":33554432,"images":{"resize":{"maxWidth":2000,"maxHeight":2000,"maxBytes":4718592,"jpegQuality":0.8},"maxPerMessage":4,"maxPerRequest":8}},
+        "cost":{"input":0.1,"output":0.2,"cacheRead":0.0,"cacheWrite":0.0,"tiers":[{"inputTokensAbove":4096,"input":0.3,"output":0.4,"cacheRead":0.0,"cacheWrite":0.0}]},
+        "thinkingLevelMap":{"off":null,"max":"high"},
+        "samplingParamsByThinkingLevel":{"high":{"temperature":0.75}},
+        "compat":{"openRouterRouting":{"only":["synthetic-region"],"require_parameters":true}}
+    });
+    for (command, data) in [
+        ("set_model", model.clone()),
+        ("get_available_models", json!({"models":[model.clone()]})),
+        (
+            "cycle_model",
+            json!({"model":model.clone(),"thinkingLevel":"max","isScoped":true}),
+        ),
+    ] {
+        let Record::Response(response) =
+            decode_record(json!({"type":"response","command":command,"success":true,"data":data}))
+                .unwrap()
+        else {
+            panic!("expected model response");
+        };
+        assert_eq!(response.decode::<Value>().unwrap(), data);
+        let decoded = match command {
+            "set_model" => response.decode::<Value>().unwrap(),
+            "get_available_models" => response.decode::<Models>().unwrap().models.remove(0),
+            "cycle_model" => {
+                response
+                    .decode::<Option<ModelCycle>>()
+                    .unwrap()
+                    .unwrap()
+                    .model
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(decoded, model);
+    }
+}
+
+#[test]
 fn required_nullable_rpc_and_native_fields_distinguish_absence_from_null() {
     for (command, data, key) in [
         ("cycle_model", Value::Null, None),

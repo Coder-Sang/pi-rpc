@@ -8,6 +8,42 @@ fn comparable<T: Debug + Clone + PartialEq>() {}
 fn same_type<T>(_: Option<T>, _: Option<T>) {}
 
 #[test]
+fn protocol_range_and_latest_reviewed_release_remain_public() {
+    assert_eq!(pi_rpc::PI_VERSION, "1.2.0");
+    assert_eq!(
+        pi_rpc::SOURCE_COMMIT,
+        "06a466935536f8c9bcacb2d5efc0fc021be1bdff"
+    );
+    assert_eq!(pi_rpc::codec::MAX_JSON_DEPTH, 512);
+    assert_eq!(pi_rpc::PI_VERSION_REQUIREMENT, ">=1.1.0, <=1.2.0");
+    for version in ["1.1.0", "1.1.1", "1.1.10", "1.2.0"] {
+        assert!(pi_rpc::Transport::new(tokio::io::empty(), tokio::io::sink(), version).is_ok());
+    }
+    for version in [
+        "0.99.2",
+        "1.0.4",
+        "1.2.1",
+        "1.10.0",
+        "v1.2.0",
+        "1.2.0 ",
+        "",
+        "1.2.0-rc.1",
+        "1.2.0+build",
+        pi_rpc::PI_VERSION_REQUIREMENT,
+    ] {
+        assert!(matches!(
+            pi_rpc::Transport::new(tokio::io::empty(), tokio::io::sink(), version),
+            Err(pi_rpc::Error::Version)
+        ));
+    }
+    #[cfg(feature = "subprocess")]
+    assert_eq!(
+        pi_rpc::ProcessOptions::default().expected_version,
+        pi_rpc::PI_VERSION_REQUIREMENT
+    );
+}
+
+#[test]
 fn ui_timeouts_and_retry_delays_keep_the_original_u64_public_fields() {
     use pi_rpc::protocol::{KnownEvent, UiMethod};
     let timeout = Some(1500_u64);

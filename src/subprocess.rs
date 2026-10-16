@@ -1,6 +1,9 @@
 //! Local non-PTY subprocess lifecycle. No config files or credentials are read
 //! by this crate. The executable inherits its environment and controls Pi setup.
-use crate::{Config, Error, PI_VERSION, PiClient, PiConnection, PiEvents, Result, Transport};
+use crate::{
+    Config, Error, PI_VERSION_REQUIREMENT, PiClient, PiConnection, PiEvents, Result, Transport,
+    version::Expectation,
+};
 use std::{
     collections::VecDeque,
     ffi::OsString,
@@ -22,6 +25,8 @@ pub struct ProcessOptions {
     /// Extra CLI arguments. Do not put secrets here.
     pub args: Vec<OsString>,
     pub cwd: Option<PathBuf>,
+    /// Either [`PI_VERSION_REQUIREMENT`] (the default) or an exact supported
+    /// release. Other constraint expressions are rejected before probing.
     pub expected_version: String,
     pub startup_timeout: Duration,
     pub stderr_bytes: usize,
@@ -33,7 +38,7 @@ impl Default for ProcessOptions {
             executable: "pi".into(),
             args: Vec::new(),
             cwd: None,
-            expected_version: PI_VERSION.into(),
+            expected_version: PI_VERSION_REQUIREMENT.into(),
             startup_timeout: Duration::from_secs(5),
             stderr_bytes: 64 * 1024,
             connection: Config::default(),
@@ -82,10 +87,8 @@ async fn bounded_version_read<R: tokio::io::AsyncRead + Unpin>(reader: R) -> Res
     }
     Ok(bytes)
 }
-async fn verify(options: &ProcessOptions) -> Result<()> {
-    if options.expected_version != PI_VERSION {
-        return Err(Error::Version);
-    }
+async fn verify(options: &ProcessOptions) -> Result<String> {
+    let expectation = Expectation::new(&options.expected_version)?;
     let mut child = base_command(options)
         .arg("--version")
         .stdin(Stdio::null())
@@ -107,11 +110,13 @@ async fn verify(options: &ProcessOptions) -> Result<()> {
         if !status.success() {
             return Err(Error::ProcessExit(status.code()));
         }
-        if std::str::from_utf8(&out).ok().map(str::trim) != Some(options.expected_version.as_str())
-        {
+        let actual = std::str::from_utf8(&out)
+            .map_err(|_| Error::Version)?
+            .trim();
+        if !expectation.matches(actual) {
             return Err(Error::Version);
         }
-        Ok(())
+        Ok(actual.to_owned())
     })
     .await;
     match result {
@@ -128,9 +133,10 @@ async fn verify(options: &ProcessOptions) -> Result<()> {
     }
 }
 impl PiProcess {
-    /// Runs only `--version` to verify 1.1.0 before launching `--mode rpc`.
+    /// Runs only `--version` to verify the supported range and optional exact
+    /// version expectation before launching `--mode rpc`.
     pub async fn spawn(options: ProcessOptions) -> Result<(PiClient, PiEvents, Self)> {
-        verify(&options).await?;
+        let actual_version = verify(&options).await?;
         let mut child = base_command(&options)
             .args(&options.args)
             .args(["--mode", "rpc"])
@@ -143,7 +149,7 @@ impl PiProcess {
         let writer = child.stdin.take().unwrap();
         let mut stderr = child.stderr.take().unwrap();
         let (exit_tx, exit) = watch::channel(None);
-        let mut transport = Transport::new(reader, writer, &options.expected_version)?;
+        let mut transport = Transport::new(reader, writer, &actual_version)?;
         transport.exit = Some(exit.clone());
         let (client, events, connection) = PiConnection::connect(transport, options.connection)?;
         let diagnostics = Diagnostics {
