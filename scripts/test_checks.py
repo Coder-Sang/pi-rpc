@@ -266,6 +266,27 @@ class PackageChecks(unittest.TestCase):
             main()
         self.assertFalse(forbidden.exists())
 
+    def test_evidence_output_cannot_overwrite_archive_or_alias(self):
+        root = self.consumer_source_root()
+        self.write_archive()
+        original = self.archive.read_bytes()
+        alias = self.archive.with_name("alias.json")
+        os.link(self.archive, alias)
+        main = runpy.run_path(str(ROOT / "scripts/record-evidence.py"))["main"]
+        for output in [self.archive, self.archive.parent / "." / self.archive.name, alias]:
+            with self.subTest(output=output), \
+                 patch.dict(main.__globals__, {"cargo_package_location": lambda _: ({"name": "pi-rpc", "version": "0.2.0"}, self.archive.parent)}), \
+                 patch.object(sys, "argv", ["record-evidence.py", "--source-root", str(root),
+                                           "--archive", str(self.archive), "--output", str(output)]), \
+                 patch("subprocess.check_output") as command, redirect_stderr(io.StringIO()) as errors, \
+                 self.assertRaises(SystemExit) as raised:
+                main()
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("must not overwrite the crate archive", errors.getvalue())
+            command.assert_not_called()
+            self.assertEqual(self.archive.read_bytes(), original)
+            self.assertEqual(alias.read_bytes(), original)
+
     def test_missing_archive_target_never_falls_back_to_worktree(self):
         del self.files["LICENSE"]
         self.write_archive()

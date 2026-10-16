@@ -26,6 +26,9 @@ def main():
         package, target = cargo_package_location(root)
         archive = args.archive or target / "package" / f"{package['name']}-{package['version']}.crate"
         output = (args.output or target / "verification/release-evidence.json").resolve()
+        require(output != archive.resolve() and not (
+                    output.exists() and archive.exists() and output.samefile(archive)),
+                "evidence output must not overwrite the crate archive")
         require(not output.is_relative_to(root) or unwanted_package_file(output.relative_to(root).as_posix()),
                 "evidence output must stay outside packaged source files")
         commit = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
