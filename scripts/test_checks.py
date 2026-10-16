@@ -14,13 +14,22 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from validation_checks import CheckError, PACKAGE_METADATA, REQUIRED_FILES, check_documents, check_package, read_archive, unwanted_package_file
+from validation_checks import CheckError, PACKAGE_METADATA, REQUIRED_FILES, check_documents, check_package, check_rustdoc, read_archive, unwanted_package_file
 from prepare_consumer import prepare_consumer
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 class DocumentChecks(unittest.TestCase):
+    def test_repository_guide_urls_are_checked_against_the_snapshot(self):
+        base = "https://github.com/Coder-Sang/pi-rpc/blob/main/"
+        files = {"README.md": f"[guide]({base}docs/guide.md#scope)\n".encode(),
+                 "docs/guide.md": b"# Scope\n"}
+        self.assertEqual(check_documents(files), (2, 1))
+        for target in ["missing.md", "docs/guide.md#absent", "../README.md", "docs/guide.md?raw=1"]:
+            with self.subTest(target=target), self.assertRaises(CheckError):
+                check_documents(files | {"README.md": f"[bad]({base}{target})".encode()})
+
     def test_duplicate_anchors_and_fenced_prose(self):
         files = {"README.md": b"# A\n# A\n[second](#a-1)\n```rust\n[not prose](missing)\n```\n"}
         self.assertEqual(check_documents(files), (1, 1))
@@ -53,6 +62,88 @@ class DocumentChecks(unittest.TestCase):
             failed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(failed.returncode, 1)
             self.assertIn("missing local link target", failed.stderr)
+
+
+class RustdocChecks(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR"))
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / "generated docs 中文"
+        self.index = self.root / "pi_rpc/index.html"
+        self.index.parent.mkdir(parents=True)
+        self.files = {"README.md": b"# Readme\n", "docs/guide.md": b"# Scope\n"}
+
+    def write(self, name, text):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def test_generated_pages_fragments_repository_guides_and_source_ranges(self):
+        self.write("pi_rpc/index.html", '<h1 id="home">Crate</h1><a href="module/index.html#item">module</a>'
+                   '<a href="../src/pi_rpc/lib.rs.html#1-2">source</a><a href="../settings.html#display">settings</a>'
+                   '<a href="https://github.com/Coder-Sang/pi-rpc/blob/main/docs/guide.md#scope">guide</a>'
+                   '<a href="https://doc.rust-lang.org/std/">std</a>')
+        self.write("pi_rpc/module/index.html", '<h2 id="item">Item</h2><a href="../index.html#home">back</a>')
+        self.write("src/pi_rpc/lib.rs.html", '<a id="1"></a><a id="2"></a>')
+        self.write("settings.html", '<h1 id="display">Settings</h1>')
+        self.assertEqual(check_rustdoc(self.root, self.files), (2, 5))
+
+    def test_original_readme_links_fail_in_generated_html(self):
+        for target in ["docs/guide.md", "./LICENSE", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]:
+            self.index.write_text(f'<a href="{target}">guide</a>', encoding="utf-8")
+            with self.subTest(target=target), self.assertRaisesRegex(CheckError, "missing rustdoc link target"):
+                check_rustdoc(self.root, self.files)
+
+    def test_missing_files_and_anchors_are_rejected(self):
+        self.write("pi_rpc/item.html", '<h1 id="present">Item</h1>')
+        for target in ["absent.html", "item.html#absent", "#absent"]:
+            self.index.write_text(f'<a href="{target}">item</a>', encoding="utf-8")
+            with self.subTest(target=target), self.assertRaises(CheckError):
+                check_rustdoc(self.root, self.files)
+
+    def test_repository_targets_and_anchors_are_not_blindly_skipped(self):
+        for path in ["missing.md", "docs/guide.md#absent", "../README.md", "docs/guide.md?raw=1"]:
+            self.index.write_text(f'<a href="https://github.com/Coder-Sang/pi-rpc/blob/main/{path}">guide</a>', encoding="utf-8")
+            with self.subTest(path=path), self.assertRaises(CheckError):
+                check_rustdoc(self.root, self.files)
+
+    def test_escaping_and_unsupported_links_are_rejected(self):
+        for target in ["../../outside.html", "%2e%2e/%2e%2e/outside.html", "/absolute.html",
+                       "//example.invalid/guide", "javascript:alert(1)", "file:///tmp/outside.html"]:
+            self.index.write_text(f'<a href="{target}">bad</a>', encoding="utf-8")
+            with self.subTest(target=target), self.assertRaises(CheckError):
+                check_rustdoc(self.root, self.files)
+
+    def test_source_ranges_require_existing_ordered_endpoints(self):
+        self.write("src/pi_rpc/lib.rs.html", '<span id="1"></span><span id="2"></span>')
+        for fragment in ["1-99", "2-1", "missing"]:
+            self.index.write_text(f'<a href="../src/pi_rpc/lib.rs.html#{fragment}">source</a>', encoding="utf-8")
+            with self.subTest(fragment=fragment), self.assertRaisesRegex(CheckError, "missing rustdoc anchor"):
+                check_rustdoc(self.root, self.files)
+        self.write("pi_rpc/item.html", '<span id="1"></span><span id="2"></span>')
+        self.index.write_text('<a href="item.html#1-2">item</a>', encoding="utf-8")
+        with self.assertRaisesRegex(CheckError, "missing rustdoc anchor"):
+            check_rustdoc(self.root, self.files)
+
+    def test_missing_generation_is_not_a_success(self):
+        with self.assertRaisesRegex(CheckError, "missing generated crate"):
+            check_rustdoc(self.root, self.files)
+
+    def test_explicit_output_cli_and_encoded_html_anchors(self):
+        self.index.write_text('<h1 id="中文">Title</h1><a href="#%E4%B8%AD%E6%96%87">title</a>'
+                              '<h2 id="impl-Borrow%3CT%3E-for-T">Impl</h2>'
+                              '<a href="#impl-Borrow%3CT%3E-for-T">impl</a>', encoding="utf-8")
+        source = Path(self.temp.name) / "source"
+        source.mkdir()
+        (source / "README.md").write_bytes(self.files["README.md"])
+        command = [sys.executable, str(ROOT / "scripts/check-rustdoc.py"),
+                   "--source-root", str(source), "--doc-root", str(self.root)]
+        passed = subprocess.run(command, cwd=self.temp.name, capture_output=True, text=True)
+        self.assertEqual(passed.returncode, 0, passed.stderr)
+        self.index.write_text('<a href="missing.html">missing</a>', encoding="utf-8")
+        failed = subprocess.run(command, cwd=self.temp.name, capture_output=True, text=True)
+        self.assertEqual(failed.returncode, 1)
+        self.assertIn("missing rustdoc link target", failed.stderr)
 
 
 class PackageChecks(unittest.TestCase):

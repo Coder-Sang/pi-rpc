@@ -2,6 +2,10 @@
 # No real Pi/model requests. Local example uses the compiled test fake.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+python_command=python3
+if ! command -v "$python_command" >/dev/null 2>&1; then
+  python_command=python
+fi
 # cargo fmt does not resolve dependencies and does not accept --locked.
 cargo fmt --check
 rustfmt --edition 2024 --check tests/fixtures/fake_pi.rs
@@ -16,6 +20,7 @@ for configuration in default all none session_only; do
   cargo test --locked ${flags[@]+"${flags[@]}"}
   cargo clippy --locked ${flags[@]+"${flags[@]}"} --all-targets -- -D warnings
   RUSTDOCFLAGS='-D warnings' cargo doc --locked ${flags[@]+"${flags[@]}"} --no-deps
+  "$python_command" scripts/check-rustdoc.py
 done
 cargo run --locked --example injected --no-default-features
 cargo run --locked --example injected --all-features

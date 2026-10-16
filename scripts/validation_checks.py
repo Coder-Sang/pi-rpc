@@ -10,6 +10,7 @@ import re
 import tarfile
 import tomllib
 from fnmatch import fnmatchcase
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -22,6 +23,7 @@ REQUIRED_FILES = {
     "src/lib.rs", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md",
     "tests/fixtures/fake_pi.rs", "tests/fixtures/rpc_acceptance_extension.ts",
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
+    "scripts/check-rustdoc.py",
 }
 PACKAGE_METADATA = {
     "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
@@ -109,12 +111,15 @@ def check_documents(files):
         prose = "\n".join(prose_lines(text, name))
         for target in re.findall(r"\[[^\]]*\]\(([^\s)]+)\)", prose):
             parsed = urlsplit(target)
-            if parsed.scheme:
+            repository_path = repository_document_path(parsed)
+            if parsed.scheme and repository_path is None:
                 continue
-            require(not parsed.netloc, f"{name}: unsupported network-relative link {target}")
-            path = unquote(parsed.path)
+            require(repository_path is not None or not parsed.netloc,
+                    f"{name}: unsupported network-relative link {target}")
+            path = repository_path if repository_path is not None else unquote(parsed.path)
             require("\\" not in path and not path.startswith("/"), f"{name}: non-relative link {target}")
-            destination = posixpath.normpath(posixpath.join(posixpath.dirname(name), path)) if path else name
+            base = "" if repository_path is not None else posixpath.dirname(name)
+            destination = posixpath.normpath(posixpath.join(base, path)) if path else name
             require(destination != ".." and not destination.startswith("../"), f"{name}: escaping link {target}")
             require(destination in files, f"{name}: missing local link target {target}")
             if parsed.fragment:
@@ -122,6 +127,93 @@ def check_documents(files):
                         f"{name}: missing anchor {target}")
             links += 1
     return len(names), links
+
+
+def repository_document_path(parsed):
+    """Map project main-branch guide URLs back to the reviewed source snapshot."""
+    prefix = "/Coder-Sang/pi-rpc/blob/main/"
+    if parsed.scheme == "https" and parsed.netloc == "github.com" and parsed.path.startswith(prefix):
+        require(not parsed.query, "repository document link must not have a query")
+        return unquote(parsed.path[len(prefix):])
+    return None
+
+
+class HtmlLinks(HTMLParser):
+    def __init__(self, text):
+        super().__init__(convert_charrefs=True)
+        self.links, self.anchors = [], set()
+        self.feed(text)
+        self.close()
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if "id" in attrs:
+            self.anchors.add(attrs["id"])
+        if tag == "a":
+            if "name" in attrs:
+                self.anchors.add(attrs["name"])
+            if "href" in attrs:
+                self.links.append(attrs["href"])
+
+
+def check_rustdoc(doc_root, files, crate="pi_rpc"):
+    """Check reachable generated HTML, including local files/fragments and guides.
+
+    External sites are not fetched. Project guide URLs are verified against the
+    source/archive snapshot, so CI is independent of network or branch timing.
+    """
+    root = Path(doc_root).resolve(strict=True)
+    require(root.is_dir(), "rustdoc root must be a directory")
+    start = root / crate / "index.html"
+    require(start.is_file(), "missing generated crate index.html")
+    pending, visited, parsed_pages = [start], set(), {}
+
+    def page(path):
+        if path not in parsed_pages:
+            parsed_pages[path] = HtmlLinks(path.read_text(encoding="utf-8"))
+        return parsed_pages[path]
+
+    links = 0
+    while pending:
+        current = pending.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        for href in page(current).links:
+            parsed = urlsplit(href)
+            source_path = repository_document_path(parsed)
+            if source_path is not None:
+                require(source_path in files, f"missing repository document: {href}")
+                if parsed.fragment:
+                    require(unquote(parsed.fragment) in heading_anchors(files[source_path].decode("utf-8"), source_path),
+                            f"missing repository anchor: {href}")
+                links += 1
+                continue
+            if parsed.scheme:
+                require(parsed.scheme in {"https", "http", "mailto"}, f"unsupported rustdoc link: {href}")
+                continue
+            require(not parsed.netloc, f"network-relative rustdoc link: {href}")
+            path = unquote(parsed.path)
+            require("\\" not in path and not path.startswith("/"), f"non-relative rustdoc link: {href}")
+            target = (current.parent / path).resolve() if path else current
+            require(target.is_relative_to(root), f"escaping rustdoc link: {href}")
+            require(target.is_file(), f"missing rustdoc link target: {href}")
+            if target.suffix == ".html":
+                if parsed.fragment:
+                    fragment = unquote(parsed.fragment)
+                    anchors = page(target).anchors
+                    source_range = re.fullmatch(r"(\d+)-(\d+)", fragment)
+                    valid_range = (target.is_relative_to(root / "src") and source_range is not None
+                                   and int(source_range[1]) <= int(source_range[2])
+                                   and source_range[1] in anchors and source_range[2] in anchors)
+                    require(parsed.fragment in anchors or fragment in anchors or valid_range,
+                            f"missing rustdoc anchor: {href}")
+                # Visit only the crate's pages. Shared rustdoc/source pages may
+                # link to dependencies omitted by --no-deps; still check targets.
+                if target.is_relative_to(start.parent):
+                    pending.append(target)
+            links += 1
+    return len(visited), links
 
 
 def read_root(root):

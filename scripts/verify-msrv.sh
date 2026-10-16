@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export RUSTUP_TOOLCHAIN=1.88.0
+python_command=python3
+if ! command -v "$python_command" >/dev/null 2>&1; then
+  python_command=python
+fi
 version=$(rustc --version)
 case "$version" in
   "rustc 1.88.0 "*) ;;
@@ -17,4 +21,6 @@ for configuration in default all none session_only; do
   esac
   cargo +1.88.0 check --locked ${flags[@]+"${flags[@]}"} --all-targets
   cargo +1.88.0 test --locked ${flags[@]+"${flags[@]}"}
+  RUSTDOCFLAGS='-D warnings' cargo +1.88.0 doc --locked ${flags[@]+"${flags[@]}"} --no-deps
+  "$python_command" scripts/check-rustdoc.py
 done

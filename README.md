@@ -7,9 +7,9 @@ A bounded Tokio async JSONL client for **Pi 1.1.0 through 1.2.0**. Rust imports 
 | **0.2.x** | **>=1.1.0, <=1.2.0** | **1.88** (edition 2024) | Available from Git/source; 0.2.0 is not yet published |
 | **0.1.0** | **1.1.0** | **1.85** | [crates.io](https://crates.io/crates/pi-rpc/0.1.0) |
 
-[All six CI jobs passed](https://github.com/Coder-Sang/pi-rpc/actions/runs/38849645478) for commit `a556aa7`: Linux, macOS and Windows on stable and exact Rust **1.88.0**, including feature matrices, stress/boundary regressions and packaged consumers. Real Pi acceptance is recorded separately in [verification](docs/verification.md); Pi is a separately installed executable.
+[All six CI jobs passed](https://github.com/Coder-Sang/pi-rpc/actions/runs/38849645478) for commit `a556aa7`: Linux, macOS and Windows on stable and exact Rust **1.88.0**, including feature matrices, stress/boundary regressions and packaged consumers. Real Pi acceptance is recorded separately in [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md); Pi is a separately installed executable.
 
-The latest reviewed Pi source baseline is **1.2.0**. See [compatibility](docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](./LICENSE), with retained [third-party notices](THIRD_PARTY_NOTICES.md).
+The latest reviewed Pi source baseline is **1.2.0**. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/main/LICENSE), with retained [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/main/THIRD_PARTY_NOTICES.md).
 
 ## Installation
 
@@ -33,7 +33,7 @@ The path must point to this 0.2.0 checkout. The published dependency `pi-rpc = "
 
 The **0.2.x** series preserves documented public paths, field types, feature names and the **Rust 1.88** minimum. Pi version admission accepts canonical three-component releases in the inclusive **1.1.0–1.2.0** range; prereleases and build metadata are rejected. In-range version admission does not establish source review or runtime acceptance of a newly published patch release.
 
-This crate remains a technical preview. Patch releases preserve the Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. See the [changelog](CHANGELOG.md), [compatibility evidence](docs/compatibility.md#version-range-and-review-evidence) and [release policy](docs/publishing.md#version-and-release-policy).
+This crate remains a technical preview. Patch releases preserve the Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. See the [changelog](https://github.com/Coder-Sang/pi-rpc/blob/main/CHANGELOG.md), [compatibility evidence](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md#version-range-and-review-evidence) and [release policy](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md#version-and-release-policy).
 
 ### Cargo features
 
@@ -146,7 +146,7 @@ async fn consume(mut events: PiEvents) -> pi_rpc::Result<()> {
 }
 ```
 
-See the [event consumption guide](docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
+See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
 
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 
@@ -244,10 +244,10 @@ git diff --check
 
 These checks use only in-memory transports and the compiled test fake. They exercise all four feature configurations, strict lint/docs, floating-point precision, stack safety, capacity/UI/close regressions and Debug/Release boundaries. They do not run real Pi or paid-model requests.
 
-For package creation, archive/source/license checks, publish dry-run and fresh independent consumers on both toolchains, follow the [release checklist](docs/publishing.md#final-verification-before-upload). It covers custom Cargo target directories and explicit archive selection. Actual local, hosted and real-Pi results are recorded in [verification](docs/verification.md). Document/package checks cover local links and known unwanted content; they are not an exhaustive credential audit.
+For package creation, archive/source/license checks, publish dry-run and fresh independent consumers on both toolchains, follow the [release checklist](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md#final-verification-before-upload). It covers custom Cargo target directories and explicit archive selection. Actual local, hosted and real-Pi results are recorded in [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md). Document/package checks cover local links and known unwanted content; they are not an exhaustive credential audit.
 
 The fake-only image tests cover four near-limit images, a 15 MiB original represented as 20 MiB Base64, exact record/envelope limits, image event replay and complete history overflow. For an informational seven-sample Release comparison of single-pass versus reserved two-pass encoding, run `cargo test --locked --release --all-features --lib image_encoding_measurement -- --ignored --nocapture`. It prints elapsed medians and reserved output bytes, not process RSS, and has no timing threshold.
 
 ## Real Pi acceptance
 
-Normal verification uses only the test fake. Separate opt-in checks cover read-only Pi RPCs, synthetic extension behavior and paid model acceptance; see the [real Pi acceptance guide](docs/acceptance.md). Those examples can persist settings or modify scratch files, and require the disposable environments described there.
+Normal verification uses only the test fake. Separate opt-in checks cover read-only Pi RPCs, synthetic extension behavior and paid model acceptance; see the [real Pi acceptance guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/acceptance.md). Those examples can persist settings or modify scratch files, and require the disposable environments described there.

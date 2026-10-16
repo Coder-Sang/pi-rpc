@@ -43,6 +43,11 @@ jobs:
           fi
           rustc --version
           cargo --version
+      # actions/setup-python v5.6.0, official tag resolved to this immutable commit.
+      - name: Python 3.12 for release checks
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
       - name: Stable strict feature matrix and examples
         if: matrix.toolchain == 'stable'
         run: bash scripts/verify.sh
@@ -53,11 +58,6 @@ jobs:
         run: bash scripts/verify-stress.sh
       - name: Native Debug and Release boundary regressions
         run: bash scripts/verify-regressions.sh
-      # actions/setup-python v5.6.0, official tag resolved to this immutable commit.
-      - name: Python 3.12 for release checks
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
       - name: Documentation checks and checker unit tests
         if: matrix.toolchain == 'stable'
         run: |
