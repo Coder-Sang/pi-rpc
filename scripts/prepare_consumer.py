@@ -72,7 +72,7 @@ def prepare_consumer(source_root, destination, archive=None):
 name = "pi-rpc-independent-consumer"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 publish = false
 
 [features]

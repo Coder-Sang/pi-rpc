@@ -25,7 +25,7 @@ REQUIRED_FILES = {
 }
 PACKAGE_METADATA = {
     "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
-    "edition": "2024", "rust-version": "1.85", "readme": "README.md",
+    "edition": "2024", "rust-version": "1.88", "readme": "README.md",
     "repository": "https://github.com/Coder-Sang/pi-rpc",
     "keywords": ["pi", "rpc", "jsonl", "tokio", "async"],
 }

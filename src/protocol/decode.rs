@@ -63,10 +63,10 @@ pub fn decode_record(v: Value) -> Result<Record> {
                 "get_entries" | "get_tree" => Some("leafId"),
                 _ => None,
             };
-            if let Some(key) = required {
-                if v.get("data").and_then(|d| d.get(key)).is_none() {
-                    return Err(invalid());
-                }
+            if let Some(key) = required
+                && v.get("data").and_then(|d| d.get(key)).is_none()
+            {
+                return Err(invalid());
             }
         }
         let r: Response = json::decode(&v).map_err(|_| invalid())?;

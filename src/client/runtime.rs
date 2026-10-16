@@ -99,11 +99,12 @@ pub(super) async fn read_loop(
             },
             Record::Event(e) => e,
         };
-        if let Event::Ui(u) = &event {
-            if u.method.is_dialog() && client.shared.config.ui_policy == UiPolicy::Cancel {
-                // Enqueue without awaiting the writer, so the reader remains continuous.
-                client.cancel_ui_if_open(u)?;
-            }
+        if let Event::Ui(u) = &event
+            && u.method.is_dialog()
+            && client.shared.config.ui_policy == UiPolicy::Cancel
+        {
+            // Enqueue without awaiting the writer, so the reader remains continuous.
+            client.cancel_ui_if_open(u)?;
         }
         let permit = budget
             .clone()

@@ -142,10 +142,10 @@ async fn ui_events(
             methods.insert(name) || name == "notify",
             "duplicate UI method",
         )?;
-        if policy == UiPolicy::Manual {
-            if let Some(answer) = answer {
-                client.respond_ui(&request, answer).await?;
-            }
+        if policy == UiPolicy::Manual
+            && let Some(answer) = answer
+        {
+            client.respond_ui(&request, answer).await?;
         }
     }
     check(methods.len() == 9, "missing UI method")?;

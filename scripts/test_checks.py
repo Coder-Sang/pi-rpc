@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from validation_checks import CheckError, REQUIRED_FILES, check_documents, check_package, read_archive, unwanted_package_file
+from validation_checks import CheckError, PACKAGE_METADATA, REQUIRED_FILES, check_documents, check_package, read_archive, unwanted_package_file
 from prepare_consumer import prepare_consumer
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -56,14 +56,21 @@ class DocumentChecks(unittest.TestCase):
 
 
 class PackageChecks(unittest.TestCase):
+    def test_repository_metadata_matches_the_0_2_release_policy(self):
+        package = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]
+        self.assertEqual(package["version"], "0.2.0")
+        self.assertEqual(package["rust-version"], "1.88")
+        for name, value in PACKAGE_METADATA.items():
+            self.assertEqual(package[name], value, name)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR"))
         self.addCleanup(self.temp.cleanup)
         self.archive = Path(self.temp.name) / "fixture.crate"
         self.files = {name: b"" for name in REQUIRED_FILES}
-        manifest = (b'[package]\nname="pi-rpc"\nversion="0.1.0"\nlicense="Apache-2.0"\npublish=["crates-io"]\n'
+        manifest = (b'[package]\nname="pi-rpc"\nversion="0.2.0"\nlicense="Apache-2.0"\npublish=["crates-io"]\n'
                     b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0"\n'
-                    b'edition="2024"\nrust-version="1.85"\nreadme="README.md"\n'
+                    b'edition="2024"\nrust-version="1.88"\nreadme="README.md"\n'
                     b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
                     b'[package.metadata.docs.rs]\nall-features=true\n')
@@ -79,7 +86,7 @@ class PackageChecks(unittest.TestCase):
     def write_archive(self, extras=()):
         with tarfile.open(self.archive, "w:gz") as archive:
             for name, data in self.files.items():
-                info = tarfile.TarInfo("pi-rpc-0.1.0/" + name)
+                info = tarfile.TarInfo("pi-rpc-0.2.0/" + name)
                 info.size = len(data)
                 archive.addfile(info, io.BytesIO(data))
             for info, data in extras:
@@ -141,7 +148,8 @@ class PackageChecks(unittest.TestCase):
     def test_required_metadata_missing_wrong_or_wrong_type(self):
         mutations = [
             (b'edition="2024"\n', [b'', b'edition="2021"\n', b'edition=2024\n']),
-            (b'rust-version="1.85"\n', [b'', b'rust-version="1.88"\n', b'rust-version=1.85\n']),
+            (b'rust-version="1.88"\n', [b'', b'rust-version="1.85"\n', b'rust-version="1.87"\n',
+                                        b'rust-version="1.89"\n', b'rust-version=1.88\n']),
             (b'readme="README.md"\n', [b'', b'readme="missing.md"\n', b'readme=false\n']),
             (b'repository="https://github.com/Coder-Sang/pi-rpc"\n',
              [b'', b'repository="https://example.invalid"\n', b'repository=false\n']),
@@ -166,7 +174,7 @@ class PackageChecks(unittest.TestCase):
             self.files[name] = saved
 
     def test_manifest_versions_must_agree(self):
-        self.files["Cargo.toml.orig"] = self.files["Cargo.toml.orig"].replace(b'version="0.1.0"', b'version="0.2.0"')
+        self.files["Cargo.toml.orig"] = self.files["Cargo.toml.orig"].replace(b'version="0.2.0"', b'version="0.3.0"')
         self.write_archive()
         with self.assertRaisesRegex(CheckError, "versions differ"):
             check_package(self.archive)
@@ -215,7 +223,7 @@ class PackageChecks(unittest.TestCase):
                 self.assertIn("--locked", args)
                 self.assertIn("--offline", args)
                 self.assertEqual(Path(args[-1]).resolve(), (root / "Cargo.toml").resolve())
-                metadata = {"packages": [{"name": "pi-rpc", "version": "0.1.0", "manifest_path": str(root / "Cargo.toml")}],
+                metadata = {"packages": [{"name": "pi-rpc", "version": "0.2.0", "manifest_path": str(root / "Cargo.toml")}],
                             "target_directory": str(target)}
                 return subprocess.CompletedProcess(args, 0, json.dumps(metadata), "")
             self.assertEqual(args, ["git", "-C", str(root.resolve()), "rev-parse", "HEAD"])
@@ -228,13 +236,13 @@ class PackageChecks(unittest.TestCase):
 
     def test_consumer_uses_cargo_target_directory_with_stale_default_package(self):
         root = self.consumer_source_root()
-        stale = root / "target/package/pi-rpc-0.1.0"
+        stale = root / "target/package/pi-rpc-0.2.0"
         stale.mkdir(parents=True)
         (stale / "Cargo.toml").write_text('[package]\nname="pi-rpc"\nversion="0.0.9"\n', encoding="utf-8")
         for index, target in enumerate([Path(self.temp.name) / "env target", Path(self.temp.name) / "config target 中文"]):
             with self.subTest(target=target):
                 target.joinpath("package").mkdir(parents=True)
-                self.archive = target / "package/pi-rpc-0.1.0.crate"
+                self.archive = target / "package/pi-rpc-0.2.0.crate"
                 self.write_archive()
                 destination = Path(self.temp.name) / f"consumer {index} 🚀"
                 destination.mkdir()
@@ -242,21 +250,22 @@ class PackageChecks(unittest.TestCase):
                 self.assertEqual(output, target.resolve() / "independent-consumer")
                 generated = tomllib.loads((destination / "consumer/Cargo.toml").read_text(encoding="utf-8"))
                 dependency = generated["dependencies"]["pi-rpc"]
-                self.assertEqual(dependency["version"], "=0.1.0")
-                self.assertEqual(Path(dependency["path"]), (destination / "package/pi-rpc-0.1.0").resolve())
+                self.assertEqual(dependency["version"], "=0.2.0")
+                self.assertEqual(generated["package"]["rust-version"], "1.88")
+                self.assertEqual(Path(dependency["path"]), (destination / "package/pi-rpc-0.2.0").resolve())
                 self.assertFalse((destination / "consumer/Cargo.lock").exists())
 
     def test_consumer_explicit_archive_ignores_old_extracted_directory(self):
         root = self.consumer_source_root()
         target = Path(self.temp.name) / "configured-target"
-        stale = target / "package/pi-rpc-0.1.0/src/lib.rs"
+        stale = target / "package/pi-rpc-0.2.0/src/lib.rs"
         stale.parent.mkdir(parents=True)
         stale.write_bytes(b"stale source")
         self.write_archive()
         destination = Path(self.temp.name) / "consumer"
         destination.mkdir()
         self.prepare_fixture_consumer(root, target, destination, self.archive)
-        self.assertEqual((destination / "package/pi-rpc-0.1.0/src/lib.rs").read_bytes(), self.files["src/lib.rs"])
+        self.assertEqual((destination / "package/pi-rpc-0.2.0/src/lib.rs").read_bytes(), self.files["src/lib.rs"])
         self.assertEqual(stale.read_bytes(), b"stale source")
 
     def test_consumer_rejects_stale_commit_dirty_package_and_wrong_version(self):
@@ -265,7 +274,7 @@ class PackageChecks(unittest.TestCase):
         destination.mkdir()
         mutations = [(".cargo_vcs_info.json", json.dumps({"git": {"sha1": "old"}}).encode()),
                      (".cargo_vcs_info.json", json.dumps({"git": {"sha1": "expected", "dirty": True}}).encode()),
-                     ("Cargo.toml", self.files["Cargo.toml"].replace(b'version="0.1.0"', b'version="0.0.9"'))]
+                     ("Cargo.toml", self.files["Cargo.toml"].replace(b'version="0.2.0"', b'version="0.0.9"'))]
         for name, data in mutations:
             saved = self.files[name]
             with self.subTest(name=name, data=data):
@@ -313,8 +322,8 @@ class PackageChecks(unittest.TestCase):
         for name in ["Cargo.toml", "Cargo.toml.orig"]:
             saved = self.files[name]
             for replacement in [b'package=false\n', b'[other]\n',
-                                saved.replace(b'version="0.1.0"\n', b''),
-                                saved.replace(b'version="0.1.0"', b'version=1')]:
+                                saved.replace(b'version="0.2.0"\n', b''),
+                                saved.replace(b'version="0.2.0"', b'version=1')]:
                 with self.subTest(name=name, replacement=replacement):
                     self.files[name] = replacement
                     self.write_archive()
@@ -370,9 +379,9 @@ class PackageChecks(unittest.TestCase):
             check_package(self.archive, source_root=root)
 
     def test_symlink_traversal_duplicate_and_sensitive_file(self):
-        for name, kind in [("pi-rpc-0.1.0/link", tarfile.SYMTYPE),
-                           ("pi-rpc-0.1.0/../escape", tarfile.REGTYPE),
-                           ("pi-rpc-0.1.0/README.md", tarfile.REGTYPE)]:
+        for name, kind in [("pi-rpc-0.2.0/link", tarfile.SYMTYPE),
+                           ("pi-rpc-0.2.0/../escape", tarfile.REGTYPE),
+                           ("pi-rpc-0.2.0/README.md", tarfile.REGTYPE)]:
             with self.subTest(name=name):
                 entry = tarfile.TarInfo(name)
                 entry.type = kind

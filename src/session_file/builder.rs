@@ -52,10 +52,10 @@ impl SessionFileBuilder {
                 "invalid or duplicate session entry ID".into(),
             ));
         }
-        if let Some(parent) = &parent_id {
-            if !self.ids.contains(parent) {
-                return Err(Error::Protocol("session parent must precede child".into()));
-            }
+        if let Some(parent) = &parent_id
+            && !self.ids.contains(parent)
+        {
+            return Err(Error::Protocol("session parent must precede child".into()));
         }
         validate_message(&message)?;
         self.ids.insert(id.clone());

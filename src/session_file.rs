@@ -187,10 +187,10 @@ impl SessionFile {
                     "invalid or duplicate session entry ID".into(),
                 ));
             }
-            if let Some(p) = &e.parent_id {
-                if p == &e.id || !seen.contains(p.as_str()) {
-                    return Err(Error::Protocol("session parent must precede child".into()));
-                }
+            if let Some(p) = &e.parent_id
+                && (p == &e.id || !seen.contains(p.as_str()))
+            {
+                return Err(Error::Protocol("session parent must precede child".into()));
             }
             fields::entry(&e.data)?;
             // Validate even manually constructed Message fields before exporting.
