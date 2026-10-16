@@ -1,26 +1,39 @@
 # pi-rpc
 
-Rust import: `pi_rpc`. A Tokio async JSONL client supporting **Pi >=1.1.0, <=1.2.0**, with latest reviewed release **1.2.0**, official commit [`06a466935536f8c9bcacb2d5efc0fc021be1bdff`](https://github.com/earendil-works/pi/tree/06a466935536f8c9bcacb2d5efc0fc021be1bdff). Version **0.2.0** is in development and has not been published. Licensed under **[Apache-2.0](./LICENSE)** for this project's original code and documentation, with [third-party notices](THIRD_PARTY_NOTICES.md) for upstream material. See [source coverage and compatibility](docs/compatibility.md), [verification](docs/verification.md) and the [public release checklist](docs/publishing.md).
+A bounded Tokio async JSONL client for **Pi 1.1.0 through 1.2.0**. Rust imports use `pi_rpc`. The SDK provides typed RPC commands and session events, local subprocess ownership, injected transports and optional native session files.
 
-Declared minimum Rust: **1.88** (edition 2024). The CI matrix is configured for native Linux, macOS and Windows on stable and exact **1.88.0**, including all four feature configurations, three stress rounds and Debug/Release boundary regressions. See the latest [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) and the [hosted CI record](docs/verification.md#hosted-ci) for completed jobs. Historical 0.1.0 results apply to its Rust 1.85/Pi 1.1.0 contract. Remote-vendor deployment remains unverified. Pi is a separately supplied executable, not installed by this crate.
+| Crate series | Pi support | Minimum Rust | Availability |
+|---|---|---|---|
+| **0.2.x** | **>=1.1.0, <=1.2.0** | **1.88** (edition 2024) | Available from Git/source; 0.2.0 is not yet published |
+| **0.1.0** | **1.1.0** | **1.85** | [crates.io](https://crates.io/crates/pi-rpc/0.1.0) |
+
+[All six CI jobs passed](https://github.com/Coder-Sang/pi-rpc/actions/runs/38849645478) for commit `a556aa7`: Linux, macOS and Windows on stable and exact Rust **1.88.0**, including feature matrices, stress/boundary regressions and packaged consumers. Real Pi acceptance is recorded separately in [verification](docs/verification.md); Pi is a separately installed executable.
+
+The latest reviewed Pi source baseline is **1.2.0**. See [compatibility](docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](LICENSE), with retained [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Installation
 
-For the development version in this checkout supporting Pi 1.1.0 through 1.2.0, add a local dependency to your application's `Cargo.toml`:
+Until 0.2.0 is published, use the verified Git revision:
 
 ```toml
 [dependencies]
-pi-rpc = { path = "../pi-rpc" }
+pi-rpc = { git = "https://github.com/Coder-Sang/pi-rpc.git", rev = "a556aa777cfb1e4e1ec4d014fa6dc13d37286c01" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-Rust imports use `pi_rpc`. Commit your application's `Cargo.lock` to retain resolved versions, and update it deliberately when adopting newer changes. The same feature options below apply to registry, Git and local dependencies.
+For a local checkout, replace the `pi-rpc` dependency with:
 
-The local path must point to this 0.2.0 checkout. A Git dependency may select a reviewed upgrade commit with `rev`; the current published registry dependency `pi-rpc = "0.1.0"` targets Pi 1.1.0. Switch to the 0.2.0 registry dependency only after that version is released.
+```toml
+pi-rpc = { path = "../pi-rpc" }
+```
+
+The path must point to this 0.2.0 checkout. The published dependency `pi-rpc = "0.1.0"` retains the older Pi 1.1.0/Rust 1.85 contract. Use a 0.2.0 registry dependency only after that version is released. Commit your application's `Cargo.lock` and update dependencies deliberately. The feature options below apply to Git, path and registry dependencies.
 
 ### Version and stability policy
 
-The **0.2.x** series keeps the documented public paths, feature names and Rust **1.88** minimum. The published **0.1.x** series remains pinned to Pi **1.1.0** and Rust **1.85**; use `pi-rpc = "0.1.0"` for that older target. Patch releases preserve the public Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. Pi compatibility covers the inclusive **1.1.0 through 1.2.0** range of canonical three-component releases. Prerelease versions and build metadata are rejected. Later expansion of the range requires a separately reviewed protocol upgrade. Technical-preview status means deployment experience is still limited to the evidence in the verification document. See the [changelog](CHANGELOG.md) and [release policy](docs/publishing.md#version-and-release-policy).
+The **0.2.x** series preserves documented public paths, field types, feature names and the **Rust 1.88** minimum. Pi version admission accepts canonical three-component releases in the inclusive **1.1.0–1.2.0** range; prereleases and build metadata are rejected. In-range version admission does not establish source review or runtime acceptance of a newly published patch release.
+
+This crate remains a technical preview. Patch releases preserve the Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. See the [changelog](CHANGELOG.md), [compatibility evidence](docs/compatibility.md#version-range-and-review-evidence) and [release policy](docs/publishing.md#version-and-release-policy).
 
 ### Cargo features
 
@@ -47,11 +60,12 @@ Local child exit is monitored independently of stdout EOF. After observing exit 
 ## Injected transport
 
 ```rust,no_run
-use pi_rpc::{Config, PiConnection, Transport, PI_VERSION};
-# async fn example<R, W>(reader: R, writer: W) -> pi_rpc::Result<()>
+use pi_rpc::{Config, PiConnection, Transport};
+# async fn example<R, W>(reader: R, writer: W, declared_version: &str) -> pi_rpc::Result<()>
 # where R: tokio::io::AsyncRead + Unpin + Send + 'static,
 # W: tokio::io::AsyncWrite + Unpin + Send + 'static {
-let transport = Transport::new(reader, writer, PI_VERSION)?;
+// The host supplies the actual concrete Pi version, such as "1.1.0" or "1.2.0".
+let transport = Transport::new(reader, writer, declared_version)?;
 let (client, mut events, mut owner) = PiConnection::connect(transport, Config::default())?;
 // The event channel is already installed, and reading has started.
 let consumer = tokio::spawn(async move {
@@ -140,8 +154,6 @@ Cancellation of an awaiting future **does not withdraw or retry its command**. T
 
 JSON objects and arrays have an explicit maximum nesting depth of **512 containers** (`codec::MAX_JSON_DEPTH`); the root container counts as one. Strings, including escaped quotes and brackets, do not add nesting. This supports ordinary session trees of at least 200 entries along a branch, within the record byte limit; deeply nested entry metadata also counts toward the limit. Wire depth is checked iteratively before parsing, and Serde conversions use `serde_stacker` rather than the default 128-container parser limit. Over-depth inbound records fail the connection with a `Protocol` error. Native session parsing and direct `Value` decoding use the same limit. Encoding checks depth incrementally as bytes are written, stopping at the first excess container; native construction counts the complete entry/message envelope. Cloning, serialization and cleanup at the boundary are exercised on a 2 MiB thread stack in an isolated test process. This is a bounded-depth contract, not arbitrary-depth JSON support.
 
-The Rust 1.88 baseline permits the current `psm` stack-switching dependency. The former direct `psm = "=0.1.27"` compatibility constraint is removed; the lockfile resolves `psm 0.1.32` and `ar_archive_writer 0.5.3`. Stack-protected conversion, iterative cleanup, the 512-container guard and 2 MiB stack regressions remain required.
-
 Default RPC limits are **32 MiB per JSON record**, **64 MiB of writer bytes**, **128 MiB of queued event wire bytes**, 128 pending commands, 128 queued writer records and 1,024 events. Explicit caller limits remain authoritative. Pi 1.2.0 normally resizes each prompt image to at most 2000×2000 and below 4.5 MiB of Base64, with model overrides and an option to disable resizing. That processing happens after RPC input is received; these transport limits cover the original input too. Four images near Pi's default processed limit occupy about 18 MiB before text and JSON overhead. The SDK does not resize images or enforce an image count. Hosts must bound original image sizes and request concurrency.
 
 Image-bearing message_start/message_end events retain their complete payload and are charged separately. Complete get_messages/get_entries/get_tree responses must fit the same record limit; accumulated history can exceed it and then terminates the connection with Protocol. Hosts should maintain history from events rather than repeatedly fetch unbounded image history. Native sessions default to 32 MiB per record and 64 MiB per file. These are wire budgets, not RSS limits: caller-owned images, decoded objects and command responses awaiting collection use additional memory.
@@ -155,13 +167,14 @@ Event byte accounting uses the original serialized UTF-8 record size, excluding 
 Default `UiPolicy::Cancel` enqueues `cancelled: true` for **every dialog**, including confirm. It never approves unattended actions. `Manual` leaves select/confirm/input/editor decisions to the consumer:
 
 ```rust,no_run
-use pi_rpc::{Config, Error, PiConnection, Transport, UiPolicy, PI_VERSION};
+use pi_rpc::{Config, Error, PiConnection, Transport, UiPolicy};
 use pi_rpc::protocol::{Event, UiAnswer};
-# async fn example<R, W>(reader: R, writer: W) -> pi_rpc::Result<()>
+# async fn example<R, W>(reader: R, writer: W, declared_version: &str) -> pi_rpc::Result<()>
 # where R: tokio::io::AsyncRead + Unpin + Send + 'static,
 # W: tokio::io::AsyncWrite + Unpin + Send + 'static {
 let config = Config { ui_policy: UiPolicy::Manual, ..Config::default() };
-let transport = Transport::new(reader, writer, PI_VERSION)?;
+// The host supplies the actual concrete Pi version, such as "1.1.0" or "1.2.0".
+let transport = Transport::new(reader, writer, declared_version)?;
 let (client, mut events, mut owner) = PiConnection::connect(transport, config)?;
 let responder = client.clone();
 let consumer = tokio::spawn(async move {
@@ -213,24 +226,25 @@ Required-but-nullable fields distinguish absence from explicit null: cycle respo
 
 ## Development
 
-See [verification](docs/verification.md#current-status-summary) for actual commands/results. Tests use Tokio duplex pipes and a fake executable. They make no paid Pi requests. Registry publishing is allowed only to crates.io; local verification requires no registry upload or remote repository.
+Development requires stable Rust with rustfmt/Clippy, separately installed exact **Rust 1.88.0**, **Bash**, **Git**, **Python 3.11+**, and a native C/assembly compiler. On Windows use Git Bash, MSVC and the Windows SDK. Installing a Rust target alone does not provide the native compiler required by stack-switching dependencies.
 
-Development requires stable Rust with rustfmt/Clippy, separately installed exact Rust **1.88.0**, **Bash**, **Git**, **Python 3.11+**, and a native C/assembly toolchain. On Windows use Git Bash plus MSVC with the Windows SDK. Python checker unit tests invoke Git; standalone document/archive checks use only the Python standard library. Commands below run from a clean Git checkout at the repository root; Windows users can use `python` if `python3` is unavailable.
+Run from the repository root. Offline mode requires dependencies and toolchains to be downloaded first; use `python` on Windows if `python3` is unavailable.
 
 ```bash
-CARGO_NET_OFFLINE=true bash scripts/verify.sh       # Four features, strict lint/docs, examples
-CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh  # Requires installed exact Rust 1.88.0
-CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh # Three rounds, no failure retries
-CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh # Fake-only Debug and Release boundaries
+CARGO_NET_OFFLINE=true bash scripts/verify.sh
+CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh
+CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
+RUSTUP_TOOLCHAIN=1.88.0 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
+CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
 RUSTUP_TOOLCHAIN=1.88.0 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
-python3 scripts/test_checks.py                     # Python 3.11+ and Git required
-python3 scripts/check-docs.py .                    # Explicit root, no Git dependency
-cargo package --locked --offline
-python3 scripts/check-package.py target/package/pi-rpc-0.2.0.crate --source-root . --expected-commit "$(git rev-parse HEAD)"
-python3 scripts/check-docs.py target/package/pi-rpc-0.2.0
+python3 scripts/test_checks.py
+python3 scripts/check-docs.py .
+git diff --check
 ```
 
-Offline mode requires previously downloaded dependencies and toolchains. The stack-protection dependencies also require a native C/assembly toolchain (Clang/GCC, or MSVC with the Windows SDK); Rust target installation alone is insufficient for cross-compiling their native code. `verify.sh` accepts Windows Git Bash and accounts for `.exe`/native paths. All six CI combinations (Linux/macOS/Windows, stable/exact 1.88.0) run the feature matrix, three stress rounds including floating-point regressions, focused Debug/Release UI, float, stack and close regressions, and a fresh independent consumer of the packaged crate. After `cargo package --locked`, run `bash scripts/verify-consumer.sh` with stable and `RUSTUP_TOOLCHAIN=1.88.0`; it resolves the effective Cargo target directory, verifies the current clean archive and extracts it into a fresh temporary directory before checking all four features without copying the SDK lockfile. Use `--archive /absolute/path/to/pi-rpc-0.2.0.crate` for an explicit package, including a per-command `--target-dir`. The separate opt-in macOS/Linux real-release smoke remains disabled by default; these normal checks use only the test fake. Configuring CI is not evidence that hosted jobs passed. Package/document checks cover this repository's local Markdown link conventions and known unwanted file names, not general Markdown or an exhaustive credential audit.
+These checks use only in-memory transports and the compiled test fake. They exercise all four feature configurations, strict lint/docs, floating-point precision, stack safety, capacity/UI/close regressions and Debug/Release boundaries. They do not run real Pi or paid-model requests.
+
+For package creation, archive/source/license checks, publish dry-run and fresh independent consumers on both toolchains, follow the [release checklist](docs/publishing.md#final-verification-before-upload). It covers custom Cargo target directories and explicit archive selection. Actual local, hosted and real-Pi results are recorded in [verification](docs/verification.md). Document/package checks cover local links and known unwanted content; they are not an exhaustive credential audit.
 
 The fake-only image tests cover four near-limit images, a 15 MiB original represented as 20 MiB Base64, exact record/envelope limits, image event replay and complete history overflow. For an informational seven-sample Release comparison of single-pass versus reserved two-pass encoding, run `cargo test --locked --release --all-features --lib image_encoding_measurement -- --ignored --nocapture`. It prints elapsed medians and reserved output bytes, not process RSS, and has no timing threshold.
 
