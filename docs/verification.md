@@ -2,13 +2,13 @@
 
 ## Current status summary
 
-Development **pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0** and requires **Rust 1.88**. Pi **1.2.0**, commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
+**pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0** and requires **Rust 1.88**. Pi **1.2.0**, commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
 
-Version 0.2.0 has not been uploaded to crates.io. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+Registry upload and hosted docs.rs confirmation are recorded after publication. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
 
 ## Local verification (2026-10-16)
 
-The following checks passed at completed baseline **`c7d4f718e888f6237e9ff956c80f51f4d38d3f25`** on **macOS aarch64**, using stable **Rust 1.97.1** and exact **Rust 1.88.0**:
+The following checks passed at completed baseline **`773ada9388d3183080f8da0036a8ce7245d97eb8`** on **macOS aarch64**, using stable **Rust 1.97.1** and exact **Rust 1.88.0**:
 
 | Check | Stable | Rust 1.88.0 |
 |---|---|---|
@@ -20,7 +20,7 @@ The following checks passed at completed baseline **`c7d4f718e888f6237e9ff956c80
 
 The boundary suites cover stack-protected parsing, conversion, cloning, serialization, release and failure paths; floating-point bit preservation; image/capacity limits; UI replies and shutdown races. Version tests cover both endpoints, synthetic intermediate versions, malformed declarations and exact locks. Probe markers verify rejection before probing or RPC startup as appropriate. The compacted-session restoration regression runs without Pi or a model.
 
-All **33** Python checker regressions, local Markdown links/anchors and whitespace checks passed. Package creation, source/VCS/license/metadata inspection and publication **dry-run** passed from a clean source snapshot. Each independent consumer used fresh dependency resolution, exercised all four features and ran in-memory/native-session examples without Pi. Source bytes were compared against the checked snapshot; no dirty-package bypass was used.
+All **50** Python checker regressions, local Markdown links/anchors and whitespace checks passed. Package creation, source/VCS/license/metadata inspection and publication **dry-run** passed from a clean source snapshot. Each independent consumer used fresh dependency resolution, exercised all four features and ran in-memory/native-session examples without Pi. Source bytes were compared against the checked snapshot; no dirty-package bypass was used.
 
 ## Real Pi acceptance
 
@@ -43,7 +43,7 @@ These local observations do not establish exhaustive model/event-variant coverag
 
 The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/1.88.0**, six jobs. Each executes its feature matrix, three stress rounds, native Debug/Release regressions, archive inspection and a fresh packaged consumer. The manual real-Pi job remains opt-in and disabled on normal pushes.
 
-The [completed baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/38857092619) passed all six jobs for **`c7d4f718e888f6237e9ff956c80f51f4d38d3f25`**, including Windows stable and exact Rust 1.88.0. This is the same historical baseline identified in the README. Subsequent candidate conclusions and evidence are published by the workflow; the baseline is not a claim that later commits have already passed.
+The [completed baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/38870217910) passed all six jobs for **`773ada9388d3183080f8da0036a8ce7245d97eb8`**, including Windows stable and exact Rust 1.88.0. This is the same historical baseline identified in the README. Subsequent candidate conclusions and evidence are published by the workflow; the baseline is not a claim that later commits have already passed.
 
 ## Candidate evidence
 

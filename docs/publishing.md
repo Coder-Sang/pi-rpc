@@ -2,7 +2,7 @@
 
 ## Current decision
 
-Development **pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0**, with latest reviewed source commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, and requires **Rust 1.88**. Version 0.2.0 is unreleased; registry upload and a release tag remain separate release steps. Cargo continues to permit publishing only to `crates-io`.
+**pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0**, with latest reviewed source commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, and requires **Rust 1.88**. The 0.2.0 release was authorized on 2026-10-16; registry upload, hosted verification and the release tag are recorded after completion. Cargo continues to permit publishing only to `crates-io`.
 
 The published [0.1.0](https://crates.io/crates/pi-rpc/0.1.0) remains pinned to Pi 1.1.0/Rust 1.85, with the immutable [v0.1.0 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.1.0) at **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Its registry, docs.rs and hosted results are recorded in [verification](verification.md#010-release-2026-10-14); they do not establish 0.2.0 acceptance.
 
@@ -27,9 +27,9 @@ The [provenance review](provenance.md) describes package contents and license de
 
 ## Before a separately authorized upload
 
-- [ ] Obtain authorization for the actual **0.2.0** upload and release tag.
-- [ ] Finalize the README's registry installation example and remove development/unuploaded wording before packaging. Keep version claims neutral until upload confirmation.
-- [ ] Finalize the **0.2.0** changelog heading and intended release date before packaging. Recheck if the date or any source text changes.
+- [x] Obtain authorization for the actual **0.2.0** upload and release tag (2026-10-16).
+- [x] Finalize the README's registry installation example and remove development/unuploaded wording before packaging. Keep version claims neutral until upload confirmation.
+- [x] Finalize the **0.2.0** changelog heading and intended release date before packaging. Recheck if the date or any source text changes.
 - [ ] Commit all package-facing files and run the complete checks below against that clean release commit, then confirm all six hosted jobs. Preserve the candidate JSON and its six-job run link outside the archive, following the [evidence procedure](verification.md#candidate-evidence).
 
 ## Final verification before upload
@@ -61,7 +61,7 @@ The consumer checks clean VCS identity, version, metadata, notices, links and ev
 
 The recorder writes `verification/release-evidence.json` under Cargo's effective target directory. CI uploads a separate `release-evidence-<os>-<toolchain>` artifact after each job's required checks. Confirm all six conclusions for the same commit; the JSON itself reports only archive/source inspection. Preserve the chosen upload platform's record before artifact expiration. The record includes no absolute paths or private runtime payloads. Different Cargo versions/platforms need not produce identical archive digests.
 
-README guide links currently target repository `main` so they work before a release exists. Before packaging a formal release, decide whether to pin them to its planned version tag, then verify the corresponding source files/anchors. Both Markdown and generated-HTML checks map `main`, canonical three-part release tags (with optional `v`), and full 40-character lowercase commit IDs to the inspected source snapshot. Other repository `blob` references are rejected; use full commit IDs instead of abbreviated hashes. These offline checks validate files and anchors, not the existence or identity of a remote ref. Confirm the tag links after pushing the exact uploaded commit's tag.
+The 0.2.0 README guide links target the planned immutable `v0.2.0` tag. Verify the corresponding source files/anchors before packaging; the remote links become available when the exact uploaded commit is tagged. Both Markdown and generated-HTML checks map `main`, canonical three-part release tags (with optional `v`), and full 40-character lowercase commit IDs to the inspected source snapshot. Other repository `blob` references are rejected; use full commit IDs instead of abbreviated hashes. These offline checks validate files and anchors, not the existence or identity of a remote ref. Confirm the tag links after pushing the exact uploaded commit's tag.
 
 After every local check and all six hosted jobs pass for the authorized clean release commit, record its SHA/digest and upload with `cargo publish --locked --registry crates-io`. Do not use `--allow-dirty` or skip package verification. Compare the actual registry archive checksum and `.cargo_vcs_info.json` with the recorded evidence.
 

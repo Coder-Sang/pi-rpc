@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-10-16
 
 - Raise the minimum Rust version from **1.85** to **1.88** and support the inclusive **Pi 1.1.0 through 1.2.0** range, with latest reviewed source commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`.
 - Preserve the existing public Rust paths, fields and features. The reviewed RPC/native v3 session schemas are unchanged; protocol coverage remains 33 commands, 24 events, 12 assistant stream variants and nine UI methods.
@@ -12,7 +12,7 @@
 - Fix guide/license navigation in generated Rustdoc and add generated-HTML link checks for every feature configuration on stable and Rust 1.88.0.
 - Pi 1.2.0 may report a busy run during extension startup before prompt acceptance or `agent_start`. Extensions must discriminate user/custom `before_agent_start` hooks. See the [upgrade notes](docs/compatibility.md#upgrade-from-pi-110-to-120).
 
-This development version has not been uploaded. Upgrading requires Rust 1.88 and a separately installed Pi release in the supported range; the published 0.1.x line retains its Pi 1.1.0/Rust 1.85 contract. Normal verification remains fake-only. Separately authorized real-Pi endpoint/UI results and hosted Opus 4.6 results are recorded in the [verification supplement](docs/verification.md#real-pi-acceptance).
+Upgrading requires Rust 1.88 and a separately installed Pi release in the supported range; the published 0.1.x line retains its Pi 1.1.0/Rust 1.85 contract. Normal verification remains fake-only. Separately authorized real-Pi endpoint/UI results and hosted Opus 4.6 results are recorded in the [verification supplement](docs/verification.md#real-pi-acceptance).
 
 ## 0.1.0 — 2026-10-14
 
