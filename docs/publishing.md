@@ -2,52 +2,45 @@
 
 ## Current decision
 
-pi-rpc **0.1.0** was published to [crates.io](https://crates.io/crates/pi-rpc/0.1.0) on **2026-10-14** as a **technical preview**, pinned to exactly Pi **1.1.0**, with Rust **1.85** as the minimum. The owner selected [Apache-2.0](../LICENSE) on 2026-10-09 and authorized the release on 2026-10-14. Cargo permits publishing only to `crates-io`. Complete local verification and all six hosted CI jobs passed on the uploaded commit **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Registry consumption on exact Rust 1.85.0, [docs.rs](https://docs.rs/pi-rpc/0.1.0/pi_rpc/) and the pushed **v0.1.0** tag are confirmed in [verification](verification.md#current-status-summary). The tag points to that uploaded commit; this later release-record update does not change the uploaded archive.
+Development **pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0**, with latest reviewed source commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, and requires **Rust 1.88**. Version 0.2.0 is unreleased; registry upload and a release tag remain separate release steps. Cargo continues to permit publishing only to `crates-io`.
 
-The package declares its public [repository](https://github.com/Coder-Sang/pi-rpc), description, README, license, keywords and all-feature docs.rs configuration. A separate homepage/documentation URL is not declared; the repository and docs.rs use their standard locations. The [README](../README.md#installation) puts registry installation first and retains Git/local alternatives.
+The published [0.1.0](https://crates.io/crates/pi-rpc/0.1.0) remains pinned to Pi 1.1.0/Rust 1.85, with the immutable [v0.1.0 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.1.0) at **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Its registry, docs.rs and hosted results are recorded in [verification](verification.md#010-release-2026-10-14); they do not establish 0.2.0 acceptance.
 
-The package checker enforces `publish = ["crates-io"]` in both original and normalized manifests, along with the repository, keywords, edition, Rust 1.85 minimum, README, license and docs.rs configuration. Each manifest must declare a nonblank string `description`, and the two values must agree. Negative regressions reject missing/blank/mistyped/mismatched descriptions and a disabled, unrestricted, missing, mistyped or different-registry publishing setting. It also requires the changelog, retained notices and provenance record, compares those files with the source checkout, and rejects ignore-policy drift. `.env.example` remains allowed at the root and in subdirectories, except inside excluded directories. The checker is bounded, not a general secret scanner.
+The package declares the repository, nonblank description, README, Apache-2.0 license, keywords and all-feature docs.rs configuration. Original and Cargo-normalized manifests must agree. The checker enforces the current Rust 1.88 baseline, crates.io-only publishing, retained notices/changelog/provenance, source-document equality, archive safety and ignore-policy agreement. `.env.example` remains allowed outside excluded directories. These checks are bounded, not an exhaustive secret scan. See the [source review](provenance.md) and [compatibility notes](compatibility.md#upgrade-from-pi-110-to-120).
 
 ## Version and release policy
 
-- **0.1.x** patch releases preserve documented public Rust paths, field types, feature names and the **1.85** minimum. Bug fixes and internal refactoring must keep the documented contract.
-- Source-breaking changes, including variants added to exhaustively matched public enums, require a new minor series such as **0.2.0** and migration notes in the [changelog](../CHANGELOG.md). A protocol upgrade or higher MSRV must be reviewed explicitly and documented before release.
-- Pi compatibility remains **1.1.0**, verified against its fixed source commit; this is not a multi-version SDK. Remote transports still rely on the host's declared Pi version.
-- A dry-run does not reserve a crate name or version; registry acceptance is confirmed by the actual upload.
-- Finalize package-facing release text on the clean release commit **before** a separately authorized upload, following the checklist below. After the upload is confirmed, create/push **v0.1.0** pointing to that exact uploaded commit and verify registry installation and docs.rs. Updating Git afterwards cannot replace text already inside the uploaded 0.1.0 source archive.
+- **0.2.x** patch releases preserve documented public Rust paths, field types, feature names and the **1.88** minimum. Pi compatibility covers the inclusive **1.1.0 through 1.2.0** range. Local defaults accept the range; concrete expectations retain exact locks. Remote hosts declare their concrete Pi version. Prereleases and build metadata are rejected; range admission alone does not establish review of a future in-range patch release.
+- The published **0.1.x** line retains its **Pi 1.1.0 / Rust 1.85** contract. Raising the compiler baseline and expanding the Pi compatibility policy are explicit 0.2.0 migration requirements; the existing Rust public types/features are preserved.
+- Source-breaking changes, including variants added to exhaustively matched public enums, require a new minor series with migration notes. Protocol upgrades and higher MSRV require explicit review and documentation.
+- A dry-run does not reserve a name/version or prove registry acceptance or docs.rs success. Published version archives cannot be overwritten.
+- Finalize package-facing README/changelog/status text before packaging a release commit. After upload confirmation, tag the exact uploaded commit; later bookkeeping commits must not replace it as the tag target.
 
 ## Completed source and content review
 
-- [x] Project license, repository and discoverability metadata are present; publishing is restricted to crates.io.
-- [x] Review project source, protocol fixture shapes, TypeScript harnesses and documentation origins. The pinned Pi MIT notice is retained in [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md); scope and the license digest are recorded in [provenance](provenance.md).
-- [x] Review dependency license declarations and final source-package contents. Dependencies/Pi sources and binaries are not vendored. Tests and opt-in harnesses are intentionally shipped; ordinary builds do not execute them.
-- [x] Review current files and reachable Git history using bounded credential patterns. Zero matches were found; historical personal-path findings are recorded without rewriting history. Existing public commit identity is retained.
-- [x] Add the initial [CHANGELOG](../CHANGELOG.md), preview/API policy and post-upload tag plan.
-- [x] Maintain four-feature Linux/macOS/Windows CI on stable and exact Rust 1.85.0, fake-only stress rounds, focused Debug/Release regressions, package checks and fresh independent consumers.
+- [x] Compare fixed Pi 1.1.0/1.2.0 archives, RPC commands/events/UI, native sessions, model schemas and image/retry semantics. Preserve the identical pinned MIT notice in [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md).
+- [x] Retain Apache-2.0 and crate metadata; update metadata checks, negative regressions, fresh-consumer manifest and CI to Rust 1.88.
+- [x] Remove the direct `psm = "=0.1.27"` workaround and resolve `psm 0.1.32` with `ar_archive_writer 0.5.3`; keep stack/depth/float/capacity/close protections.
+- [x] Preserve the documented public Rust paths/features and cover version-range and exact-lock fake probes, with opt-in examples using the latest reviewed Pi 1.2.0 baseline.
+
+The [provenance review](provenance.md) describes package contents and license declarations. [Verification](verification.md) distinguishes local checks, real-Pi acceptance and hosted CI.
 
 ## Before a separately authorized upload
 
-The owner authorized the actual **0.1.0** release on **2026-10-14**. Final release text is committed before packaging; successful upload is recorded only after registry confirmation.
-
-- [x] Obtain separate authorization for the actual crates.io upload.
-- [x] Replace candidate/unpublished wording in the README, put the registry installation example first and retain Git as an alternative. Use neutral version/technical-preview wording rather than claiming that an unperformed upload succeeded.
-- [x] Finalize the **0.1.0** changelog heading and intended release date, **2026-10-14**, before packaging. If the intended date changes before upload, update the release commit and recheck it. Record actual upload confirmation separately afterwards.
-- [x] Update the current release status. Preserve dated verification/provenance records as historical evidence.
-- [x] Commit all package-facing documentation, then run the complete verification, packaging, dry-run and independent-consumer checks below against that clean commit. Record its SHA and archive digest outside the archive itself.
-
-The package must contain the final release text when uploaded. A post-upload README/changelog correction in Git does not rewrite the already published version; source corrections require another crate version.
+- [ ] Obtain authorization for the actual **0.2.0** upload and release tag.
+- [ ] Finalize the README's registry installation example and remove development/unuploaded wording before packaging. Keep version claims neutral until upload confirmation.
+- [ ] Finalize the **0.2.0** changelog heading and intended release date before packaging. Recheck if the date or any source text changes.
+- [ ] Commit all package-facing files and run the complete checks below against that clean release commit, then confirm all six hosted jobs. Record the commit SHA and archive SHA-256 outside the archive.
 
 ## Final verification before upload
-
-Run the following from a clean commit. Offline mode is appropriate for the locked SDK checks after dependencies/toolchains are downloaded. The fresh consumer and publishing rehearsal should have network access to resolve the current registry index.
 
 ```bash
 CARGO_NET_OFFLINE=true bash scripts/verify.sh
 CARGO_NET_OFFLINE=true bash scripts/verify-msrv.sh
 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
-RUSTUP_TOOLCHAIN=1.85.0 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
+RUSTUP_TOOLCHAIN=1.88.0 CARGO_NET_OFFLINE=true bash scripts/verify-stress.sh
 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
-RUSTUP_TOOLCHAIN=1.85.0 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
+RUSTUP_TOOLCHAIN=1.88.0 CARGO_NET_OFFLINE=true bash scripts/verify-regressions.sh
 python3 scripts/test_checks.py
 python3 scripts/check-docs.py .
 cargo package --locked --list
@@ -55,28 +48,30 @@ cargo package --locked
 cargo publish --dry-run --locked --registry crates-io
 python3 scripts/check-package.py --source-root . --expected-commit "$(git rev-parse HEAD)"
 bash scripts/verify-consumer.sh
-RUSTUP_TOOLCHAIN=1.85.0 bash scripts/verify-consumer.sh
+RUSTUP_TOOLCHAIN=1.88.0 bash scripts/verify-consumer.sh
 git diff --check
 ```
 
-`cargo package --locked` explicitly refreshes the standard archive used by the checker; Cargo versions can put the publishing rehearsal's archive in a temporary subdirectory instead. Without an explicit archive argument, archive checking and consumer preparation use Cargo metadata to resolve the package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and use `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.1.0.crate`.
+Use offline mode only after dependencies/toolchains are downloaded. The fresh consumer and publishing rehearsal should have network access to resolve the registry index. `cargo package --locked` explicitly refreshes the standard archive; Cargo can place a publishing rehearsal's archive in a temporary subdirectory instead.
 
-The consumer verifies the archive's current clean VCS identity, version, metadata, notices, links and every archived source file before unpacking that exact snapshot into a new temporary directory. Existing unpacked package directories are ignored. It creates its own lockfile, checks public paths in all four feature configurations, runs the in-memory example four times and the native-session example twice. Neither example executes Pi. Its build output uses the effective target directory's `independent-consumer` subdirectory. The checker already covers archive-local Markdown links, so no default-target extraction path is assumed by the release commands.
+Archive selection uses Cargo metadata to resolve the current package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and consumer, for example `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.2.0.crate`.
 
-`--dry-run` packages and verifies without uploading; it does not establish registry acceptance, reserve a name, or prove future docs.rs success. After every local check and all six CI jobs succeed for the clean release commit, record its SHA and archive SHA-256 outside the archive, then upload with `cargo publish --locked --registry crates-io`. Do not use `--allow-dirty` or skip package verification. Compare the registry archive checksum and `.cargo_vcs_info.json` with the recorded release evidence before tagging.
+The consumer checks clean VCS identity, version, metadata, notices, links and every archived source byte before extracting that exact snapshot into a fresh directory. It ignores stale unpacked directories and creates its own lockfile. All four feature configurations compile/run the public-path tests and in-memory example; both session configurations also run the native-session example. No Pi process is executed.
 
-Development requires stable Rust with rustfmt/Clippy, separately installed exact **1.85.0**, Bash, Git, **Python 3.11+** and a native C/assembly compiler. Windows uses Git Bash, MSVC and the Windows SDK. Python checker tests invoke Git; document/archive checking otherwise uses standard-library modules. The archive checks do not extract arbitrary member paths or follow archive symlinks.
+After every local check and all six hosted jobs pass for the authorized clean release commit, record its SHA/digest and upload with `cargo publish --locked --registry crates-io`. Do not use `--allow-dirty` or skip package verification. Compare the actual registry archive checksum and `.cargo_vcs_info.json` with the recorded evidence.
 
-The latest hosted outcomes are available in [Verify workflow runs](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml). Before release-document finalization, all six jobs passed for commit **fc0767f** in [run 38450761088](https://github.com/Coder-Sang/pi-rpc/actions/runs/38450761088). Dated local/final results belong in [verification](verification.md#current-status-summary); historical counts apply only to their recorded commits. Normal release verification uses the fake executable and in-memory transports, without real Pi or paid models.
+Development requires stable Rust with rustfmt/Clippy, separately installed exact **1.88.0**, Bash, Git, **Python 3.11+** and a native C/assembly compiler. Windows uses Git Bash, MSVC and the Windows SDK. Native stack-switching dependencies still require their platform compiler; installing a Rust target alone does not prove cross-platform execution.
+
+The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) is configured for Linux/macOS/Windows on stable and exact 1.88.0. Consult the [hosted CI record](verification.md#hosted-ci) for completed jobs. [Local verification](verification.md#current-status-summary) and historical release results are recorded separately.
 
 ## After a separately authorized upload
 
-- [x] Confirm `pi-rpc` **0.1.0** appears in the registry and a fresh registry consumer builds on Rust 1.85.0.
-- [x] Confirm docs.rs builds with all features and optional APIs are visible.
-- [x] Record the actual upload confirmation and validation results in a release record, and push **v0.1.0** pointing to the exact uploaded commit. A follow-up bookkeeping commit must not be substituted as the tag target.
+- [ ] Confirm **0.2.0** in the registry, compare its actual bytes/VCS identity and run a fresh registry consumer on exact Rust 1.88.0.
+- [ ] Confirm docs.rs builds with all features and optional APIs are visible.
+- [ ] Record actual results and create/push **v0.2.0** pointing to the exact uploaded commit. A later documentation commit must not be substituted.
 
-Do not defer package-facing README/changelog changes to this stage. If verification fails after upload, correct the package in a new version and describe the outcome; the source archive for the uploaded version cannot be overwritten.
+Post-upload Git-only README/changelog edits do not replace the uploaded archive. Corrections to published source require another version.
 
 ## Opt-in live acceptance
 
-Historical live-Pi/model evidence and the earlier settings-isolation incident remain in [verification](verification.md). Live examples are outside normal release preparation. Hosts own executable installation, credentials, environment isolation and process access policy. Persistent-setting RPCs can modify the selected Pi agent directory; follow the [isolated acceptance guide](acceptance.md#broader-real-pi-acceptance) before any separately authorized live run.
+Real Pi and paid-model acceptance require an explicit request and are separate from normal verification. The current local endpoint/UI results and completed local hosted-model checks are recorded in [verification](verification.md#real-pi-acceptance); remote deployment and vendor acceptance remain unverified. Historical results apply only to their recorded versions. Hosts own executable installation, credentials, environment isolation and process policy. Persistent-setting RPCs may modify Pi's selected agent directory; follow the [isolated acceptance guide](acceptance.md#broader-real-pi-acceptance) before a separately authorized run.
