@@ -55,11 +55,15 @@ fn fixture() -> PathBuf {
         .1
         .clone()
 }
-fn link_fixture(path: &std::path::Path) {
-    // Aliases and the fixture share tempfile's filesystem. Reuse the immutable
-    // executable inode: a concurrent Unix fork can briefly inherit a copy's
-    // writable descriptor and make exec fail with ETXTBSY, even after copy exits.
+fn named_fixture(path: &std::path::Path) {
+    // Linux aliases share tempfile's filesystem and reuse the immutable inode:
+    // a concurrent fork can briefly inherit a copy's writable descriptor and
+    // make exec fail with ETXTBSY, even after copy exits. Other platforms retain
+    // their original executable-copy behavior.
+    #[cfg(target_os = "linux")]
     std::fs::hard_link(fixture(), path).unwrap();
+    #[cfg(not(target_os = "linux"))]
+    std::fs::copy(fixture(), path).unwrap();
 }
 fn options(mode: &str) -> ProcessOptions {
     ProcessOptions {
@@ -286,7 +290,7 @@ async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        link_fixture(&path);
+        named_fixture(&path);
         let result = PiProcess::spawn(ProcessOptions {
             executable: path.clone(),
             startup_timeout: if name == "probe-hang" {
@@ -327,7 +331,7 @@ async fn default_range_and_exact_locks_run_supported_versions() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        link_fixture(&path);
+        named_fixture(&path);
         let actual = match name {
             "previous-version" | "padded-version" => "1.1.0",
             "intermediate-version" => "1.1.1",
@@ -359,7 +363,7 @@ async fn exact_lock_mismatch_never_launches_rpc() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        link_fixture(&path);
+        named_fixture(&path);
         let error = PiProcess::spawn(ProcessOptions {
             executable: path.clone(),
             expected_version: expected.into(),
@@ -379,7 +383,7 @@ async fn invalid_expectations_fail_before_executable_probe() {
     let path = dir
         .path()
         .join(format!("current-version{}", std::env::consts::EXE_SUFFIX));
-    link_fixture(&path);
+    named_fixture(&path);
     for expected in [
         "",
         "*",
