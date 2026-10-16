@@ -36,6 +36,23 @@ class DocumentChecks(unittest.TestCase):
         files = {"README.md": b"# A\n# A\n[second](#a-1)\n```rust\n[not prose](missing)\n```\n"}
         self.assertEqual(check_documents(files), (1, 1))
 
+    def test_release_tag_and_commit_guide_links(self):
+        for reference in ["v0.2.0", "0.2.0", "1f06a808bacb63bd9318c48628cbf53213bcd783"]:
+            base = f"https://github.com/Coder-Sang/pi-rpc/blob/{reference}/"
+            files = {"README.md": f"[guide]({base}docs/guide.md#scope)".encode(),
+                     "docs/guide.md": b"# Scope\n"}
+            with self.subTest(reference=reference):
+                self.assertEqual(check_documents(files), (2, 1))
+            for path in ["missing.md", "docs/guide.md#missing", "docs/guide.md?raw=1",
+                         "../README.md", "%2e%2e/README.md", "docs/%2fguide.md", ""]:
+                with self.subTest(reference=reference, path=path), self.assertRaises(CheckError):
+                    check_documents(files | {"README.md": f"[bad]({base}{path})".encode()})
+
+    def test_unsupported_repository_refs_are_not_external_links(self):
+        for reference in ["develop", "v01.2.0", "v0.2.0-rc.1", "1f06a80", "a" * 39, "a" * 41, "%6dain"]:
+            with self.subTest(reference=reference), self.assertRaises(CheckError):
+                check_documents({"README.md": f"[bad](https://github.com/Coder-Sang/pi-rpc/blob/{reference}/README.md)".encode()})
+
     def test_missing_target_anchor_escape_and_unclosed_fence(self):
         for text in ["[missing](absent.md)", "[bad](#absent)", "[escape](../README.md)", "```rust\nunclosed"]:
             with self.subTest(text=text), self.assertRaises(CheckError):
@@ -114,6 +131,22 @@ class RustdocChecks(unittest.TestCase):
                        "//example.invalid/guide", "javascript:alert(1)", "file:///tmp/outside.html"]:
             self.index.write_text(f'<a href="{target}">bad</a>', encoding="utf-8")
             with self.subTest(target=target), self.assertRaises(CheckError):
+                check_rustdoc(self.root, self.files)
+
+    def test_release_tag_and_commit_html_links(self):
+        for reference in ["v0.2.0", "0.2.0", "1f06a808bacb63bd9318c48628cbf53213bcd783"]:
+            base = f"https://github.com/Coder-Sang/pi-rpc/blob/{reference}/"
+            self.index.write_text(f'<a href="{base}docs/guide.md#scope">guide</a>', encoding="utf-8")
+            with self.subTest(reference=reference):
+                self.assertEqual(check_rustdoc(self.root, self.files), (1, 1))
+            for path in ["missing.md", "docs/guide.md#missing", "docs/guide.md?raw=1",
+                         "../README.md", "%2e%2e/README.md", "docs/%2fguide.md", ""]:
+                self.index.write_text(f'<a href="{base}{path}">bad</a>', encoding="utf-8")
+                with self.subTest(reference=reference, path=path), self.assertRaises(CheckError):
+                    check_rustdoc(self.root, self.files)
+        for reference in ["develop", "v01.2.0", "v0.2.0-rc.1", "1f06a80", "a" * 39, "a" * 41, "%6dain"]:
+            self.index.write_text(f'<a href="https://github.com/Coder-Sang/pi-rpc/blob/{reference}/README.md">bad</a>', encoding="utf-8")
+            with self.subTest(reference=reference), self.assertRaises(CheckError):
                 check_rustdoc(self.root, self.files)
 
     def test_source_ranges_require_existing_ordered_endpoints(self):

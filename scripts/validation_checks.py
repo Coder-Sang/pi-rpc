@@ -132,11 +132,25 @@ def check_documents(files):
 
 
 def repository_document_path(parsed):
-    """Map project main-branch guide URLs back to the reviewed source snapshot."""
-    prefix = "/Coder-Sang/pi-rpc/blob/main/"
-    if parsed.scheme == "https" and parsed.netloc == "github.com" and parsed.path.startswith(prefix):
+    """Map main, release-tag and full-commit guide URLs to the source snapshot.
+
+    This checks document contents, not whether a not-yet-pushed release ref exists.
+    Reject other blob refs instead of silently treating them as external links.
+    """
+    prefix = "/Coder-Sang/pi-rpc/blob/"
+    if parsed.netloc == "github.com" and parsed.path.startswith(prefix):
+        require(parsed.scheme == "https", "repository document link must use HTTPS")
         require(not parsed.query, "repository document link must not have a query")
-        return unquote(parsed.path[len(prefix):])
+        reference, separator, path = parsed.path[len(prefix):].partition("/")
+        version = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+        require(reference == "main" or re.fullmatch(r"v?" + version, reference) is not None
+                or re.fullmatch(r"[0-9a-f]{40}", reference) is not None,
+                "unsupported repository document reference")
+        path = unquote(path)
+        require(separator and path and "\\" not in path
+                and all(part not in {"", ".", ".."} for part in path.split("/")),
+                "invalid repository document path")
+        return path
     return None
 
 
