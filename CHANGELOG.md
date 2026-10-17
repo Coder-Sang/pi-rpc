@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 — unreleased
+
+- Extend inclusive Pi admission to **1.1.0 through 1.3.0**, retaining exact version locks and Rust **1.88**. The latest reviewed Pi source is `71023aec1546d6d677a65669c5665c0927ce0dd0`.
+- Preserve Pi 1.3.0 tool-call `argumentsError` and model `supportsMidConvoEffort` metadata through existing extension JSON without changing public field types. Add fragmented-stream, history, native-session and three-version admission/lifecycle regressions.
+- Keep the shared RPC implementation. Provider behavior changes remain Pi-owned; no real Pi or paid-model acceptance for 1.3.0 is claimed. Published 0.2.0 retains its original Pi 1.1.0–1.2.0 support.
+
 ## 0.2.0 — 2026-10-16
 
 - Raise the minimum Rust version from **1.85** to **1.88** and support the inclusive **Pi 1.1.0 through 1.2.0** range, with latest reviewed source commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`.

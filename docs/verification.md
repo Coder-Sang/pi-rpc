@@ -2,9 +2,17 @@
 
 ## Current status summary
 
-**pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0** and requires **Rust 1.88**. Pi **1.2.0**, commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
+Development **pi-rpc 0.2.1** supports **Pi >=1.1.0, <=1.3.0** and requires **Rust 1.88**. Pi **1.3.0**, commit `71023aec1546d6d677a65669c5665c0927ce0dd0`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
 
 The [0.2.0 release](#020-release-2026-10-16) is published and its hosted documentation is verified. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+
+## Pi 1.3.0 development status
+
+On 2026-10-18, the local macOS checks passed stable and exact Rust 1.88.0 four-feature strict verification, both three-round stress suites, Debug/Release boundary regressions, 50 Python regressions, Markdown/generated-HTML and whitespace checks. The complete successful pass preserved all 99 tracked source hashes. Subsequent example-label and manual-CI-pin edits are checked separately and do not change SDK execution.
+
+The 0.2.1 work extends admission and adds synthetic version, tool-argument-error and model-metadata regressions, retaining public fields/features and Rust 1.88. Hosted six-job results and real-Pi acceptance below apply to their recorded earlier commits/versions; they do not establish Pi 1.3.0 live or cross-platform acceptance. No real Pi or paid model is invoked by the development checks.
+
+An initial MSRV stress attempt failed `partial_record_at_process_exit_remains_protocol_error`; isolated recheck and a complete three-round stress repeat passed. Its cause remains unconfirmed; the reader logic, assertion and deadlines were not changed. First-failure logs are retained outside the package. Expanded version-mismatch cases use a distinct fake-executable path per case to prevent alias collisions or rewriting a reused executable.
 
 ## Local verification (2026-10-16)
 

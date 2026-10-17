@@ -132,4 +132,4 @@ jobs:
           tar -xzf "$directory/$ARTIFACT" -C "$directory"
           test -x "$directory/pi/pi"
       - name: Isolated read-only real Pi smoke
-        run: bash scripts/verify-release.sh "$RUNNER_TEMP/pi-release/pi/pi"
+        run: bash scripts/verify-release.sh "$RUNNER_TEMP/pi-release/pi/pi" 1.2.0

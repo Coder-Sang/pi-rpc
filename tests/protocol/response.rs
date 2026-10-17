@@ -212,3 +212,37 @@ fn strict_response_shapes_and_cancelled_values() {
         assert!(matches!(decode_record(v), Err(Error::Protocol(_))));
     }
 }
+
+#[test]
+fn pi_1_3_mid_conversation_effort_metadata_is_preserved() {
+    for supported in [false, true] {
+        let model = json!({"id":"synthetic","compat":{"supportsMidConvoEffort":supported,
+            "futureCompat":{"preserve":true}}});
+        for (command, data) in [
+            ("set_model", model.clone()),
+            ("get_available_models", json!({"models":[model.clone()]})),
+            (
+                "cycle_model",
+                json!({"model":model,"thinkingLevel":"off","isScoped":false}),
+            ),
+        ] {
+            let Record::Response(response) =
+                decode_record(json!({"type":"response","command":command,
+                "success":true,"data":data}))
+                .unwrap()
+            else {
+                panic!("expected response")
+            };
+            let decoded = match command {
+                "get_available_models" => {
+                    serde_json::to_value(response.decode::<Models>().unwrap()).unwrap()
+                }
+                "cycle_model" => {
+                    serde_json::to_value(response.decode::<Option<ModelCycle>>().unwrap()).unwrap()
+                }
+                _ => response.decode::<Value>().unwrap(),
+            };
+            assert_eq!(decoded, data);
+        }
+    }
+}

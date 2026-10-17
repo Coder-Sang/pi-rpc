@@ -92,3 +92,7 @@ Do not wait only for `AssistantEvent::Error` or a top-level `Err` to detect a fa
 `extension_error`, compaction errors and retry failure fields also remain ordinary events. Command rejection is returned by the corresponding command future as `Error::Rejected` and is nonterminal.
 
 Connection failures arrive through `recv()` as one `Err`: transport failure, EOF/process exit, malformed known records, configured capacity overflow or close termination. The consumer drains already buffered events first, receives exactly one authoritative terminal reason, then receives `None` on subsequent calls. Cancelling a pending receive does not consume that reason. The connection owner and outstanding commands observe the same published terminal error. In the README example, terminal errors are returned to the caller; the host can treat orderly `Closed` according to its lifecycle policy.
+
+## Pi 1.3.0 tool argument diagnostics
+
+Pi 1.3.0 can attach `argumentsError` to a tool call when its completed arguments are not a valid JSON object; `arguments` is then `{}`. `ContentBlock::ToolCall.extra` retains that diagnostic, including in `toolcall_end`; native messages and history retain it too. It is a tool-argument failure, not by itself a terminal connection error. The SDK forwards the record and does not execute or repair tool arguments. The existing required-object validation for `arguments` still applies. Model metadata such as `compat.supportsMidConvoEffort` remains open JSON.

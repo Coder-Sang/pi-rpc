@@ -21,26 +21,37 @@ fn parse(value: &str) -> Option<[u64; 3]> {
 }
 
 pub(crate) fn is_supported(value: &str) -> bool {
-    parse(value).is_some_and(|version| ([1, 1, 0]..=[1, 2, 0]).contains(&version))
+    parse(value).is_some_and(|version| ([1, 1, 0]..=[1, 3, 0]).contains(&version))
 }
 
 #[cfg(feature = "subprocess")]
-pub(crate) struct Expectation<'a>(Option<&'a str>);
+pub(crate) enum Expectation<'a> {
+    Supported,
+    Through1_2,
+    Exact(&'a str),
+}
 
 #[cfg(feature = "subprocess")]
 impl<'a> Expectation<'a> {
     pub(crate) fn new(value: &'a str) -> crate::Result<Self> {
         if value == crate::PI_VERSION_REQUIREMENT {
-            Ok(Self(None))
+            Ok(Self::Supported)
+        } else if value == ">=1.1.0, <=1.2.0" {
+            Ok(Self::Through1_2)
         } else if is_supported(value) {
-            Ok(Self(Some(value)))
+            Ok(Self::Exact(value))
         } else {
             Err(crate::Error::Version)
         }
     }
 
     pub(crate) fn matches(&self, actual: &str) -> bool {
-        is_supported(actual) && self.0.is_none_or(|expected| actual == expected)
+        is_supported(actual)
+            && match self {
+                Self::Supported => true,
+                Self::Through1_2 => parse(actual).is_some_and(|v| v <= [1, 2, 0]),
+                Self::Exact(expected) => actual == *expected,
+            }
     }
 }
 
@@ -56,10 +67,13 @@ mod tests {
             "1.1.10",
             "1.1.18446744073709551615",
             "1.2.0",
+            "1.2.1",
+            "1.2.10",
+            "1.3.0",
         ] {
             assert!(is_supported(value), "{value}");
         }
-        for value in ["0.99.2", "1.0.999", "1.2.1", "1.10.0", "2.0.0"] {
+        for value in ["0.99.2", "1.0.999", "1.3.1", "1.10.0", "2.0.0"] {
             assert!(!is_supported(value), "{value}");
         }
     }
@@ -96,15 +110,24 @@ mod tests {
     #[test]
     fn expectations_preserve_exact_locks_and_only_accept_the_fixed_range() {
         let range = Expectation::new(crate::PI_VERSION_REQUIREMENT).unwrap();
-        for version in ["1.1.0", "1.1.1", "1.1.10", "1.2.0"] {
+        for version in [
+            "1.1.0", "1.1.1", "1.1.10", "1.2.0", "1.2.1", "1.2.10", "1.3.0",
+        ] {
             assert!(range.matches(version));
             let exact = Expectation::new(version).unwrap();
             assert!(exact.matches(version));
             assert!(!exact.matches("1.1.9"));
         }
-        for version in ["1.0.4", "1.2.1", "1.2.0-rc.1", "1.2.0+build"] {
+        for version in ["1.0.4", "1.3.1", "1.2.0-rc.1", "1.2.0+build"] {
             assert!(!range.matches(version));
             assert!(Expectation::new(version).is_err());
+        }
+        let previous = Expectation::new(">=1.1.0, <=1.2.0").unwrap();
+        for actual in ["1.1.0", "1.1.10", "1.2.0"] {
+            assert!(previous.matches(actual));
+        }
+        for actual in ["1.0.4", "1.2.1", "1.3.0", "1.2.0-rc.1"] {
+            assert!(!previous.matches(actual));
         }
         for expression in ["*", "^1.1.0", ">=1.1.0", ">=1.1.0,<=1.2.0", ""] {
             assert!(Expectation::new(expression).is_err());

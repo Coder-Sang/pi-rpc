@@ -34,22 +34,26 @@ fn main() {
                 "1.0.4"
             } else if name.contains("previous-version") {
                 "1.1.0"
+            } else if name.contains("baseline-version") {
+                "1.2.0"
+            } else if name.contains("patch-version") {
+                "1.2.10"
             } else if name.contains("intermediate-version") {
                 "1.1.1"
             } else if name.contains("numeric-version") {
                 "1.1.10"
             } else if name.contains("future-version") {
-                "1.2.1"
+                "1.3.1"
             } else if name.contains("prerelease-version") {
-                "1.2.0-rc.1"
+                "1.3.0-rc.1"
             } else if name.contains("metadata-version") {
-                "1.2.0+build"
+                "1.3.0+build"
             } else if name.contains("leading-zero-version") {
                 "1.01.0"
             } else if name.contains("padded-version") {
                 " \t1.1.0\r\n "
             } else {
-                "1.2.0"
+                "1.3.0"
             }
         );
         return;

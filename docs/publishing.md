@@ -2,6 +2,8 @@
 
 ## Current decision
 
+Development **0.2.1** extends support to **Pi >=1.1.0, <=1.3.0**, retaining Rust **1.88**, public fields and features. It is not published. Its latest reviewed source is `71023aec1546d6d677a65669c5665c0927ce0dd0`; 1.3.0 live acceptance is not claimed. The completed 0.2.0 checklist and evidence below remain historical. Publishing 0.2.1 requires a fresh clean-commit package review, full checks and six hosted jobs, plus separate upload/tag authorization.
+
 **pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0**, with latest reviewed source commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, and requires **Rust 1.88**. Version 0.2.0 was published on 2026-10-16; registry bytes, Rust 1.88.0 registry consumption, docs.rs and the exact uploaded commit tag are confirmed in the [release record](verification.md#020-release-2026-10-16). Cargo continues to permit publishing only to `crates-io`.
 
 The published [0.1.0](https://crates.io/crates/pi-rpc/0.1.0) remains pinned to Pi 1.1.0/Rust 1.85, with the immutable [v0.1.0 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.1.0) at **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Its registry, docs.rs and hosted results are recorded in [verification](verification.md#010-release-2026-10-14); they do not establish 0.2.0 acceptance.
@@ -10,7 +12,7 @@ The package declares the repository, nonblank description, README, Apache-2.0 li
 
 ## Version and release policy
 
-- **0.2.x** patch releases preserve documented public Rust paths, field types, feature names and the **1.88** minimum. Pi compatibility covers the inclusive **1.1.0 through 1.2.0** range. Local defaults accept the range; concrete expectations retain exact locks. Remote hosts declare their concrete Pi version. Prereleases and build metadata are rejected; range admission alone does not establish review of a future in-range patch release.
+- **0.2.x** patch releases preserve documented public Rust paths, field types, feature names and the **1.88** minimum. Pi compatibility for development 0.2.1 covers the inclusive **1.1.0 through 1.3.0** range; published 0.2.0 retains **1.1.0 through 1.2.0**. Local defaults accept the range; concrete expectations retain exact locks. Remote hosts declare their concrete Pi version. Prereleases and build metadata are rejected; range admission alone does not establish review of a future in-range patch release.
 - The published **0.1.x** line retains its **Pi 1.1.0 / Rust 1.85** contract. Raising the compiler baseline and expanding the Pi compatibility policy are explicit 0.2.0 migration requirements; the existing Rust public types/features are preserved.
 - Source-breaking changes, including variants added to exhaustively matched public enums, require a new minor series with migration notes. Protocol upgrades and higher MSRV require explicit review and documentation.
 - A dry-run does not reserve a name/version or prove registry acceptance or docs.rs success. Published version archives cannot be overwritten.

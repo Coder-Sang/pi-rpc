@@ -28,3 +28,7 @@ Individual dependency licenses remain authoritative. This is a source-package re
 Each candidate's [evidence record](verification.md#candidate-evidence) inventories the archived source files and their SHA-256 digests, alongside Cargo's generated `Cargo.toml.orig` and `.cargo_vcs_info.json`. Consumer preparation compares every archived source byte, using `Cargo.toml.orig` for the original manifest, and rejects unexpected archive-only source files. Distributed documentation is checked for personal absolute paths; bounded credential-pattern and filename checks supplement the package review without claiming exhaustive secret detection.
 
 Fresh consumers resolve the current archive via Cargo metadata or an explicit `--archive`, validate version and clean VCS identity, and extract the verified snapshot into a new directory. Each creates its own lockfile and checks all four features on stable or Rust 1.88.0. Registry installation on exact Rust 1.88.0 and docs.rs hosting for 0.2.0 were confirmed after upload; see the [release record](verification.md#020-release-2026-10-16).
+
+## Pi 1.3.0 development review
+
+Development 0.2.1 extends admission through Pi 1.3.0 with no dependency upgrades. The fixed source comparison and changed-file hashes are recorded in [compatibility](compatibility.md#pi-130-source-review-2026-10-18). The upstream MIT license is byte-identical to the previously reviewed baseline; retained notices remain unchanged. This is source evidence, not live Pi 1.3.0 acceptance.

@@ -308,3 +308,26 @@ fn native_file_record_and_entry_limits_and_crlf() {
         ));
     }
 }
+
+#[test]
+fn pi_1_3_tool_argument_error_round_trips_in_native_history() {
+    let message = json!({"role":"assistant","content":[{"type":"toolCall","id":"call","name":"read",
+        "arguments":{},"argumentsError":"Complete tool arguments were not a JSON object"}],
+        "api":"synthetic","provider":"synthetic","model":"synthetic","timestamp":1,"stopReason":"toolUse",
+        "usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,
+        "cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}}});
+    let mut file = SessionFile::new("s", ISO, "/p");
+    add(
+        &mut file,
+        "e",
+        None,
+        json!({"type":"message","message":message.clone()}),
+    );
+    let bytes = file.encode(SessionLimits::default()).unwrap();
+    let parsed = SessionFile::parse(&bytes, SessionLimits::default()).unwrap();
+    let EntryData::Message { message: decoded } = &parsed.entries[0].data else {
+        panic!("expected message")
+    };
+    assert_eq!(serde_json::to_value(decoded).unwrap(), message);
+    assert_eq!(parsed.encode(SessionLimits::default()).unwrap(), bytes);
+}

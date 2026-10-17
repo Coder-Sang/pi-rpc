@@ -22,3 +22,7 @@ All four examples below are opt-in and subprocess-feature gated. They are compil
 | `rpc_extension_smoke` | `/path/pi /fresh/scratch/cwd` | Nine UI methods under manual and default-cancel policies, actual extension-received answers, retry recovery/active cancellation/disabled behavior and automatic compaction. Requires `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` inside its scratch cwd. Uses an in-memory synthetic provider and extension-provided automatic summary, **not hosted-model fault evidence or Opus summarization**. |
 
 Use `cargo run --offline --example NAME -- ...`. Path guards in the opt-in examples are lexical, not a filesystem sandbox: use trusted scratch paths without symlinks or parent-directory traversal. Existing provider authentication is handled only by Pi. Settings isolation does not guarantee a readonly authentication copy: Pi may refresh tokens in that private copy. Scratch authentication/configuration cleanup remains the caller's responsibility. See the dated [per-RPC evidence and limitations](verification.md#real-pi-acceptance).
+
+## Development Pi 1.3.0 examples
+
+The opt-in examples default to the latest reviewed `PI_VERSION` (currently 1.3.0). This default is not a completed live acceptance claim. Historical Pi 1.2.0 acceptance is recorded against the published 0.2.0 source; use that tagged source to reproduce its version-specific examples. The manual CI smoke keeps its verified 1.2.0 download and passes the exact version explicitly. Real Pi/model execution still requires separate authorization.

@@ -546,7 +546,8 @@ async fn main() -> pi_rpc::Result<()> {
         run(options, policy).await?;
     }
     println!(
-        "Pi 1.2.0 real extension UI and synthetic retry acceptance: no paid request; clean exits PASS"
+        "Pi {} real extension UI and synthetic retry acceptance: no paid request; clean exits PASS",
+        pi_rpc::PI_VERSION
     );
     Ok(())
 }

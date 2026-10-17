@@ -1,8 +1,8 @@
-//! No-prompt Pi 1.2.0 acceptance using existing Pi authentication.
+//! Opt-in no-prompt acceptance of the latest reviewed Pi using existing authentication.
 //! Usage: PI_CODING_AGENT_DIR=/scratch/root/agent cargo run --example
 //! rpc_state_smoke -- /path/pi /scratch/root
 //! Prepare opaque private auth/models copies in root/agent if needed. Bash-only
-//! sessions cannot persist in Pi 1.2.0, so export/clone/switch are native boundaries.
+//! persistence was observed with Pi 1.2.0; export/clone/switch are native boundaries.
 //! Pi itself owns configuration/authentication. This example never reads either.
 use pi_rpc::{
     Config, Error, PiClient, PiProcess, ProcessOptions,
@@ -114,7 +114,10 @@ async fn exercise(
         assert_eq!(client.get_state().await?.auto_compaction_enabled, enabled);
         pass("set_auto_compaction + state");
         client.set_auto_retry(enabled).await?;
-        pass("set_auto_retry (ack only: Pi 1.2.0 get_state omits autoRetryEnabled)");
+        pass(&format!(
+            "set_auto_retry (ack only: Pi {} get_state omits autoRetryEnabled)",
+            pi_rpc::PI_VERSION
+        ));
     }
     client.abort_retry().await?;
     assert!(!client.get_state().await?.is_streaming);
@@ -239,7 +242,8 @@ async fn exercise(
         pass("switch_session restores name/history");
     } else {
         println!(
-            "BOUNDARY persistence/switch_session: Pi 1.2.0 only flushes user/assistant conversations; bash-only history remains in memory. No prompt sent."
+            "BOUNDARY persistence/switch_session: Pi {} only flushes user/assistant conversations; bash-only history remains in memory. No prompt sent.",
+            pi_rpc::PI_VERSION
         );
     }
     println!("SKIP fork: no user entry can be created without prompt/model turn.");

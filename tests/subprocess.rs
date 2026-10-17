@@ -324,6 +324,8 @@ async fn default_range_and_exact_locks_run_supported_versions() {
     for name in [
         "current-version",
         "previous-version",
+        "baseline-version",
+        "patch-version",
         "intermediate-version",
         "numeric-version",
         "padded-version",
@@ -336,9 +338,15 @@ async fn default_range_and_exact_locks_run_supported_versions() {
             "previous-version" | "padded-version" => "1.1.0",
             "intermediate-version" => "1.1.1",
             "numeric-version" => "1.1.10",
-            _ => "1.2.0",
+            "baseline-version" => "1.2.0",
+            "patch-version" => "1.2.10",
+            _ => "1.3.0",
         };
-        for expected in [pi_rpc::PI_VERSION_REQUIREMENT, actual] {
+        let mut expectations = vec![pi_rpc::PI_VERSION_REQUIREMENT, actual];
+        if matches!(actual, "1.1.0" | "1.1.1" | "1.1.10" | "1.2.0") {
+            expectations.push(">=1.1.0, <=1.2.0");
+        }
+        for expected in expectations {
             let (client, mut events, mut owner) = PiProcess::spawn(ProcessOptions {
                 executable: path.clone(),
                 expected_version: expected.into(),
@@ -359,10 +367,18 @@ async fn default_range_and_exact_locks_run_supported_versions() {
 #[tokio::test]
 async fn exact_lock_mismatch_never_launches_rpc() {
     let dir = tempfile::tempdir().unwrap();
-    for (name, expected) in [("previous-version", "1.2.0"), ("current-version", "1.1.0")] {
+    for (index, (name, expected)) in [
+        ("previous-version", "1.2.0"),
+        ("current-version", "1.1.0"),
+        ("current-version", ">=1.1.0, <=1.2.0"),
+        ("patch-version", ">=1.1.0, <=1.2.0"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
         let path = dir
             .path()
-            .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+            .join(format!("{name}-{index}{}", std::env::consts::EXE_SUFFIX));
         named_fixture(&path);
         let error = PiProcess::spawn(ProcessOptions {
             executable: path.clone(),
@@ -391,7 +407,7 @@ async fn invalid_expectations_fail_before_executable_probe() {
         ">=1.1.0",
         ">=1.1.0,<=1.2.0",
         "1.0.4",
-        "1.2.1",
+        "1.3.1",
         "1.1.0-rc.1",
         "1.2.0+build",
         "1.01.0",
