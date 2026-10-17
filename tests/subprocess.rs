@@ -229,7 +229,8 @@ async fn unexpected_exit_is_not_eof_or_transport_error() {
 async fn partial_record_at_process_exit_remains_protocol_error() {
     let (_c, mut e, mut p) = PiProcess::spawn(options("partial")).await.unwrap();
     ready(&mut e).await;
-    assert!(matches!(p.wait_terminal().await, Error::Protocol(_)));
+    let terminal = p.wait_terminal().await;
+    assert!(matches!(terminal, Error::Protocol(_)), "{terminal:?}");
     p.terminate().await;
 }
 #[tokio::test]

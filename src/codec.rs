@@ -2,7 +2,13 @@
 use crate::{Error, Result, json};
 use serde::Serialize;
 use serde_json::Value;
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 use tokio::io::{AsyncRead, AsyncReadExt};
+
+const READ_CHUNK_BYTES: usize = 4096;
 
 /// Maximum JSON object/array nesting. The root container counts as one.
 pub const MAX_JSON_DEPTH: usize = json::MAX_DEPTH;
@@ -126,48 +132,93 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
     /// A nonempty unterminated final record is a protocol error, never accepted.
     pub async fn next(&mut self) -> Result<Option<(Value, usize)>> {
         loop {
-            let pos = self.buffer[self.scanned..].iter().position(|b| *b == b'\n');
-            #[cfg(test)]
-            {
-                self.scanned_bytes += pos.map_or(self.buffer.len() - self.scanned, |p| p + 1);
+            if let Some(record) = self.buffered_record()? {
+                return Ok(Some(record));
             }
-            if let Some(pos) = pos {
-                let end = self.scanned + pos;
-                let record = &self.buffer[self.start..end];
-                let record = record.strip_suffix(b"\r").unwrap_or(record);
-                if record.len() > self.max_bytes {
-                    return Err(Error::Protocol("record byte limit exceeded".into()));
-                }
-                let value = json::parse(record)?;
-                let size = record.len();
-                self.start = end + 1;
-                self.scanned = self.start;
-                return Ok(Some((value, size)));
-            }
-            self.scanned = self.buffer.len();
-            if self.buffer.len() - self.start > self.max_bytes.saturating_add(1) {
-                return Err(Error::Protocol("record byte limit exceeded".into()));
-            }
-            if self.start > 0 {
-                self.buffer.drain(..self.start);
-                self.scanned -= self.start;
-                self.start = 0;
-            }
-            let mut chunk = [0u8; 4096];
+            let mut chunk = [0u8; READ_CHUNK_BYTES];
             let n = self
                 .reader
                 .read(&mut chunk)
                 .await
                 .map_err(|e| Error::Transport(e.to_string()))?;
             if n == 0 {
-                return if self.buffer.is_empty() {
-                    Ok(None)
-                } else {
-                    Err(Error::Protocol("unterminated record at EOF".into()))
-                };
+                self.check_eof()?;
+                return Ok(None);
             }
             self.buffer.extend_from_slice(&chunk[..n]);
         }
+    }
+
+    /// Terminal-only validation: buffered records plus at most one chunk of
+    /// immediately readable input. Never await, dispatch records or drain a
+    /// continuously ready stream beyond the fixed byte allowance.
+    pub(crate) fn check_ready_at_exit(
+        &mut self,
+        cx: &mut Context<'_>,
+        mut validate: impl FnMut(Value) -> Result<()>,
+    ) -> Result<()> {
+        let mut allowance = READ_CHUNK_BYTES;
+        loop {
+            while let Some((value, _)) = self.buffered_record()? {
+                validate(value)?;
+            }
+            if allowance == 0 {
+                return Ok(());
+            }
+            let mut chunk = [0u8; READ_CHUNK_BYTES];
+            let mut buffer = tokio::io::ReadBuf::new(&mut chunk[..allowance]);
+            match Pin::new(&mut self.reader).poll_read(cx, &mut buffer) {
+                Poll::Pending => return Ok(()),
+                Poll::Ready(Err(error)) => return Err(Error::Transport(error.to_string())),
+                Poll::Ready(Ok(())) => {
+                    let bytes = buffer.filled();
+                    if bytes.is_empty() {
+                        return self.check_eof();
+                    }
+                    allowance -= bytes.len();
+                    self.buffer.extend_from_slice(bytes);
+                }
+            }
+        }
+    }
+
+    fn check_eof(&self) -> Result<()> {
+        if self.buffer.len() != self.start {
+            Err(Error::Protocol("unterminated record at EOF".into()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn buffered_record(&mut self) -> Result<Option<(Value, usize)>> {
+        let pos = self.buffer[self.scanned..].iter().position(|b| *b == b'\n');
+        #[cfg(test)]
+        {
+            self.scanned_bytes += pos.map_or(self.buffer.len() - self.scanned, |p| p + 1);
+        }
+        if let Some(pos) = pos {
+            let end = self.scanned + pos;
+            let record = &self.buffer[self.start..end];
+            let record = record.strip_suffix(b"\r").unwrap_or(record);
+            if record.len() > self.max_bytes {
+                return Err(Error::Protocol("record byte limit exceeded".into()));
+            }
+            let value = json::parse(record)?;
+            let size = record.len();
+            self.start = end + 1;
+            self.scanned = self.start;
+            return Ok(Some((value, size)));
+        }
+        self.scanned = self.buffer.len();
+        if self.buffer.len() - self.start > self.max_bytes.saturating_add(1) {
+            return Err(Error::Protocol("record byte limit exceeded".into()));
+        }
+        if self.start > 0 {
+            self.buffer.drain(..self.start);
+            self.scanned -= self.start;
+            self.start = 0;
+        }
+        Ok(None)
     }
 }
 
@@ -221,5 +272,74 @@ mod tests {
             Value::String("AAAABBBB".into())
         );
         assert_eq!(reader.scanned_bytes, 11);
+    }
+}
+
+#[cfg(test)]
+mod exit_tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    struct AlwaysReady(Arc<AtomicUsize>);
+    impl AsyncRead for AlwaysReady {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            buffer: &mut tokio::io::ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            const RECORD: &[u8] = b"{\"type\":\"agent_start\"}\n";
+            let offset = self.0.fetch_add(1, Ordering::SeqCst);
+            buffer.put_slice(&[RECORD[offset % RECORD.len()]]);
+            Poll::Ready(Ok(()))
+        }
+    }
+    #[test]
+    fn terminal_ready_validation_has_a_byte_bound_even_for_tiny_continuous_reads() {
+        let count = Arc::new(AtomicUsize::new(0));
+        let mut reader = JsonlReader::new(AlwaysReady(count.clone()), 65536);
+        let mut records = 0;
+        reader
+            .check_ready_at_exit(
+                &mut Context::from_waker(std::task::Waker::noop()),
+                |value| {
+                    records += 1;
+                    crate::protocol::decode_record(value).map(drop)
+                },
+            )
+            .unwrap();
+        assert_eq!(count.load(Ordering::SeqCst), READ_CHUNK_BYTES);
+        assert_eq!(
+            records,
+            READ_CHUNK_BYTES / b"{\"type\":\"agent_start\"}\n".len()
+        );
+    }
+    #[test]
+    fn terminal_ready_validation_checks_depth_boundaries_on_two_mib_stack() {
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                for (arrays, valid) in [(511, true), (512, false)] {
+                    let bytes = format!(
+                        "{{\"type\":\"future\",\"data\":{}0{}}}\n",
+                        "[".repeat(arrays),
+                        "]".repeat(arrays)
+                    );
+                    let mut reader = JsonlReader::new(bytes.as_bytes(), 4096);
+                    let checked = reader.check_ready_at_exit(
+                        &mut Context::from_waker(std::task::Waker::noop()),
+                        |value| crate::protocol::decode_record(value).map(drop),
+                    );
+                    assert_eq!(checked.is_ok(), valid);
+                    if !valid {
+                        assert!(matches!(checked, Err(Error::Protocol(_))));
+                    }
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }

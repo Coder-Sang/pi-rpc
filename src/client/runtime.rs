@@ -54,7 +54,17 @@ pub(super) async fn read_loop(
     loop {
         let record = if let Some((reason, deadline)) = &exited {
             tokio::select! { biased;
-                _=tokio::time::sleep_until(*deadline)=>return Err(reason.clone()),
+                _=tokio::time::sleep_until(*deadline)=> {
+                    // Preserve ready protocol failures if scheduling crossed the
+                    // deadline. This bounded check does not extend event delivery.
+                    let checked = std::future::poll_fn(|cx| std::task::Poll::Ready(
+                        reader.check_ready_at_exit(cx, |value| decode_record(value).map(drop))
+                    )).await;
+                    if let Err(error @ Error::Protocol(_)) = checked {
+                        return Err(error);
+                    }
+                    return Err(reason.clone());
+                },
                 record=reader.next()=>record?,
             }
         } else {
@@ -131,3 +141,6 @@ async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
     }
     std::future::pending().await
 }
+
+#[cfg(test)]
+mod tests;
