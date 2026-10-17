@@ -150,8 +150,8 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
     }
 
     /// Terminal-only validation: buffered records plus at most one chunk of
-    /// immediately readable input. Never await, dispatch records or drain a
-    /// continuously ready stream beyond the fixed byte allowance.
+    /// immediately readable input. An unfinished record permits one additional
+    /// byte of EOF lookahead, without further validation. Never await or dispatch.
     pub(crate) fn check_ready_at_exit(
         &mut self,
         cx: &mut Context<'_>,
@@ -162,11 +162,13 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
             while let Some((value, _)) = self.buffered_record()? {
                 validate(value)?;
             }
-            if allowance == 0 {
+            let eof_probe = allowance == 0;
+            if eof_probe && self.buffer.is_empty() {
                 return Ok(());
             }
             let mut chunk = [0u8; READ_CHUNK_BYTES];
-            let mut buffer = tokio::io::ReadBuf::new(&mut chunk[..allowance]);
+            let read_limit = if eof_probe { 1 } else { allowance };
+            let mut buffer = tokio::io::ReadBuf::new(&mut chunk[..read_limit]);
             match Pin::new(&mut self.reader).poll_read(cx, &mut buffer) {
                 Poll::Pending => return Ok(()),
                 Poll::Ready(Err(error)) => return Err(Error::Transport(error.to_string())),
@@ -175,8 +177,13 @@ impl<R: AsyncRead + Unpin> JsonlReader<R> {
                     if bytes.is_empty() {
                         return self.check_eof();
                     }
-                    allowance -= bytes.len();
                     self.buffer.extend_from_slice(bytes);
+                    // Only an empty read establishes EOF. Keep any lookahead
+                    // byte, but never parse it or poll again past the allowance.
+                    if eof_probe {
+                        return Ok(());
+                    }
+                    allowance -= bytes.len();
                 }
             }
         }
@@ -310,11 +317,42 @@ mod exit_tests {
                 },
             )
             .unwrap();
-        assert_eq!(count.load(Ordering::SeqCst), READ_CHUNK_BYTES);
+        // The unfinished record permits exactly one extra byte of EOF
+        // lookahead, never another round of continuous validation.
+        assert_eq!(count.load(Ordering::SeqCst), READ_CHUNK_BYTES + 1);
         assert_eq!(
             records,
             READ_CHUNK_BYTES / b"{\"type\":\"agent_start\"}\n".len()
         );
+    }
+    #[test]
+    fn terminal_eof_probe_does_not_validate_or_discard_lookahead() {
+        for suffix in [&b""[..], &b"\n"[..], &b"x\n"[..]] {
+            let mut wire = b"{\"type\":\"agent_start\"}".to_vec();
+            wire.resize(READ_CHUNK_BYTES, b' ');
+            wire.extend_from_slice(suffix);
+            let mut reader = JsonlReader::new(wire.as_slice(), 8192);
+            let mut records = 0;
+            let result = reader.check_ready_at_exit(
+                &mut Context::from_waker(std::task::Waker::noop()),
+                |_| {
+                    records += 1;
+                    Ok(())
+                },
+            );
+            if suffix.is_empty() {
+                assert_eq!(
+                    result,
+                    Err(Error::Protocol("unterminated record at EOF".into()))
+                );
+            } else {
+                assert_eq!(result, Ok(()));
+            }
+            assert_eq!(records, 0, "lookahead must not extend validation");
+            let consumed = READ_CHUNK_BYTES + usize::from(!suffix.is_empty());
+            assert_eq!(reader.buffer, wire[..consumed]);
+            assert_eq!(reader.reader, &wire[consumed..]);
+        }
     }
     #[test]
     fn terminal_ready_validation_checks_depth_boundaries_on_two_mib_stack() {

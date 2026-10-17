@@ -91,6 +91,49 @@ async fn ready_protocol_errors_precede_elapsed_exit_deadline() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn exit_deadline_checks_eof_at_the_exact_ready_byte_budget() {
+    for tail_bytes in [4095, 4096, 4097] {
+        let tail = vec![b' '; tail_bytes];
+        for eof in [false, true] {
+            let result = deadline_case(b"{\"type\":", &tail, eof, 8192).await;
+            if eof && tail_bytes <= 4096 {
+                assert_eq!(
+                    result,
+                    Err(Error::Protocol("unterminated record at EOF".into())),
+                    "{tail_bytes} ready bytes followed by EOF"
+                );
+            } else {
+                assert_eq!(
+                    result,
+                    Err(Error::ProcessExit(Some(7))),
+                    "{tail_bytes} ready bytes, EOF={eof}"
+                );
+            }
+        }
+    }
+    // A complete record at the boundary remains valid. An LF outside the
+    // validation allowance is only lookahead and must not dispatch the record.
+    for prefix in [
+        &b"{\"type\":\"agent_start\"}"[..],
+        &b"{\"type\":\"extension_ui_request\",\"id\":\"ui\",\"method\":\"input\",\"title\":\"Title\"}"[..],
+        &b"{\"type\":\"response\",\"command\":\"abort\",\"success\":true}"[..],
+    ] {
+        for record_bytes in [4095, 4096, 4097] {
+            for ending in [&b"\n"[..], &b"\r\n"[..]] {
+                let mut record = prefix.to_vec();
+                record.resize(record_bytes - ending.len(), b' ');
+                record.extend_from_slice(ending);
+                assert_eq!(
+                    deadline_case(b"", &record, true, 8192).await,
+                    Err(Error::ProcessExit(Some(7))),
+                    "complete {record_bytes}-byte record at cutoff"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn elapsed_exit_keeps_cutoff_for_valid_ui_and_unfinished_live_pipes() {
     for (initial, tail, eof) in [
         (&b""[..], &b""[..], true),
@@ -144,48 +187,51 @@ impl AsyncWrite for Flushed {
 
 #[tokio::test(start_paused = true)]
 async fn exit_deadline_protocol_failure_reaches_pending_owner_and_events_once() {
-    let (reader, mut peer) = tokio::io::duplex(1024);
-    peer.write_all(b"{\"type\":\"agent_start\"}\n{\"type\":")
-        .await
+    for tail_bytes in [0, 4096] {
+        let (reader, mut peer) = tokio::io::duplex(1024);
+        peer.write_all(b"{\"type\":\"agent_start\"}\n{\"type\":")
+            .await
+            .unwrap();
+        let (pending_tx, pending) = tokio::sync::oneshot::channel();
+        let (flushed_tx, flushed) = tokio::sync::oneshot::channel();
+        let (_exit_tx, exit) = watch::channel(Some(Error::ProcessExit(Some(0))));
+        let mut transport = Transport::new(
+            PendingRead {
+                reader,
+                pending: Some(pending_tx),
+            },
+            Flushed(Some(flushed_tx)),
+            crate::PI_VERSION,
+        )
         .unwrap();
-    let (pending_tx, pending) = tokio::sync::oneshot::channel();
-    let (flushed_tx, flushed) = tokio::sync::oneshot::channel();
-    let (_exit_tx, exit) = watch::channel(Some(Error::ProcessExit(Some(0))));
-    let mut transport = Transport::new(
-        PendingRead {
-            reader,
-            pending: Some(pending_tx),
-        },
-        Flushed(Some(flushed_tx)),
-        crate::PI_VERSION,
-    )
-    .unwrap();
-    transport.exit = Some(exit);
-    let (client, mut events, mut owner) =
-        PiConnection::connect(transport, Config::default()).unwrap();
-    let command_client = client.clone();
-    let command = tokio::spawn(async move { command_client.get_state().await });
-    pending.await.unwrap();
-    flushed.await.unwrap();
-    drop(peer);
-    tokio::time::advance(Duration::from_millis(51)).await;
-    let terminal = owner.wait_terminal().await;
-    assert!(matches!(terminal, Error::Protocol(_)), "{terminal:?}");
-    assert_eq!(command.await.unwrap(), Err(terminal.clone()));
-    assert_eq!(
-        events.recv().await,
-        Some(Ok(Event::Known(crate::protocol::KnownEvent::AgentStart)))
-    );
-    assert_eq!(events.recv().await, Some(Err(terminal.clone())));
-    assert_eq!(events.recv().await, None);
-    assert_eq!(client.shared.pending_count(), 0);
-    assert_eq!(
-        client.admission.available_permits(),
-        Config::default().max_pending_commands
-    );
-    assert_eq!(
-        client.budget.available_permits(),
-        Config::default().max_writer_bytes
-    );
-    assert_eq!(owner.close().await, terminal);
+        transport.exit = Some(exit);
+        let (client, mut events, mut owner) =
+            PiConnection::connect(transport, Config::default()).unwrap();
+        let command_client = client.clone();
+        let command = tokio::spawn(async move { command_client.get_state().await });
+        pending.await.unwrap();
+        flushed.await.unwrap();
+        peer.write_all(&vec![b' '; tail_bytes]).await.unwrap();
+        drop(peer);
+        tokio::time::advance(Duration::from_millis(51)).await;
+        let terminal = owner.wait_terminal().await;
+        assert!(matches!(terminal, Error::Protocol(_)), "{terminal:?}");
+        assert_eq!(command.await.unwrap(), Err(terminal.clone()));
+        assert_eq!(
+            events.recv().await,
+            Some(Ok(Event::Known(crate::protocol::KnownEvent::AgentStart)))
+        );
+        assert_eq!(events.recv().await, Some(Err(terminal.clone())));
+        assert_eq!(events.recv().await, None);
+        assert_eq!(client.shared.pending_count(), 0);
+        assert_eq!(
+            client.admission.available_permits(),
+            Config::default().max_pending_commands
+        );
+        assert_eq!(
+            client.budget.available_permits(),
+            Config::default().max_writer_bytes
+        );
+        assert_eq!(owner.close().await, terminal);
+    }
 }

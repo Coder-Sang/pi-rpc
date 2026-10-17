@@ -2,7 +2,7 @@
 
 ## 0.2.1 — unreleased
 
-- Preserve ready protocol failures when process-exit draining crosses its 50 ms deadline. Final validation is nonwaiting and byte-bounded; dispatch cutoff, EOF grace and owner close deadlines remain unchanged. Add paused-clock ordering, bounded-read and stack regressions.
+- Preserve ready protocol failures when process-exit draining crosses its 50 ms deadline. Final validation is nonwaiting and byte-bounded, including a single-byte EOF probe for unfinished records at the exact 4 KiB budget; dispatch cutoff, EOF grace and owner close deadlines remain unchanged. Add paused-clock ordering, bounded-read and stack regressions.
 
 - Extend inclusive Pi admission to **1.1.0 through 1.3.0**, retaining exact version locks and Rust **1.88**. The latest reviewed Pi source is `71023aec1546d6d677a65669c5665c0927ce0dd0`.
 - Preserve Pi 1.3.0 tool-call `argumentsError` and model `supportsMidConvoEffort` metadata through existing extension JSON without changing public field types. Add fragmented-stream, history, native-session and three-version admission/lifecycle regressions.
