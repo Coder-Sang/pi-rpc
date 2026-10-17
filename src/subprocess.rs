@@ -25,8 +25,10 @@ pub struct ProcessOptions {
     /// Extra CLI arguments. Do not put secrets here.
     pub args: Vec<OsString>,
     pub cwd: Option<PathBuf>,
-    /// Either [`PI_VERSION_REQUIREMENT`] (the default) or an exact supported
-    /// release. Other constraint expressions are rejected before probing.
+    /// Either [`PI_VERSION_REQUIREMENT`] (the default), the previous fixed
+    /// `">=1.1.0, <=1.2.0"` expression, or an exact supported release.
+    /// The previous expression retains its original upper bound. Other
+    /// constraint expressions are rejected before probing.
     pub expected_version: String,
     pub startup_timeout: Duration,
     pub stderr_bytes: usize,
