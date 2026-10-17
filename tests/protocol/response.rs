@@ -218,7 +218,19 @@ fn pi_1_3_mid_conversation_effort_metadata_is_preserved() {
     for supported in [false, true] {
         let model = json!({"id":"synthetic","compat":{"supportsMidConvoEffort":supported,
             "futureCompat":{"preserve":true}}});
+        let mut state = success_fixtures()
+            .into_iter()
+            .find(|(command, _)| *command == "get_state")
+            .unwrap()
+            .1
+            .unwrap();
+        state["model"] = model.clone();
+        // Preserve the explicit null optionals emitted by the typed state.
+        for key in ["sessionFile", "sessionName"] {
+            state[key] = Value::Null;
+        }
         for (command, data) in [
+            ("get_state", state),
             ("set_model", model.clone()),
             ("get_available_models", json!({"models":[model.clone()]})),
             (
@@ -234,6 +246,9 @@ fn pi_1_3_mid_conversation_effort_metadata_is_preserved() {
                 panic!("expected response")
             };
             let decoded = match command {
+                "get_state" => {
+                    serde_json::to_value(response.decode::<SessionState>().unwrap()).unwrap()
+                }
                 "get_available_models" => {
                     serde_json::to_value(response.decode::<Models>().unwrap()).unwrap()
                 }

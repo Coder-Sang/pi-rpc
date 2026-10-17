@@ -107,6 +107,34 @@ fn pi_1_3_tool_argument_errors_survive_messages_streams_and_history() {
         serde_json::to_value(response.decode::<Messages>().unwrap().messages.remove(0)).unwrap(),
         message
     );
+    let entry = json!({"type":"message","id":"entry","parentId":null,
+        "timestamp":"2026-10-18T00:00:00Z","message":message});
+    for (command, data) in [
+        (
+            "get_entries",
+            json!({"entries":[entry.clone()],"leafId":"entry"}),
+        ),
+        (
+            "get_tree",
+            json!({"tree":[{"entry":entry,"children":[],"label":null,"labelTimestamp":null}],"leafId":"entry"}),
+        ),
+    ] {
+        let Record::Response(response) = decode_record(json!({"type":"response","command":command,
+            "success":true,"data":data}))
+        .unwrap() else {
+            panic!("expected history response")
+        };
+        let decoded = match command {
+            "get_entries" => serde_json::to_value(response.decode::<Entries>().unwrap()).unwrap(),
+            _ => serde_json::to_value(response.decode::<Tree>().unwrap()).unwrap(),
+        };
+        assert_eq!(decoded, data);
+    }
+    let appended = json!({"type":"entry_appended","entry":entry});
+    let Record::Event(Event::Known(decoded)) = decode_record(appended.clone()).unwrap() else {
+        panic!("expected entry event")
+    };
+    assert_eq!(serde_json::to_value(decoded).unwrap(), appended);
     for bad in [Value::Null, json!("partial"), json!([])] {
         let mut malformed = tool.clone();
         malformed["arguments"] = bad;
