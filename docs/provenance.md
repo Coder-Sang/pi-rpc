@@ -1,6 +1,6 @@
 # Release provenance and package review
 
-The 0.2.0 review covers **Pi 1.1.0–1.2.0 / Rust 1.88**. Fixed upstream source archives were compared; [compatibility](compatibility.md#upgrade-from-pi-110-to-120) records the relevant schemas, changes and hashes. The Pi MIT license is unchanged between those endpoints. Source review and [runtime acceptance](verification.md#real-pi-acceptance) are separate evidence.
+The development **0.2.1** review covers **Pi 1.1.0–1.3.0 / Rust 1.88**. Fixed upstream source archives were compared; [compatibility](compatibility.md#upgrade-from-pi-110-to-120) records the original 1.1.0/1.2.0 comparison, and the [Pi 1.3.0 review](compatibility.md#pi-130-source-review-2026-10-18) records the extension. All three fixed releases have identical Pi MIT license bytes. The published 0.2.0 review remains scoped to Pi 1.1.0–1.2.0. Source review, [fake-only candidate verification](verification.md#021-completed-baseline-2026-10-18) and [real-Pi acceptance](verification.md#real-pi-acceptance) are separate evidence.
 
 ## Material inventory
 
@@ -9,15 +9,15 @@ The 0.2.0 review covers **Pi 1.1.0–1.2.0 / Rust 1.88**. Fixed upstream source 
 | `src/` Rust implementation | Project-authored wire-compatible implementation; Apache-2.0 in [LICENSE](../LICENSE) |
 | Rust tests and in-memory/fake examples | Project-authored harnesses and regression cases, with protocol field names and fixture shapes derived from the pinned Pi definitions |
 | Three `tests/fixtures/rpc_*.ts` extensions | Project-authored acceptance, synthetic retry/compaction and wait-tool harnesses; they import Pi APIs and are explicitly opt-in |
-| Protocol descriptions, examples and compatibility evidence | Derived from the fixed Pi 1.1.0 and 1.2.0 sources listed in [compatibility](compatibility.md#required-source-evidence); Pi MIT copyright and permission text retained in [third-party notices](../THIRD_PARTY_NOTICES.md) |
+| Protocol descriptions, examples and compatibility evidence | Derived from the fixed Pi 1.1.0/1.2.0 [source evidence](compatibility.md#required-source-evidence) and [Pi 1.3.0 comparison](compatibility.md#pi-130-source-review-2026-10-18); Pi MIT copyright and permission text retained in [third-party notices](../THIRD_PARTY_NOTICES.md) |
 | CI workflow | Project-authored workflow with immutable third-party action references; action implementations are fetched by GitHub and are not in the source crate |
 | Cargo dependencies | Separately resolved third-party crates, not vendored source; license declarations reviewed below |
 
-The tracked-file inventory and introduction commits were inspected. No Pi source archive, executable, generated session, user auth/settings copy or vendor source directory is included. The TypeScript harnesses are not executed by ordinary builds/tests. The latest reviewed Pi protocol reference is fixed to commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, rather than a moving branch. The SHA-256 of that commit's full MIT `LICENSE` is **0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48**; its copyright and permission text are retained verbatim.
+The tracked-file inventory and introduction commits were inspected. No Pi source archive, executable, generated session, user auth/settings copy or vendor source directory is included. The TypeScript harnesses are not executed by ordinary builds/tests. The latest reviewed Pi protocol reference is Pi **1.3.0**, fixed to commit **71023aec1546d6d677a65669c5665c0927ce0dd0**, rather than a moving branch. The SHA-256 of that commit's full MIT `LICENSE` is **0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48**; its copyright and permission text are retained verbatim.
 
 ## Dependency metadata
 
-The 0.2.0 upgrade's locked all-feature metadata contains **41** non-project packages, all with license declarations. New build dependencies are `ar_archive_writer 0.5.3` (**Apache-2.0 WITH LLVM-exception**) and `object 0.39.1` (**Apache-2.0 OR MIT**); `psm 0.1.32` declares **MIT OR Apache-2.0** and Rust **1.88.0**. These crates remain separately resolved and are not vendored. Their declarations do not change the license of this project's original code.
+The 0.2.0 upgrade's locked all-feature metadata contains **41** non-project packages, all with license declarations; the 0.2.1 work retains that dependency set. Build dependencies introduced in 0.2.0 are `ar_archive_writer 0.5.3` (**Apache-2.0 WITH LLVM-exception**) and `object 0.39.1` (**Apache-2.0 OR MIT**); `psm 0.1.32` declares **MIT OR Apache-2.0** and Rust **1.88.0**. These crates remain separately resolved and are not vendored. Their declarations do not change the license of this project's original code.
 
 Individual dependency licenses remain authoritative. This is a source-package review, not a binary redistribution license inventory for downstream applications.
 
@@ -31,4 +31,4 @@ Fresh consumers resolve the current archive via Cargo metadata or an explicit `-
 
 ## Pi 1.3.0 development review
 
-Development 0.2.1 extends admission through Pi 1.3.0 with no dependency upgrades. The fixed source comparison and changed-file hashes are recorded in [compatibility](compatibility.md#pi-130-source-review-2026-10-18). The upstream MIT license is byte-identical to the previously reviewed baseline; retained notices remain unchanged. This is source evidence, not live Pi 1.3.0 acceptance.
+Development 0.2.1 extends admission through Pi 1.3.0 with no dependency upgrades. The fixed source comparison and changed-file hashes are recorded in [compatibility](compatibility.md#pi-130-source-review-2026-10-18). [Third-party notices](../THIRD_PARTY_NOTICES.md) identify all three reviewed releases and the latest fixed license source; the retained MIT text remains byte-identical. This is source evidence, not live Pi 1.3.0 acceptance.

@@ -4,6 +4,8 @@
 
 Development **0.2.1** extends support to **Pi >=1.1.0, <=1.3.0**, retaining Rust **1.88**, public fields and features. It is not published. Its latest reviewed source is `71023aec1546d6d677a65669c5665c0927ce0dd0`; 1.3.0 live acceptance is not claimed. The completed 0.2.0 checklist and evidence below remain historical. Publishing 0.2.1 requires a fresh clean-commit package review, full checks and six hosted jobs, plus separate upload/tag authorization.
 
+The [completed 0.2.1 development baseline](verification.md#021-completed-baseline-2026-10-18) is commit `d5bdb061f339fac98657df737400ea61bba46ad8`, with six successful native fake-only jobs and local stable/exact 1.88.0 package/consumer verification. Follow the [candidate evidence procedure](verification.md#candidate-evidence) for later commits; neither this baseline nor the historical upload checklist authorizes a new upload.
+
 **pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0**, with latest reviewed source commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, and requires **Rust 1.88**. Version 0.2.0 was published on 2026-10-16; registry bytes, Rust 1.88.0 registry consumption, docs.rs and the exact uploaded commit tag are confirmed in the [release record](verification.md#020-release-2026-10-16). Cargo continues to permit publishing only to `crates-io`.
 
 The published [0.1.0](https://crates.io/crates/pi-rpc/0.1.0) remains pinned to Pi 1.1.0/Rust 1.85, with the immutable [v0.1.0 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.1.0) at **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Its registry, docs.rs and hosted results are recorded in [verification](verification.md#010-release-2026-10-14); they do not establish 0.2.0 acceptance.
@@ -19,6 +21,8 @@ The package declares the repository, nonblank description, README, Apache-2.0 li
 - Finalize package-facing README/changelog/status text before packaging a release commit. After upload confirmation, tag the exact uploaded commit; later bookkeeping commits must not replace it as the tag target.
 
 ## Completed source and content review
+
+The checked items here and in the before/after-upload lists record the published **0.2.0** release. Current 0.2.1 source and license coverage are documented in [provenance](provenance.md).
 
 - [x] Compare fixed Pi 1.1.0/1.2.0 archives, RPC commands/events/UI, native sessions, model schemas and image/retry semantics. Preserve the identical pinned MIT notice in [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md).
 - [x] Retain Apache-2.0 and crate metadata; update metadata checks, negative regressions, fresh-consumer manifest and CI to Rust 1.88.
@@ -57,7 +61,7 @@ git diff --check
 
 Use offline mode only after dependencies/toolchains are downloaded. The fresh consumer and publishing rehearsal should have network access to resolve the registry index. `cargo package --locked` explicitly refreshes the standard archive; Cargo can place a publishing rehearsal's archive in a temporary subdirectory instead.
 
-Archive selection uses Cargo metadata to resolve the current package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and consumer, for example `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.2.0.crate`.
+Archive selection uses Cargo metadata to resolve the current package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and consumer, for example `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.2.1.crate`.
 
 The consumer checks clean VCS identity, version, metadata, notices, links and every archived source byte before extracting that exact snapshot into a fresh directory. It ignores stale unpacked directories and creates its own lockfile. All four feature configurations compile/run the public-path tests and in-memory example; both session configurations also run the native-session example. No Pi process is executed.
 

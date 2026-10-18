@@ -8,7 +8,7 @@ A bounded Tokio async JSONL client for **Pi 1.1.0 through 1.3.0**. Rust imports 
 | **0.2.0** | **>=1.1.0, <=1.2.0** | **1.88** | [crates.io](https://crates.io/crates/pi-rpc/0.2.0) |
 | **0.1.0** | **1.1.0** | **1.85** | [crates.io](https://crates.io/crates/pi-rpc/0.1.0) |
 
-The [documented acceptance baseline](https://github.com/Coder-Sang/pi-rpc/actions/runs/38870217910) is commit `773ada9`: all six Linux/macOS/Windows × stable/exact **1.88.0** jobs passed. New candidates are identified by the [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml): each job publishes a `release-evidence-*` artifact binding its actual commit, compiler and crate digest. Require all six jobs to succeed; see [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#candidate-evidence) for interpretation. Real Pi acceptance is recorded separately. Pi is a separately installed executable.
+The [completed 0.2.1 verification baseline](https://github.com/Coder-Sang/pi-rpc/actions/runs/39111745084) is commit `d5bdb061f339fac98657df737400ea61bba46ad8`: all six Linux/macOS/Windows × stable/exact **1.88.0** jobs passed with fake/in-memory transports. New candidates are identified by the [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml): each job publishes a `release-evidence-*` artifact binding its actual commit, compiler and crate digest. Require all six jobs to succeed; see [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#candidate-evidence) for interpretation. Real Pi acceptance is recorded separately. Pi is a separately installed executable.
 
 The latest reviewed Pi source baseline is **1.3.0**. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/main/LICENSE), with retained [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/main/THIRD_PARTY_NOTICES.md).
 
@@ -22,7 +22,7 @@ pi-rpc = { path = "../pi-rpc" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-To consume a Git candidate, choose a successful six-job [Verify run](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml), read `source.commit` from its `release-evidence-*` artifact, and replace the path dependency with `git = "https://github.com/Coder-Sang/pi-rpc.git"` and `rev` set to that exact commit. The historical acceptance baseline above does not select newer candidates automatically.
+To consume a Git candidate, choose a successful six-job [Verify run](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml), read `source.commit` from its `release-evidence-*` artifact, and replace the path dependency with `git = "https://github.com/Coder-Sang/pi-rpc.git"` and `rev` set to that exact commit. The completed baseline above does not select newer candidates automatically.
 
 The published `pi-rpc = "0.2.0"` supports Pi 1.1.0–1.2.0. The published dependency `pi-rpc = "0.1.0"` retains the older Pi 1.1.0/Rust 1.85 contract. Commit your application's `Cargo.lock` and update dependencies deliberately. The feature options below apply to Git, path and registry dependencies.
 
