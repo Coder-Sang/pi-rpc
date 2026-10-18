@@ -1,12 +1,12 @@
 # Changelog
 
-## 0.2.1 — unreleased
+## 0.2.1 — 2026-10-18
 
-- Require a concrete Pi version in both opt-in acceptance entrypoints, rejecting current and legacy range expressions before probing. Keep SDK legacy-range admission unchanged and run no-Pi entrypoint regressions in the normal and Debug/Release gates.
-- Preserve ready protocol failures when process-exit draining crosses its 50 ms deadline. Final validation is nonwaiting and byte-bounded, including a single-byte EOF probe for unfinished records at the exact 4 KiB budget; dispatch cutoff, EOF grace and owner close deadlines remain unchanged. Add paused-clock ordering, bounded-read and stack regressions.
-
-- Extend inclusive Pi admission to **1.1.0 through 1.3.0**, retaining exact version locks and Rust **1.88**. The latest reviewed Pi source is `71023aec1546d6d677a65669c5665c0927ce0dd0`.
+- Extend inclusive Pi admission to **1.1.0 through 1.3.0**, retaining exact version locks and Rust **1.88**. The previous fixed `>=1.1.0, <=1.2.0` configuration keeps its original upper bound. The latest reviewed Pi source is `71023aec1546d6d677a65669c5665c0927ce0dd0`.
 - Preserve Pi 1.3.0 tool-call `argumentsError` and model `supportsMidConvoEffort` metadata through existing extension JSON without changing public field types. Add fragmented-stream, history, native-session and three-version admission/lifecycle regressions.
+- Preserve ready protocol failures when process-exit draining crosses its 50 ms deadline. Final validation is nonwaiting and byte-bounded, including a single-byte EOF probe for unfinished records at the exact 4 KiB budget; dispatch cutoff, EOF grace and owner close deadlines remain unchanged.
+- Add deterministic terminal/resource regressions covering blocked partial writes, flushes, queued records, pending and budget release, and explicit shutdown-call assertions that cannot be hidden by a background panic.
+- Require concrete Pi versions in opt-in acceptance entrypoints, rejecting current and legacy range expressions before probing. Verify the `PI_VERSION` default and exact version forwarding with a std-only fake probe, including rejection before RPC startup and local negative controls. Run the entrypoint regressions in normal and Debug/Release gates without real Pi or model requests.
 - Keep the shared RPC implementation. Provider behavior changes remain Pi-owned; no real Pi or paid-model acceptance for 1.3.0 is claimed. Published 0.2.0 retains its original Pi 1.1.0–1.2.0 support.
 
 ## 0.2.0 — 2026-10-16

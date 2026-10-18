@@ -23,6 +23,6 @@ All four examples below are opt-in and subprocess-feature gated. They are compil
 
 Use `cargo run --offline --example NAME -- ...`. Path guards in the opt-in examples are lexical, not a filesystem sandbox: use trusted scratch paths without symlinks or parent-directory traversal. Existing provider authentication is handled only by Pi. Settings isolation does not guarantee a readonly authentication copy: Pi may refresh tokens in that private copy. Scratch authentication/configuration cleanup remains the caller's responsibility. See the dated [per-RPC evidence and limitations](verification.md#real-pi-acceptance).
 
-## Development Pi 1.3.0 examples
+## Pi 1.3.0 examples and historical acceptance
 
 Historical Pi 1.1.0/1.2.0 live acceptance is recorded against the published 0.2.0 source; use that tagged source to reproduce those observations. Running current source with an explicit older version is a new acceptance run. The manual CI smoke keeps its verified 1.2.0 download and passes the exact version explicitly. Fake-only tests of the current entrypoints reject both range expressions and admit concrete/default versions without an installed Pi. Real Pi/model execution still requires separate authorization.

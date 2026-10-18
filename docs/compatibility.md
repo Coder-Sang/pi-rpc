@@ -1,6 +1,6 @@
 # Source coverage and compatibility
 
-Current development **pi-rpc 0.2.1** supports **Pi >=1.1.0, <=1.3.0**, with Rust **1.88**. The latest reviewed release is [Pi 1.3.0](https://github.com/earendil-works/pi/releases/tag/v1.3.0), fixed commit [`71023aec1546d6d677a65669c5665c0927ce0dd0`](https://github.com/earendil-works/pi/tree/71023aec1546d6d677a65669c5665c0927ce0dd0). Published 0.2.0 retains Pi 1.1.0–1.2.0; published 0.1.0 retains Pi 1.1.0/Rust 1.85. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
+**pi-rpc 0.2.1** supports **Pi >=1.1.0, <=1.3.0**, with Rust **1.88**. The latest reviewed release is [Pi 1.3.0](https://github.com/earendil-works/pi/releases/tag/v1.3.0), fixed commit [`71023aec1546d6d677a65669c5665c0927ce0dd0`](https://github.com/earendil-works/pi/tree/71023aec1546d6d677a65669c5665c0927ce0dd0). Published 0.2.0 retains Pi 1.1.0–1.2.0; published 0.1.0 retains Pi 1.1.0/Rust 1.85. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
 
 ## Version range and review evidence
 

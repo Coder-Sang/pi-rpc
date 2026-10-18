@@ -1,6 +1,6 @@
 # Release provenance and package review
 
-The development **0.2.1** review covers **Pi 1.1.0–1.3.0 / Rust 1.88**. Fixed upstream source archives were compared; [compatibility](compatibility.md#upgrade-from-pi-110-to-120) records the original 1.1.0/1.2.0 comparison, and the [Pi 1.3.0 review](compatibility.md#pi-130-source-review-2026-10-18) records the extension. All three fixed releases have identical Pi MIT license bytes. The published 0.2.0 review remains scoped to Pi 1.1.0–1.2.0. Source review, [fake-only candidate verification](verification.md#021-completed-baseline-2026-10-18) and [real-Pi acceptance](verification.md#real-pi-acceptance) are separate evidence.
+The **0.2.1** review covers **Pi 1.1.0–1.3.0 / Rust 1.88**. Fixed upstream source archives were compared; [compatibility](compatibility.md#upgrade-from-pi-110-to-120) records the original 1.1.0/1.2.0 comparison, and the [Pi 1.3.0 review](compatibility.md#pi-130-source-review-2026-10-18) records the extension. All three fixed releases have identical Pi MIT license bytes. The published 0.2.0 review remains scoped to Pi 1.1.0–1.2.0. Source review, [fake-only candidate verification](verification.md#021-completed-baseline-2026-10-18) and [real-Pi acceptance](verification.md#real-pi-acceptance) are separate evidence.
 
 ## Material inventory
 
@@ -31,4 +31,4 @@ Fresh consumers resolve the current archive via Cargo metadata or an explicit `-
 
 ## Pi 1.3.0 development review
 
-Development 0.2.1 extends admission through Pi 1.3.0 with no dependency upgrades. The fixed source comparison and changed-file hashes are recorded in [compatibility](compatibility.md#pi-130-source-review-2026-10-18). [Third-party notices](../THIRD_PARTY_NOTICES.md) identify all three reviewed releases and the latest fixed license source; the retained MIT text remains byte-identical. This is source evidence, not live Pi 1.3.0 acceptance.
+Version 0.2.1 extends admission through Pi 1.3.0 with no dependency upgrades. The fixed source comparison and changed-file hashes are recorded in [compatibility](compatibility.md#pi-130-source-review-2026-10-18). [Third-party notices](../THIRD_PARTY_NOTICES.md) identify all three reviewed releases and the latest fixed license source; the retained MIT text remains byte-identical. This is source evidence, not live Pi 1.3.0 acceptance.
