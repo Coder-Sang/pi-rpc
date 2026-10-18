@@ -6,7 +6,10 @@ use crate::{
 use std::{
     future::Future,
     pin::Pin,
-    sync::Mutex,
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     task::{Context, Poll},
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -278,11 +281,22 @@ async fn exit_deadline_protocol_failure_reaches_pending_owner_and_events_once() 
     }
 }
 
+struct WriterDropNotice(Option<tokio::sync::oneshot::Sender<()>>);
+impl Drop for WriterDropNotice {
+    fn drop(&mut self) {
+        if let Some(sender) = self.0.take() {
+            let _ = sender.send(());
+        }
+    }
+}
+
 struct BlockedWriter {
     block_flush: bool,
     written: usize,
     blocked: Option<tokio::sync::oneshot::Sender<usize>>,
-    dropped: Option<tokio::sync::oneshot::Sender<()>>,
+    shutdown_calls: Arc<AtomicUsize>,
+    shutdown_on_drop: bool,
+    _drop_notice: WriterDropNotice,
 }
 impl AsyncWrite for BlockedWriter {
     fn poll_write(
@@ -312,13 +326,17 @@ impl AsyncWrite for BlockedWriter {
         Poll::Pending
     }
     fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        self.shutdown_calls.fetch_add(1, Ordering::SeqCst);
         panic!("Protocol termination must abort the blocked writer");
     }
 }
 impl Drop for BlockedWriter {
     fn drop(&mut self) {
-        if let Some(sender) = self.dropped.take() {
-            let _ = sender.send(());
+        if self.shutdown_on_drop {
+            // Negative control: the notice field still drops during unwinding,
+            // after shutdown increments the counter and the I/O task panics.
+            let _ =
+                Pin::new(self).poll_shutdown(&mut Context::from_waker(std::task::Waker::noop()));
         }
     }
 }
@@ -326,118 +344,156 @@ impl Drop for BlockedWriter {
 #[tokio::test(start_paused = true)]
 async fn protocol_termination_refunds_in_flight_and_queued_writes() {
     for block_flush in [false, true] {
-        let started = tokio::time::Instant::now();
-        let checked_at = started + Duration::from_millis(51);
-        let (reader, mut peer) = tokio::io::duplex(8192);
-        peer.write_all(b"{\"type\":\"agent_start\"}\n{\"type\":")
-            .await
-            .unwrap();
-        let (pending_tx, pending) = tokio::sync::oneshot::channel();
-        let (blocked_tx, blocked) = tokio::sync::oneshot::channel();
-        let (dropped_tx, dropped) = tokio::sync::oneshot::channel();
-        let reads = Arc::new(Mutex::new(Vec::new()));
-        let (_exit_tx, exit) = watch::channel(Some(Error::ProcessExit(Some(0))));
-        let mut transport = Transport::new(
-            PendingRead {
-                reader,
-                pending: Some(pending_tx),
-                ready: Box::pin(tokio::time::sleep_until(
-                    started + Duration::from_millis(50),
-                )),
-                reads: reads.clone(),
-            },
-            BlockedWriter {
-                block_flush,
-                written: 0,
-                blocked: Some(blocked_tx),
-                dropped: Some(dropped_tx),
-            },
-            crate::PI_VERSION,
-        )
-        .unwrap();
-        transport.exit = Some(exit);
-        let config = Config {
-            max_pending_commands: 2,
-            max_writer_records: 1,
-            max_writer_bytes: 1024,
-            ..Config::default()
-        };
-        let (client, mut events, mut owner) =
-            PiConnection::connect(transport, config.clone()).unwrap();
-
-        // Keep both command futures unpolled after admission, so PendingGuard
-        // cannot hide missing supervisor cleanup by removing their pending IDs.
-        let in_flight = client.get_state();
-        tokio::pin!(in_flight);
-        assert!(
-            std::future::poll_fn(|cx| Poll::Ready(in_flight.as_mut().poll(cx)))
-                .await
-                .is_pending()
-        );
-        pending.await.unwrap();
-        let written = blocked.await.unwrap();
-        let record_bytes = config.max_writer_bytes - client.budget.available_permits();
-        assert!(record_bytes > 1);
-        assert_eq!(written, if block_flush { record_bytes } else { 1 });
-        assert_eq!(client.shared.pending_count(), 1);
-        assert_eq!(client.admission.available_permits(), 1);
-        assert_eq!(client.writer.capacity(), 1);
-
-        let queued = client.get_state();
-        tokio::pin!(queued);
-        assert!(
-            std::future::poll_fn(|cx| Poll::Ready(queued.as_mut().poll(cx)))
-                .await
-                .is_pending()
-        );
-        assert_eq!(client.shared.pending_count(), 2);
-        assert_eq!(client.admission.available_permits(), 0);
-        assert_eq!(client.writer.capacity(), 0);
-        assert_eq!(
-            client.budget.available_permits(),
-            config.max_writer_bytes - 2 * record_bytes
-        );
-        peer.write_all(&[b' '; 4096]).await.unwrap();
-        drop(peer);
-        assert_eq!(tokio::time::Instant::now(), started);
-        assert!(reads.lock().unwrap().is_empty(), "tail must remain unread");
-
-        tokio::time::advance(Duration::from_millis(51)).await;
-        let terminal = owner.wait_terminal().await;
-        assert_eq!(
-            terminal,
-            Error::Protocol("unterminated record at EOF".into())
-        );
-        assert_eq!(
-            *reads.lock().unwrap(),
-            vec![(4096, 4096, checked_at), (1, 0, checked_at)]
-        );
-        assert_eq!(client.shared.pending_count(), 0);
-        assert_eq!(
-            client.admission.available_permits(),
-            config.max_pending_commands
-        );
-        // Terminal publication precedes I/O task cancellation. Wait for the
-        // writer's Drop, not command completion or close(), to check refunds.
-        tokio::time::timeout(Duration::from_millis(1), dropped)
-            .await
-            .expect("blocked writer must be dropped without waiting for I/O")
-            .unwrap();
-        assert_eq!(tokio::time::Instant::now(), checked_at);
-        assert_eq!(client.budget.available_permits(), config.max_writer_bytes);
-        assert_eq!(client.writer.capacity(), config.max_writer_records);
-        assert!(client.writer.is_closed());
-        assert_eq!(in_flight.await, Err(terminal.clone()));
-        assert_eq!(queued.await, Err(terminal.clone()));
-        assert_eq!(
-            events.recv().await,
-            Some(Ok(Event::Known(crate::protocol::KnownEvent::AgentStart)))
-        );
-        assert_eq!(events.recv().await, Some(Err(terminal.clone())));
-        assert_eq!(events.recv().await, None);
-        assert_eq!(owner.close().await, terminal);
-        assert_eq!(owner.terminal_reason(), Some(terminal));
-        assert_eq!(events.recv().await, None);
-        assert_eq!(tokio::time::Instant::now(), checked_at);
+        protocol_termination_case(block_flush, false, Arc::new(AtomicUsize::new(0))).await;
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn forbidden_shutdown_fails_resource_checks_despite_background_panic() {
+    for block_flush in [false, true] {
+        let shutdown_calls = Arc::new(AtomicUsize::new(0));
+        let error = tokio::spawn(protocol_termination_case(
+            block_flush,
+            true,
+            shutdown_calls.clone(),
+        ))
+        .await
+        .expect_err("forbidden shutdown must fail the resource checks");
+        assert!(error.is_panic(), "{error}");
+        assert_eq!(shutdown_calls.load(Ordering::SeqCst), 1);
+        let payload = error.into_panic();
+        let message = payload
+            .downcast_ref::<String>()
+            .expect("the explicit shutdown-count assertion must panic");
+        assert!(
+            message.contains("Protocol termination must not call shutdown"),
+            "unexpected panic: {message}"
+        );
+    }
+}
+
+async fn protocol_termination_case(
+    block_flush: bool,
+    shutdown_on_drop: bool,
+    shutdown_calls: Arc<AtomicUsize>,
+) {
+    let started = tokio::time::Instant::now();
+    let checked_at = started + Duration::from_millis(51);
+    let (reader, mut peer) = tokio::io::duplex(8192);
+    peer.write_all(b"{\"type\":\"agent_start\"}\n{\"type\":")
+        .await
+        .unwrap();
+    let (pending_tx, pending) = tokio::sync::oneshot::channel();
+    let (blocked_tx, blocked) = tokio::sync::oneshot::channel();
+    let (dropped_tx, dropped) = tokio::sync::oneshot::channel();
+    let reads = Arc::new(Mutex::new(Vec::new()));
+    let (_exit_tx, exit) = watch::channel(Some(Error::ProcessExit(Some(0))));
+    let mut transport = Transport::new(
+        PendingRead {
+            reader,
+            pending: Some(pending_tx),
+            ready: Box::pin(tokio::time::sleep_until(
+                started + Duration::from_millis(50),
+            )),
+            reads: reads.clone(),
+        },
+        BlockedWriter {
+            block_flush,
+            written: 0,
+            blocked: Some(blocked_tx),
+            shutdown_calls: shutdown_calls.clone(),
+            shutdown_on_drop,
+            _drop_notice: WriterDropNotice(Some(dropped_tx)),
+        },
+        crate::PI_VERSION,
+    )
+    .unwrap();
+    transport.exit = Some(exit);
+    let config = Config {
+        max_pending_commands: 2,
+        max_writer_records: 1,
+        max_writer_bytes: 1024,
+        ..Config::default()
+    };
+    let (client, mut events, mut owner) = PiConnection::connect(transport, config.clone()).unwrap();
+
+    // Keep both command futures unpolled after admission, so PendingGuard
+    // cannot hide missing supervisor cleanup by removing their pending IDs.
+    let in_flight = client.get_state();
+    tokio::pin!(in_flight);
+    assert!(
+        std::future::poll_fn(|cx| Poll::Ready(in_flight.as_mut().poll(cx)))
+            .await
+            .is_pending()
+    );
+    pending.await.unwrap();
+    let written = blocked.await.unwrap();
+    let record_bytes = config.max_writer_bytes - client.budget.available_permits();
+    assert!(record_bytes > 1);
+    assert_eq!(written, if block_flush { record_bytes } else { 1 });
+    assert_eq!(client.shared.pending_count(), 1);
+    assert_eq!(client.admission.available_permits(), 1);
+    assert_eq!(client.writer.capacity(), 1);
+
+    let queued = client.get_state();
+    tokio::pin!(queued);
+    assert!(
+        std::future::poll_fn(|cx| Poll::Ready(queued.as_mut().poll(cx)))
+            .await
+            .is_pending()
+    );
+    assert_eq!(client.shared.pending_count(), 2);
+    assert_eq!(client.admission.available_permits(), 0);
+    assert_eq!(client.writer.capacity(), 0);
+    assert_eq!(
+        client.budget.available_permits(),
+        config.max_writer_bytes - 2 * record_bytes
+    );
+    peer.write_all(&[b' '; 4096]).await.unwrap();
+    drop(peer);
+    assert_eq!(tokio::time::Instant::now(), started);
+    assert!(reads.lock().unwrap().is_empty(), "tail must remain unread");
+
+    tokio::time::advance(Duration::from_millis(51)).await;
+    let terminal = owner.wait_terminal().await;
+    assert_eq!(
+        terminal,
+        Error::Protocol("unterminated record at EOF".into())
+    );
+    assert_eq!(
+        *reads.lock().unwrap(),
+        vec![(4096, 4096, checked_at), (1, 0, checked_at)]
+    );
+    assert_eq!(client.shared.pending_count(), 0);
+    assert_eq!(
+        client.admission.available_permits(),
+        config.max_pending_commands
+    );
+    // Terminal publication precedes I/O task cancellation. Wait for the
+    // writer's Drop, not command completion or close(), to check refunds.
+    tokio::time::timeout(Duration::from_millis(1), dropped)
+        .await
+        .expect("blocked writer must be dropped without waiting for I/O")
+        .unwrap();
+    assert_eq!(tokio::time::Instant::now(), checked_at);
+    assert_eq!(
+        shutdown_calls.load(Ordering::SeqCst),
+        0,
+        "Protocol termination must not call shutdown"
+    );
+    assert_eq!(client.budget.available_permits(), config.max_writer_bytes);
+    assert_eq!(client.writer.capacity(), config.max_writer_records);
+    assert!(client.writer.is_closed());
+    assert_eq!(in_flight.await, Err(terminal.clone()));
+    assert_eq!(queued.await, Err(terminal.clone()));
+    assert_eq!(
+        events.recv().await,
+        Some(Ok(Event::Known(crate::protocol::KnownEvent::AgentStart)))
+    );
+    assert_eq!(events.recv().await, Some(Err(terminal.clone())));
+    assert_eq!(events.recv().await, None);
+    assert_eq!(owner.close().await, terminal);
+    assert_eq!(owner.terminal_reason(), Some(terminal));
+    assert_eq!(events.recv().await, None);
+    assert_eq!(tokio::time::Instant::now(), checked_at);
 }
