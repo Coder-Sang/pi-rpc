@@ -8,7 +8,7 @@ if ! command -v "$python_command" >/dev/null 2>&1; then
 fi
 # cargo fmt does not resolve dependencies and does not accept --locked.
 cargo fmt --check
-rustfmt --edition 2024 --check tests/fixtures/fake_pi.rs
+rustfmt --edition 2024 --check tests/fixtures/fake_pi.rs tests/fixtures/acceptance_probe.rs
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;

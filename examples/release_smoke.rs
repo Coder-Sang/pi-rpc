@@ -67,8 +67,13 @@ async fn run(mut args: impl Iterator<Item = std::ffi::OsString>) -> pi_rpc::Resu
 }
 
 #[cfg(test)]
+#[path = "../tests/support/acceptance_version.rs"]
+mod acceptance_version;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use acceptance_version::{Fixture, VERSIONS};
 
     #[tokio::test]
     async fn acceptance_requires_a_concrete_version_before_probing() {
@@ -90,23 +95,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn concrete_and_default_versions_reach_the_probe() {
-        let root = tempfile::tempdir().unwrap();
-        let executable = root.path().join("nonexistent-pi").into_os_string();
-        for version in [
-            None,
-            Some("1.1.0"),
-            Some("1.1.10"),
-            Some("1.2.0"),
-            Some("1.3.0"),
-        ] {
-            let mut args = vec![executable.clone()];
-            args.extend(version.map(std::ffi::OsString::from));
-            let result = run(args.into_iter()).await;
-            assert!(
-                matches!(result, Err(Error::Transport(_))),
-                "{version:?}: {result:?}"
-            );
+    async fn default_version_is_the_latest_reviewed_exact_release() {
+        let fixture = Fixture::new();
+        for actual in VERSIONS {
+            let probe = fixture.probe(actual);
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                run([probe.executable().as_os_str().to_owned()].into_iter()),
+            )
+            .await
+            .expect("acceptance entrypoint stalled");
+            probe.assert_outcome(result, PI_VERSION);
+        }
+    }
+
+    #[tokio::test]
+    async fn explicit_versions_are_exact_locks_before_rpc_startup() {
+        let fixture = Fixture::new();
+        for expected in VERSIONS {
+            for actual in VERSIONS {
+                let probe = fixture.probe(actual);
+                let result = tokio::time::timeout(
+                    std::time::Duration::from_secs(10),
+                    run([probe.executable().as_os_str().to_owned(), expected.into()].into_iter()),
+                )
+                .await
+                .expect("acceptance entrypoint stalled");
+                probe.assert_outcome(result, expected);
+            }
         }
     }
 }
