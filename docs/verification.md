@@ -4,7 +4,7 @@
 
 **pi-rpc 0.2.1** supports **Pi >=1.1.0, <=1.3.0** and requires **Rust 1.88**. Pi **1.3.0**, commit `71023aec1546d6d677a65669c5665c0927ce0dd0`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
 
-The 0.2.1 release is authorized for 2026-10-18, subject to fresh clean-commit checks and six successful hosted jobs before upload. Its actual registry bytes, exact-MSRV registry consumer, docs.rs and uploaded-commit tag are recorded after confirmation in a later bookkeeping commit; that commit must not replace the uploaded source. The [0.2.0 release](#020-release-2026-10-16) is published and its hosted documentation is verified. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+The [0.2.1 release](#021-release-2026-10-18) was published on 2026-10-18 after complete clean-commit verification and six successful hosted jobs. Its actual registry bytes, exact Rust 1.88.0 registry consumer, docs.rs and uploaded-commit tag are confirmed below. This later documentation bookkeeping does not replace the uploaded source. The [0.2.0 release](#020-release-2026-10-16) retains its separately recorded results. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
 
 ## Pi 1.3.0 development status
 
@@ -30,7 +30,7 @@ The matching local macOS aarch64 verification used stable **Rust 1.97.1** and ex
 
 All **50** Python checker regressions, Markdown/generated-HTML links, whitespace checks, strict packaging and publication **dry-run** passed. All **102** tracked source hashes stayed unchanged during acceptance. The inspected local archive contained **104 files**, SHA-256 **`73cb3ef1455c9ffc4fab349047a7bfd60b1849785349a830254c9c475e15f9fe`**. The independent consumers used that verified source snapshot. This is a completed development baseline, not the final release archive or live Pi 1.3.0 acceptance.
 
-The final release documentation requires its own fresh checks and six-job run. Its actual commit, archive digest and matching run belong in the [candidate evidence](#candidate-evidence) outside the package; the completed baseline above is not substituted for those results.
+The final release documentation passed its own fresh checks and six-job run, recorded in the [0.2.1 release results](#021-release-2026-10-18). The matching [candidate evidence](#candidate-evidence) was preserved outside the package; the development baseline above was not substituted for those results.
 
 ## Local verification (2026-10-16)
 
@@ -69,7 +69,7 @@ These local observations do not establish exhaustive model/event-variant coverag
 
 The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/1.88.0**, six jobs. Each executes its feature matrix, three stress rounds, native Debug/Release regressions, archive inspection and a fresh packaged consumer. The manual real-Pi job remains opt-in and disabled on normal pushes.
 
-The [completed 0.2.1 baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500) passed all six jobs for **`d27fb2c8de7abe2dedb6aec5aced08d4096eb766`**, including Windows stable and exact Rust 1.88.0. This is the same completed baseline identified in the README. Subsequent candidate conclusions and evidence are published by the workflow; the baseline is not a claim that later commits have already passed.
+The [completed 0.2.1 baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500) passed all six jobs for **`d27fb2c8de7abe2dedb6aec5aced08d4096eb766`**, including Windows stable and exact Rust 1.88.0. This is the same completed baseline identified in the README. The final uploaded commit **`6a7004d6f845857753bd64cfdbf0762807f1c405`** separately passed its [six release jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39120347264), including both Windows toolchains; all six matching candidate artifacts were present. Later documentation commits have their own workflow results and do not replace the release source.
 
 ## Candidate evidence
 
@@ -87,6 +87,19 @@ The recorder checks metadata, licenses, archive safety, clean VCS identity and e
 A record attests only to its archive/source inspection, not to tests it did not execute. For CI acceptance, confirm **all six jobs succeeded for the same `source.commit`** and inspect their preceding test steps. Keep the relevant JSON and complete run link outside the crate archive, preserving them before CI artifact retention expires. Different platforms/Cargo versions can produce different archive digests; compare the eventual upload with the selected upload platform's archive, not with an assumed universal digest.
 
 The candidate's own commit and digest are recorded after it exists, outside the package. Documentation therefore records a completed baseline and the evidence procedure, rather than changing its own SHA after every verification run. Real-Pi observations above remain separately dated and scoped; these fake-only gates do not rerun or extend them.
+
+## 0.2.1 release (2026-10-18)
+
+Published [pi-rpc 0.2.1](https://crates.io/crates/pi-rpc/0.2.1) supports **Pi 1.1.0 through 1.3.0 / Rust 1.88**. The immutable [v0.2.1 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.2.1) points to the actual uploaded commit **`6a7004d6f845857753bd64cfdbf0762807f1c405`**. This later documentation bookkeeping does not replace that release source. The legacy `>=1.1.0, <=1.2.0` SDK configuration retains its original upper bound; public Rust paths, field types and features are unchanged.
+
+- The [six release CI jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39120347264) passed on Linux/macOS/Windows with stable and exact **Rust 1.88.0**, each with its matching candidate evidence artifact. The manual real-Pi job was skipped.
+- The clean release commit passed complete local verification on macOS aarch64: stable **Rust 1.97.1** and exact **1.88.0** each passed **624** feature-matrix, **243** three-round stress and **320** Debug/Release boundary test executions, plus fresh packaged consumers in all four feature configurations. Formatting, strict Clippy, Rustdoc/generated-HTML, all **50** Python regressions, Markdown links, whitespace checks, strict archive inspection and publication dry-run passed. All **102** tracked source hashes stayed unchanged during acceptance.
+- The downloaded registry archive matches the pre-upload inspected archive byte for byte: **104 files**, **169575 bytes**, SHA-256 **`cf4ff040cda7da561a1ca62028fa004b8cbb85c575c1b7123197b78fc3ed4c30`**. Its clean `.cargo_vcs_info.json` identifies the uploaded commit above, and source/metadata/license inspection passed again on the downloaded archive.
+- A fresh **Rust 1.88.0** registry consumer resolved exactly `pi-rpc = "=0.2.1"`, verified the registry source and checksum in its new lockfile, and passed public-path tests and in-memory examples in all four feature configurations. Both session configurations passed the native-session example. No path/patch SDK override, Pi process or model was used.
+- [docs.rs 0.2.1](https://docs.rs/pi-rpc/0.2.1/pi_rpc/) is available. Its crate index, `SessionFileBuilder`, `PiProcess`, `ProcessOptions`, `PI_VERSION_REQUIREMENT` and `SOURCE_COMMIT` pages were checked, including the supported range and latest reviewed upstream commit. The hosted docs.rs compiler is separate from the exact-MSRV consumer evidence.
+- The remote annotated tag peels to the actual uploaded commit. All **eight** distinct README guide/license targets under `v0.2.1` are accessible and match that release source byte for byte.
+
+The release checks did not invoke real Pi or paid models and do not establish live Pi 1.3.0 acceptance. Earlier real-Pi observations retain their separately recorded scope. Complete candidate/publication evidence is retained outside the crate archive; subsequent main/tag workflow results can be inspected in the [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml).
 
 ## 0.2.0 release (2026-10-16)
 
