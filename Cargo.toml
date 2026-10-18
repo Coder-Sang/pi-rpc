@@ -44,10 +44,12 @@ required-features = ["session_file"]
 [[example]]
 name = "release_smoke"
 required-features = ["subprocess"]
+test = true
 
 [[example]]
 name = "model_smoke"
 required-features = ["subprocess"]
+test = true
 
 [[example]]
 name = "rpc_extension_smoke"

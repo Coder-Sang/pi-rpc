@@ -3,7 +3,10 @@ use pi_rpc::{Error, PI_VERSION, PiProcess, ProcessOptions};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> pi_rpc::Result<()> {
-    let mut args = std::env::args_os().skip(1);
+    run(std::env::args_os().skip(1)).await
+}
+
+async fn run(mut args: impl Iterator<Item = std::ffi::OsString>) -> pi_rpc::Result<()> {
     let executable = args
         .next()
         .expect("usage: release_smoke /absolute/path/to/pi [exact-pi-version]");
@@ -13,9 +16,8 @@ async fn main() -> pi_rpc::Result<()> {
         .unwrap_or_else(|| PI_VERSION.into());
     assert!(args.next().is_none(), "unexpected arguments");
     // Acceptance must identify a concrete release, not merely admit a range.
-    if expected_version == pi_rpc::PI_VERSION_REQUIREMENT {
-        return Err(Error::Version);
-    }
+    // Transport validates a concrete supported version without performing I/O.
+    pi_rpc::Transport::new(tokio::io::empty(), tokio::io::sink(), &expected_version)?;
     let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
         expected_version: expected_version.clone(),
         executable: executable.into(),
@@ -62,4 +64,49 @@ async fn main() -> pi_rpc::Result<()> {
         "Pi {expected_version}: 10 read-only RPCs passed; clean exit and terminal delivery verified"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn acceptance_requires_a_concrete_version_before_probing() {
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("nonexistent-pi").into_os_string();
+        for version in [
+            pi_rpc::PI_VERSION_REQUIREMENT,
+            ">=1.1.0, <=1.2.0",
+            "1.0.9",
+            "1.3.1",
+            "1.01.0",
+            "1.3.0 ",
+            "v1.3.0",
+            "1.3.0-beta",
+        ] {
+            let result = run([executable.clone(), version.into()].into_iter()).await;
+            assert_eq!(result, Err(Error::Version), "{version}");
+        }
+    }
+
+    #[tokio::test]
+    async fn concrete_and_default_versions_reach_the_probe() {
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("nonexistent-pi").into_os_string();
+        for version in [
+            None,
+            Some("1.1.0"),
+            Some("1.1.10"),
+            Some("1.2.0"),
+            Some("1.3.0"),
+        ] {
+            let mut args = vec![executable.clone()];
+            args.extend(version.map(std::ffi::OsString::from));
+            let result = run(args.into_iter()).await;
+            assert!(
+                matches!(result, Err(Error::Transport(_))),
+                "{version:?}: {result:?}"
+            );
+        }
+    }
 }

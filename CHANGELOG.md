@@ -2,6 +2,7 @@
 
 ## 0.2.1 — unreleased
 
+- Require a concrete Pi version in both opt-in acceptance entrypoints, rejecting current and legacy range expressions before probing. Keep SDK legacy-range admission unchanged and run no-Pi entrypoint regressions in the normal and Debug/Release gates.
 - Preserve ready protocol failures when process-exit draining crosses its 50 ms deadline. Final validation is nonwaiting and byte-bounded, including a single-byte EOF probe for unfinished records at the exact 4 KiB budget; dispatch cutoff, EOF grace and owner close deadlines remain unchanged. Add paused-clock ordering, bounded-read and stack regressions.
 
 - Extend inclusive Pi admission to **1.1.0 through 1.3.0**, retaining exact version locks and Rust **1.88**. The latest reviewed Pi source is `71023aec1546d6d677a65669c5665c0927ce0dd0`.

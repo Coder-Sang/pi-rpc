@@ -12,7 +12,8 @@ for profile in debug release; do
   fi
   echo "UI, float, stack and close regressions: $profile"
   cargo test --locked --all-features ${flags[@]+"${flags[@]}"} \
-    --lib --example rpc_live_smoke --test ui_reply --test ui_close --test client --test subprocess \
+    --lib --example rpc_live_smoke --example release_smoke --example model_smoke \
+    --test ui_reply --test ui_close --test client --test subprocess \
     --test protocol --test public_paths --test json_depth --test encoding_limits --test image_capacity --test capacity_defaults \
     --test session_depth --test session_encoding_limits --test session_numbers
 done
