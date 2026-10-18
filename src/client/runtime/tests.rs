@@ -6,6 +6,7 @@ use crate::{
 use std::{
     future::Future,
     pin::Pin,
+    sync::Mutex,
     task::{Context, Poll},
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -149,6 +150,8 @@ async fn elapsed_exit_keeps_cutoff_for_valid_ui_and_unfinished_live_pipes() {
 struct PendingRead {
     reader: tokio::io::DuplexStream,
     pending: Option<tokio::sync::oneshot::Sender<()>>,
+    ready: Pin<Box<tokio::time::Sleep>>,
+    reads: Arc<Mutex<Vec<(usize, usize, tokio::time::Instant)>>>,
 }
 impl AsyncRead for PendingRead {
     fn poll_read(
@@ -156,7 +159,22 @@ impl AsyncRead for PendingRead {
         cx: &mut Context<'_>,
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
+        let after_initial = self.pending.is_none();
+        // The initial event/partial record is read normally. Once its Pending
+        // barrier fires, hold all tail data until the paused exit deadline.
+        if after_initial && self.ready.as_mut().poll(cx).is_pending() {
+            return Poll::Pending;
+        }
+        let limit = buffer.remaining();
+        let before = buffer.filled().len();
         let result = Pin::new(&mut self.reader).poll_read(cx, buffer);
+        if after_initial && matches!(&result, Poll::Ready(Ok(()))) {
+            self.reads.lock().unwrap().push((
+                limit,
+                buffer.filled().len() - before,
+                tokio::time::Instant::now(),
+            ));
+        }
         if result.is_pending()
             && let Some(sender) = self.pending.take()
         {
@@ -188,17 +206,25 @@ impl AsyncWrite for Flushed {
 #[tokio::test(start_paused = true)]
 async fn exit_deadline_protocol_failure_reaches_pending_owner_and_events_once() {
     for tail_bytes in [0, 4096] {
-        let (reader, mut peer) = tokio::io::duplex(1024);
+        let started = tokio::time::Instant::now();
+        let cutoff = started + Duration::from_millis(50);
+        let checked_at = started + Duration::from_millis(51);
+        // Queue the entire tail without backpressure. The read gate, not pipe
+        // capacity or executor scheduling, keeps it unread until the cutoff.
+        let (reader, mut peer) = tokio::io::duplex(8192);
         peer.write_all(b"{\"type\":\"agent_start\"}\n{\"type\":")
             .await
             .unwrap();
         let (pending_tx, pending) = tokio::sync::oneshot::channel();
         let (flushed_tx, flushed) = tokio::sync::oneshot::channel();
+        let reads = Arc::new(Mutex::new(Vec::new()));
         let (_exit_tx, exit) = watch::channel(Some(Error::ProcessExit(Some(0))));
         let mut transport = Transport::new(
             PendingRead {
                 reader,
                 pending: Some(pending_tx),
+                ready: Box::pin(tokio::time::sleep_until(cutoff)),
+                reads: reads.clone(),
             },
             Flushed(Some(flushed_tx)),
             crate::PI_VERSION,
@@ -213,9 +239,25 @@ async fn exit_deadline_protocol_failure_reaches_pending_owner_and_events_once() 
         flushed.await.unwrap();
         peer.write_all(&vec![b' '; tail_bytes]).await.unwrap();
         drop(peer);
+        assert_eq!(tokio::time::Instant::now(), started);
+        assert!(reads.lock().unwrap().is_empty(), "tail must remain unread");
+        assert_eq!(client.shared.pending_count(), 1);
+        assert_eq!(
+            client.admission.available_permits(),
+            Config::default().max_pending_commands - 1
+        );
         tokio::time::advance(Duration::from_millis(51)).await;
         let terminal = owner.wait_terminal().await;
         assert!(matches!(terminal, Error::Protocol(_)), "{terminal:?}");
+        assert_eq!(tokio::time::Instant::now(), checked_at);
+        let expected_reads = if tail_bytes == 0 {
+            vec![(4096, 0, checked_at)]
+        } else {
+            // A normal JsonlReader::next EOF read would request 4096 again.
+            // The one-byte request proves the terminal EOF probe was reached.
+            vec![(4096, 4096, checked_at), (1, 0, checked_at)]
+        };
+        assert_eq!(*reads.lock().unwrap(), expected_reads);
         assert_eq!(command.await.unwrap(), Err(terminal.clone()));
         assert_eq!(
             events.recv().await,
