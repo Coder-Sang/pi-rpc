@@ -2,9 +2,17 @@
 
 ## Current status summary
 
-**pi-rpc 0.2.1** supports **Pi >=1.1.0, <=1.3.0** and requires **Rust 1.88**. Pi **1.3.0**, commit `71023aec1546d6d677a65669c5665c0927ce0dd0`, is the latest reviewed source baseline. Supported version admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#version-range-and-review-evidence).
+**pi-rpc 0.2.2 (development)** supports **Pi >=1.1.0, <=1.4.0** and requires **Rust 1.88**. Pi **1.4.0**, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, is the latest reviewed source baseline. Supported admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#pi-140-source-review-2026-10-27). This candidate is not uploaded to crates.io; no live Pi 1.4.0/model acceptance is claimed.
 
-The [0.2.1 release](#021-release-2026-10-18) was published on 2026-10-18 after complete clean-commit verification and six successful hosted jobs. Its actual registry bytes, exact Rust 1.88.0 registry consumer, docs.rs and uploaded-commit tag are confirmed below. This later documentation bookkeeping does not replace the uploaded source. The [0.2.0 release](#020-release-2026-10-16) retains its separately recorded results. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+The [0.2.1 release](#021-release-2026-10-18) was published on 2026-10-18 after complete clean-commit verification and six successful hosted jobs. Its actual registry bytes, exact Rust 1.88.0 registry consumer, docs.rs and uploaded-commit tag are confirmed below. The separate 0.2.1 bookkeeping did not replace its uploaded source. The [0.2.0 release](#020-release-2026-10-16) retains its separately recorded results. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+
+## Pi 1.4.0 development status (2026-10-27)
+
+The 0.2.2 candidate retains public paths, field types, features, Rust 1.88 and dependency versions while extending default admission through 1.4.0. Both older fixed range configurations retain their own upper bounds; concrete versions remain exact locks. Fake probes cover defaults, legacy bounds, synthetic intermediate versions and rejection before probe/RPC launch. Acceptance entrypoint unit tests reject all three ranges and verify exact forwarding using only the std-only fake.
+
+Targeted stable and exact 1.88.0 checks cover new compatibility-field preservation on model/state/cycle/list responses, fragmented CRLF delivery of summaries larger than 64 KiB and paired recovery omissions, and native-v3 round trips retaining the original messages. Existing image/float/stack/UI/close regressions remain required. These tests exercise SDK transport and data preservation, not Pi's internal recovery, provider, classifier or worker behavior.
+
+The final clean candidate must pass the complete local feature/stress/Debug/Release/Python/document/package/dry-run/consumer checks and all six hosted jobs. Its actual commit, source hashes, archive digest, compiler and matching run are recorded outside the package following [candidate evidence](#candidate-evidence); historical 0.2.1 results below do not establish 0.2.2 acceptance. Normal verification invokes no real Pi or paid model. The optional manual smoke remains pinned to Pi 1.2.0 and is skipped on ordinary pushes. This task does not upload a new version or create a release tag.
 
 ## Pi 1.3.0 development status
 
@@ -69,7 +77,7 @@ These local observations do not establish exhaustive model/event-variant coverag
 
 The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/1.88.0**, six jobs. Each executes its feature matrix, three stress rounds, native Debug/Release regressions, archive inspection and a fresh packaged consumer. The manual real-Pi job remains opt-in and disabled on normal pushes.
 
-The [completed 0.2.1 baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500) passed all six jobs for **`d27fb2c8de7abe2dedb6aec5aced08d4096eb766`**, including Windows stable and exact Rust 1.88.0. This is the same completed baseline identified in the README. The final uploaded commit **`6a7004d6f845857753bd64cfdbf0762807f1c405`** separately passed its [six release jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39120347264), including both Windows toolchains; all six matching candidate artifacts were present. Later documentation commits have their own workflow results and do not replace the release source.
+The [completed 0.2.1 baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500) passed all six jobs for **`d27fb2c8de7abe2dedb6aec5aced08d4096eb766`**, including Windows stable and exact Rust 1.88.0. The README identifies the final release separately from this historical development baseline. The final uploaded commit **`6a7004d6f845857753bd64cfdbf0762807f1c405`** separately passed its [six release jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39120347264), including both Windows toolchains; all six matching candidate artifacts were present. Later documentation commits have their own workflow results and do not replace the release source.
 
 ## Candidate evidence
 

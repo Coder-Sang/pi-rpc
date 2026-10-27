@@ -1,4 +1,4 @@
-# Consuming Pi 1.1.0–1.2.0 events
+# Consuming Pi 1.1.0–1.4.0 events
 
 `PiConnection::connect` returns a `PiClient`, a single `PiEvents` consumer and the connection owner. `PiEvents::recv().await` returns `Option<Result<Event>>`. Events remain ordered across the whole session and are not scoped to the latest prompt. The host adapter owns conversation/SSE correlation and run-outcome policy. See the [README](../README.md) for connection ownership and the [compatibility contract](compatibility.md) for the supported version range, reviewed sources and limits.
 
@@ -6,7 +6,7 @@
 
 | Outer variant | Meaning |
 |---|---|
-| `Event::Known` | One of the 24 supported ordinary Pi 1.1.0–1.2.0 event types |
+| `Event::Known` | One of the 24 supported ordinary Pi 1.1.0–1.4.0 event types |
 | `Event::Ui` | An extension UI request, including one-way notifications |
 | `Event::Unknown` | A record with an unrecognized string `type`; its complete JSON is preserved |
 | `Event::UncorrelatedResponse` | A validated command response with no ID |
@@ -96,3 +96,11 @@ Connection failures arrive through `recv()` as one `Err`: transport failure, EOF
 ## Pi 1.3.0 tool argument diagnostics
 
 Pi 1.3.0 can attach `argumentsError` to a tool call when its completed arguments are not a valid JSON object; `arguments` is then `{}`. `ContentBlock::ToolCall.extra` retains that diagnostic, including in `toolcall_end`; native messages and history retain it too. It is a tool-argument failure, not by itself a terminal connection error. The SDK forwards the record and does not execute or repair tool arguments. The existing required-object validation for `arguments` still applies. Model metadata such as `compat.supportsMidConvoEffort` remains open JSON.
+
+## Pi 1.4.0 recovery and metadata
+
+Pi 1.4.0 uses the same RPC event and native-v3 schemas. New classifier `compat.imageInput` and `compat.sendImageOptInHeader` fields belong to Pi's model/provider APIs; the Rust SDK preserves open metadata and does not add a classifier command. Provider request identity and TypeScript telemetry changes likewise do not add RPC event variants.
+
+Compaction and branch summaries use the model's output limit rather than a fixed summary cap; `reserveTokens` controls when compaction starts. Configured SDK record/event byte limits still apply. Retry classification and tool restoration also change inside Pi, so retry frequency and the next model request can differ across versions even with identical wire shapes.
+
+Recovery can append separate `context_edit` records with `replacement: null` for the failed assistant attempt and its matching tool results. Those messages remain in native history while disappearing from projected `get_messages` context. Forward `entry_appended`, retry and compaction events in order, and preserve raw history independently; do not apply another SDK-side projection. Synthetic fragmented CRLF and native-file regressions cover this shape and larger summaries. They test transport/preservation, not live Pi recovery behavior. See the [fixed source review](compatibility.md#pi-140-source-review-2026-10-27).
