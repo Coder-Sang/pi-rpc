@@ -184,3 +184,103 @@ async fn consuming_events_releases_byte_budget() {
     assert!(o.terminal_reason().is_none());
     drop(o);
 }
+
+#[tokio::test]
+async fn pi_1_4_recovery_history_and_large_summaries_survive_fragmented_rpc() {
+    let (client, mut events, mut owner, mut reader, mut writer) =
+        super::streaming::setup_fragmented(Config::default());
+    let summary = "summary 中文\n".repeat(8192);
+    assert!(summary.len() > 65536);
+    let entries = super::recovery::entries(&summary);
+    let compact = entries.last().unwrap();
+    let result = json!({"summary":summary,"firstKeptEntryId":"user",
+        "tokensBefore":100000.0,"estimatedTokensAfter":4096.0,
+        "usage":compact["usage"],"details":compact["details"]});
+    let expected_events = [
+        json!({"type":"compaction_start","reason":"overflow"}),
+        json!({"type":"summarization_retry_scheduled","attempt":1,"maxAttempts":3,
+            "delayMs":1500,"errorMessage":"Upstream HTTP/2 stream failed"}),
+        json!({"type":"summarization_retry_attempt_start","source":"compaction","reason":"overflow"}),
+        json!({"type":"summarization_retry_finished"}),
+        json!({"type":"entry_appended","entry":entries[3]}),
+        json!({"type":"entry_appended","entry":entries[4]}),
+        json!({"type":"entry_appended","entry":compact}),
+        json!({"type":"compaction_end","reason":"overflow","result":result,
+            "aborted":false,"willRetry":true,"errorMessage":null}),
+    ];
+    // Projected context omits the failed pair, but native history retains it
+    // alongside two explicit omission entries. The SDK must not project it again.
+    let messages = json!({"messages":[
+        {"role":"compactionSummary","summary":summary,"tokensBefore":100000.0,"timestamp":4},
+        entries[0]["message"]]});
+    let history = json!({"entries":entries,"leafId":"compact"});
+    let mut nodes = Vec::new();
+    for entry in entries.iter().rev() {
+        nodes = vec![json!({"entry":entry,"children":nodes,"label":null,"labelTimestamp":null})];
+    }
+    let tree = json!({"tree":nodes,"leafId":"compact"});
+    let command_client = client.clone();
+    let commands = tokio::spawn(async move {
+        (
+            command_client.get_messages().await.unwrap(),
+            command_client.get_entries(None).await.unwrap(),
+            command_client.get_tree().await.unwrap(),
+        )
+    });
+    for (index, (kind, data)) in [
+        ("get_messages", &messages),
+        ("get_entries", &history),
+        ("get_tree", &tree),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let request = next(&mut reader).await;
+        assert_eq!(request["type"], kind);
+        let mut batch = Vec::new();
+        if index == 0 {
+            for event in &expected_events {
+                let mut bytes = codec::encode(event, 1024 * 1024).unwrap();
+                assert_eq!(bytes.pop(), Some(b'\n'));
+                batch.extend(bytes);
+                batch.extend_from_slice(b"\r\n");
+            }
+        }
+        let response = json!({"type":"response","id":request["id"],"command":kind,
+            "success":true,"data":data});
+        let mut bytes = codec::encode(&response, 1024 * 1024).unwrap();
+        assert_eq!(bytes.pop(), Some(b'\n'));
+        batch.extend(bytes);
+        batch.extend_from_slice(b"\r\n");
+        // The transport returns at most three bytes per poll, splitting UTF-8,
+        // escapes and CRLF even though records arrive in a coalesced write.
+        tokio::time::timeout(Duration::from_secs(2), writer.write_all(&batch))
+            .await
+            .expect("fragmented history delivery stalled")
+            .unwrap();
+    }
+    let (decoded_messages, decoded_entries, decoded_tree) =
+        tokio::time::timeout(Duration::from_secs(2), commands)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(serde_json::to_value(decoded_messages).unwrap(), messages);
+    assert_eq!(serde_json::to_value(decoded_entries).unwrap(), history);
+    assert_eq!(serde_json::to_value(decoded_tree).unwrap(), tree);
+    for expected in expected_events {
+        let Some(Ok(Event::Known(actual))) = bounded_event(&mut events).await else {
+            panic!("expected ordered recovery event");
+        };
+        assert_eq!(serde_json::to_value(actual).unwrap(), expected);
+    }
+    assert!(owner.terminal_reason().is_none());
+    let peer = tokio::spawn(async move {
+        assert!(reader.next().await.unwrap().is_none());
+        drop(writer);
+    });
+    assert_eq!(owner.close().await, Error::Closed);
+    peer.await.unwrap();
+    assert_eq!(bounded_event(&mut events).await, Some(Err(Error::Closed)));
+    assert_eq!(bounded_event(&mut events).await, None);
+    assert_eq!(client.abort().await, Err(Error::Closed));
+}

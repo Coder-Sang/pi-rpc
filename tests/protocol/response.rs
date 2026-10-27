@@ -261,3 +261,52 @@ fn pi_1_3_mid_conversation_effort_metadata_is_preserved() {
         }
     }
 }
+
+#[test]
+fn pi_1_4_compat_fields_remain_open_and_lossless_across_model_responses() {
+    // Classifier/provider compatibility is interpreted by Pi, not this SDK.
+    // Synthetic model metadata checks forward preservation on each RPC path.
+    for image_input in ["assets", "images", "state-image-urls"] {
+        for opt_in in [false, true] {
+            let model = json!({"id":"synthetic","provider":"synthetic",
+                "compat":{"imageInput":image_input,"sendImageOptInHeader":opt_in,
+                    "supportsMidConvoEffort":true,"futureCompat":{"preserve":[null,false,1]}}});
+            let mut state = success_fixtures()
+                .into_iter()
+                .find(|(command, _)| *command == "get_state")
+                .unwrap()
+                .1
+                .unwrap();
+            state["model"] = model.clone();
+            state["sessionFile"] = Value::Null;
+            state["sessionName"] = Value::Null;
+            for (command, data) in [
+                ("get_state", state),
+                ("set_model", model.clone()),
+                ("get_available_models", json!({"models":[model.clone()]})),
+                (
+                    "cycle_model",
+                    json!({"model":model,"thinkingLevel":"xhigh","isScoped":false}),
+                ),
+            ] {
+                let Record::Response(response) = decode_record(json!({"type":"response",
+                    "command":command,"success":true,"data":data}))
+                .unwrap() else {
+                    panic!("expected model response");
+                };
+                let decoded = match command {
+                    "get_state" => serde_json::to_value(response.decode::<SessionState>().unwrap()),
+                    "get_available_models" => {
+                        serde_json::to_value(response.decode::<Models>().unwrap())
+                    }
+                    "cycle_model" => {
+                        serde_json::to_value(response.decode::<Option<ModelCycle>>().unwrap())
+                    }
+                    _ => Ok(response.decode::<Value>().unwrap()),
+                }
+                .unwrap();
+                assert_eq!(decoded, data, "{command}: {image_input} opt_in={opt_in}");
+            }
+        }
+    }
+}

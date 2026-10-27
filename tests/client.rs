@@ -86,3 +86,6 @@ mod requests;
 mod streaming;
 #[path = "client/ui.rs"]
 mod ui;
+
+#[path = "support/recovery.rs"]
+mod recovery;

@@ -331,3 +331,48 @@ fn pi_1_3_tool_argument_error_round_trips_in_native_history() {
     assert_eq!(serde_json::to_value(decoded).unwrap(), message);
     assert_eq!(parsed.encode(SessionLimits::default()).unwrap(), bytes);
 }
+
+#[path = "support/recovery.rs"]
+mod recovery;
+
+#[test]
+fn pi_1_4_native_recovery_edits_keep_original_messages_and_large_summary() {
+    let summary = "summary 中文\n".repeat(8192);
+    let entries = recovery::entries(&summary);
+    let mut file = SessionFile::new("recovery", "2026-10-27T00:00:00.000Z", "/project");
+    file.entries = entries
+        .iter()
+        .cloned()
+        .map(|entry| serde_json::from_value(entry).unwrap())
+        .collect();
+    let encoded = file.encode(SessionLimits::default()).unwrap();
+    let parsed = SessionFile::parse(&encoded, SessionLimits::default()).unwrap();
+    assert_eq!(parsed.entries.len(), 6);
+    assert_eq!(
+        serde_json::to_value(&parsed.entries).unwrap(),
+        json!(entries)
+    );
+    for (index, target) in [(3, "attempt"), (4, "result")] {
+        let EntryData::ContextEdit {
+            target_id,
+            replacement,
+        } = &parsed.entries[index].data
+        else {
+            panic!("expected persisted omission");
+        };
+        assert_eq!(target_id, target);
+        assert!(replacement.is_none());
+    }
+    let EntryData::Compaction {
+        summary: decoded,
+        extra,
+        ..
+    } = &parsed.entries[5].data
+    else {
+        panic!("expected compaction entry");
+    };
+    assert_eq!(decoded, &summary);
+    assert_eq!(extra["details"], entries[5]["details"]);
+    assert_eq!(extra["usage"], entries[5]["usage"]);
+    assert_eq!(parsed.encode(SessionLimits::default()).unwrap(), encoded);
+}
