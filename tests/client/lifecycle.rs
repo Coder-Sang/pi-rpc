@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn supported_endpoints_share_command_event_and_close_delivery() {
-    for version in ["1.1.0", "1.2.0", "1.3.0"] {
+    for version in ["1.1.0", "1.2.0", "1.3.0", "1.4.0"] {
         let (local, remote) = tokio::io::duplex(65536);
         let (reader, writer) = tokio::io::split(local);
         let (client, mut events, mut owner) = PiConnection::connect(

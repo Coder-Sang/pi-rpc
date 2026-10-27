@@ -1,9 +1,9 @@
 [package]
 name = "pi-rpc"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.88"
-description = "Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.3.0"
+description = "Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.4.0"
 readme = "README.md"
 publish = ["crates-io"]
 license = "Apache-2.0"

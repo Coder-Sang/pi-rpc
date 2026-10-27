@@ -9,29 +9,34 @@ fn same_type<T>(_: Option<T>, _: Option<T>) {}
 
 #[test]
 fn protocol_range_and_latest_reviewed_release_remain_public() {
-    assert_eq!(pi_rpc::PI_VERSION, "1.3.0");
+    assert_eq!(pi_rpc::PI_VERSION, "1.4.0");
     assert_eq!(
         pi_rpc::SOURCE_COMMIT,
-        "71023aec1546d6d677a65669c5665c0927ce0dd0"
+        "4a080252f06caf63a525d7873c5d94d3c23887e0"
     );
     assert_eq!(pi_rpc::codec::MAX_JSON_DEPTH, 512);
-    assert_eq!(pi_rpc::PI_VERSION_REQUIREMENT, ">=1.1.0, <=1.3.0");
+    assert_eq!(pi_rpc::PI_VERSION_REQUIREMENT, ">=1.1.0, <=1.4.0");
     for version in [
-        "1.1.0", "1.1.1", "1.1.10", "1.2.0", "1.2.1", "1.2.10", "1.3.0",
+        "1.1.0", "1.1.1", "1.1.10", "1.2.0", "1.2.1", "1.2.10", "1.3.0", "1.3.1", "1.3.10", "1.4.0",
     ] {
         assert!(pi_rpc::Transport::new(tokio::io::empty(), tokio::io::sink(), version).is_ok());
     }
     for version in [
         "0.99.2",
         "1.0.4",
-        "1.3.1",
+        "1.4.1",
         "1.10.0",
         "v1.3.0",
         "1.3.0 ",
         "",
         "1.3.0-rc.1",
         "1.3.0+build",
+        "1.4.0-rc.1",
+        "1.4.0+build",
+        " 1.4.0",
         pi_rpc::PI_VERSION_REQUIREMENT,
+        ">=1.1.0, <=1.2.0",
+        ">=1.1.0, <=1.3.0",
     ] {
         assert!(matches!(
             pi_rpc::Transport::new(tokio::io::empty(), tokio::io::sink(), version),
