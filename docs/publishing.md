@@ -2,7 +2,7 @@
 
 ## Current decision
 
-Release **0.2.2** supports **Pi >=1.1.0, <=1.4.0 / Rust 1.88**, reviewed at fixed upstream commit `4a080252f06caf63a525d7873c5d94d3c23887e0`. The 2026-10-27 release request authorizes publication from main after complete local verification, strict packaging/dry-run/consumer checks and six successful CI jobs for the same clean commit. Preserve its [candidate evidence](verification.md#candidate-evidence) outside the package. Upload that source, verify the registry bytes, an exact Rust 1.88.0 registry consumer and docs.rs, then create `v0.2.2` at the actual uploaded commit. Record observed publication results in a later bookkeeping commit; a dry-run alone does not confirm publication. No real Pi or paid model is used by these release gates.
+Release **0.2.2** supports **Pi >=1.1.0, <=1.4.0 / Rust 1.88**, reviewed at fixed upstream commit `4a080252f06caf63a525d7873c5d94d3c23887e0`. It was published on **2026-10-27** from main commit **`d69912fc4821085d300da5ba1fe9f942c76e22ec`**, after complete local verification, strict package/dry-run/consumer checks and [six successful CI jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40468486669) for that clean source. The downloaded registry bytes, exact Rust 1.88.0 registry consumer, docs.rs, annotated `v0.2.2` tag and all eight frozen guide/license targets are confirmed in the [release record](verification.md#022-release-2026-10-27). This later bookkeeping records observations without changing the uploaded source or tag target. No real Pi or paid model was used by these release gates.
 
 Release **0.2.1** supports **Pi >=1.1.0, <=1.3.0**, retaining Rust **1.88**, public fields and features. Its latest reviewed source is `71023aec1546d6d677a65669c5665c0927ce0dd0`; live Pi 1.3.0 acceptance is not claimed. Version 0.2.1 was published on 2026-10-18 from **`6a7004d6f845857753bd64cfdbf0762807f1c405`**, after complete local verification and six successful hosted jobs for that commit. The registry bytes, exact Rust 1.88.0 registry consumer, docs.rs, immutable `v0.2.1` tag and frozen guide links are confirmed in the [release record](verification.md#021-release-2026-10-18).
 
@@ -27,12 +27,12 @@ The package declares the repository, nonblank description, README, Apache-2.0 li
 - [x] Authorize publication from main and an exact uploaded-commit tag (2026-10-27).
 - [x] Finalize registry installation, the 0.2.2 changelog date and immutable `v0.2.2` guide links before packaging.
 - [x] Review Pi 1.1.0–1.4.0 source and identical MIT notices; retain legacy range bounds, exact locks, public paths, features and Rust 1.88.
-- [ ] Commit the final release source; pass every local gate, strict package/dry-run/consumer check and all six CI jobs for that same commit.
-- [ ] Upload the verified commit and compare the downloaded registry archive, checksum and clean VCS identity with the pre-upload evidence.
-- [ ] Verify an exact Rust 1.88.0 registry consumer in all four feature configurations and verify docs.rs with the optional APIs.
-- [ ] Create/push `v0.2.2` at the actual uploaded commit, verify frozen guide links, and record confirmed results separately.
+- [x] Commit the final release source; pass every local gate, strict package/dry-run/consumer check and all six CI jobs for that same commit.
+- [x] Upload the verified commit and compare the downloaded registry archive, checksum and clean VCS identity with the pre-upload evidence.
+- [x] Verify an exact Rust 1.88.0 registry consumer in all four feature configurations and verify docs.rs with the optional APIs.
+- [x] Create/push `v0.2.2` at the actual uploaded commit, verify frozen guide links, and record confirmed results separately.
 
-The [completed 0.2.2 baseline](verification.md#022-completed-baseline-2026-10-27) identifies prior successful checks. It is not the final release archive. The uploaded archive will retain this pre-upload checklist state; completed observations belong in subsequent bookkeeping without changing its source or tag target.
+The [completed 0.2.2 baseline](verification.md#022-completed-baseline-2026-10-27) identifies prior successful checks. The final release passed its own complete acceptance. The uploaded archive retains the pre-upload checklist state; these confirmed observations were added afterward without changing its source or tag target.
 
 ## 0.2.1 release checklist
 
