@@ -408,6 +408,60 @@ async fn exact_lock_mismatch_never_launches_rpc() {
 }
 
 #[tokio::test]
+async fn exact_lock_patch_prefix_mismatches_never_launch_rpc() {
+    let dir = tempfile::tempdir().unwrap();
+    for (profile, actual, other) in [
+        ("prefix-short-version", "1.3.1", "1.3.10"),
+        ("prior-patch", "1.3.10", "1.3.1"),
+    ] {
+        // A matching lock proves the fake really reports the intended version
+        // and can start RPC; each mismatch uses a fresh executable/marker path.
+        for (expected, accepted) in [(actual, true), (other, false)] {
+            let path = dir.path().join(format!(
+                "{profile}-exact-{accepted}{}",
+                std::env::consts::EXE_SUFFIX
+            ));
+            named_fixture(&path);
+            let result = PiProcess::spawn(ProcessOptions {
+                executable: path.clone(),
+                expected_version: expected.into(),
+                ..Default::default()
+            })
+            .await;
+            assert_eq!(
+                std::fs::read(path.with_extension("probe-started")).unwrap(),
+                b"probe",
+                "expected={expected} actual={actual}"
+            );
+            match result {
+                Err(error) => {
+                    assert!(!accepted, "matching lock rejected: {actual}");
+                    assert_eq!(error, Error::Version, "expected={expected} actual={actual}");
+                    assert!(!path.with_extension("rpc-started").exists());
+                }
+                Ok((client, mut events, mut owner)) => {
+                    ready(&mut events).await;
+                    assert_eq!(
+                        std::fs::read(path.with_extension("rpc-started")).unwrap(),
+                        b"rpc"
+                    );
+                    // Clean up even if a regression incorrectly admitted a
+                    // mismatch, so negative-control runs cannot leak children.
+                    let terminal = owner.close().await;
+                    assert_eq!(terminal, Error::ProcessExit(Some(0)));
+                    terminal_once(&mut events, terminal.clone()).await;
+                    assert_eq!(client.abort().await, Err(terminal));
+                    assert!(
+                        accepted,
+                        "prefix mismatch started RPC: expected={expected} actual={actual}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn invalid_expectations_fail_before_executable_probe() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir

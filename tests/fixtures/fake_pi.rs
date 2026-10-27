@@ -36,6 +36,8 @@ fn main() {
                 "1.1.0"
             } else if name.contains("baseline-version") {
                 "1.2.0"
+            } else if name.contains("prefix-short-version") {
+                "1.3.1"
             } else if name.contains("prior-version") {
                 "1.3.0"
             } else if name.contains("prior-patch") {

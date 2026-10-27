@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-pub(super) const VERSIONS: [&str; 6] = ["1.1.0", "1.1.10", "1.2.0", "1.3.0", "1.3.10", "1.4.0"];
+pub(super) const VERSIONS: [&str; 7] = [
+    "1.1.0", "1.1.10", "1.2.0", "1.3.0", "1.3.1", "1.3.10", "1.4.0",
+];
 
 pub(super) struct Fixture {
     _root: tempfile::TempDir,

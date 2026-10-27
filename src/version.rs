@@ -135,6 +135,27 @@ mod tests {
 
     #[cfg(feature = "subprocess")]
     #[test]
+    fn exact_lock_patch_prefix_collisions_are_rejected() {
+        let shorter = "1.3.1";
+        let longer = "1.3.10";
+        // Negative controls: these vectors expose both incorrect directions
+        // of prefix matching while remaining supported concrete releases.
+        assert!(longer.starts_with(shorter));
+        assert!(!shorter.starts_with(longer));
+        for (expected, actual) in [(shorter, longer), (longer, shorter)] {
+            assert!(is_supported(expected));
+            assert!(is_supported(actual));
+            let exact = Expectation::new(expected).unwrap();
+            assert!(exact.matches(expected), "expected={expected}");
+            assert!(
+                !exact.matches(actual),
+                "expected={expected} actual={actual}"
+            );
+        }
+    }
+
+    #[cfg(feature = "subprocess")]
+    #[test]
     fn legacy_ranges_keep_their_original_upper_bounds() {
         let through_1_2 = Expectation::new(">=1.1.0, <=1.2.0").unwrap();
         let through_1_3 = Expectation::new(">=1.1.0, <=1.3.0").unwrap();
