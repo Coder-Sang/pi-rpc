@@ -1,13 +1,13 @@
 # Changelog
 
-## 0.2.2 — Unreleased
+## 0.2.2 — 2026-10-27
 
 - Extend inclusive Pi admission to **1.1.0 through 1.4.0**, retaining Rust **1.88**, public paths, field types and features. The fixed `>=1.1.0, <=1.2.0` and `>=1.1.0, <=1.3.0` expectations keep their original upper bounds; concrete expectations retain exact matching.
 - Set the latest reviewed `PI_VERSION` to **1.4.0**, source commit `4a080252f06caf63a525d7873c5d94d3c23887e0`. Keep one shared wire implementation and unchanged dependency versions.
 - Extend fake subprocess, Transport lifecycle, public-path and concrete acceptance-entrypoint regressions through 1.4.0, including rejection before probing or RPC startup as appropriate. Acceptance examples still reject every fixed range expression.
+- Verify exact locks reject the `1.3.1`/`1.3.10` prefix collision in both directions before RPC startup. Matching-lock controls start RPC; local mutation controls detect either direction of an incorrect prefix comparison.
 - Add open compatibility-metadata preservation, fragmented CRLF delivery of larger summaries and paired recovery omissions, and native-v3 history round trips. These synthetic tests preserve the distinction between active context and native history; they do not execute Pi's recovery algorithm.
 - Document Pi-owned classifier image inputs, summary budgets, retry/recovery and request-identity changes. No real Pi 1.4.0 or paid-model acceptance is claimed. Published 0.2.1 retains Pi 1.1.0–1.3.0 support.
-
 
 ## 0.2.1 — 2026-10-18
 
