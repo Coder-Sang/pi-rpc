@@ -1,4 +1,4 @@
-//! Async, bounded Pi 1.1.0–1.4.0 RPC. See the README for lifecycle and gateway policy.
+//! Async, bounded Pi 1.1.0–1.4.0 RPC with explicit transport and process ownership.
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 pub mod client;

@@ -1,4 +1,5 @@
 //! One continuous reader, one serialized writer, ID-correlated command futures.
+#![doc = include_str!("../docs/connections.md")]
 use crate::{
     Error, Result,
     protocol::{Command, Event, Response},
@@ -28,22 +29,41 @@ use outbound::WriteMessage;
 use runtime::{read_loop, write_loop};
 use state::{PendingGuard, Shared};
 
+/// Dialog policy selected before connecting; one-way UI notifications are delivered in both modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiPolicy {
+    /// Automatically cancel every dialog, including confirm, while still delivering its event.
     Cancel,
+    /// Let the host answer dialogs with [`PiClient::respond_ui`].
     Manual,
 }
+/// Connection admission, wire budgets and deadlines.
+///
+/// Capacity limits must be positive and fit Tokio permit counts. They bound serialized
+/// records and queues, not total process memory. See the
+/// [connection guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md#bounds-and-backpressure).
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Maximum JSON bytes per inbound or outbound record, excluding LF/CR. Default: 32 MiB.
     pub max_record_bytes: usize,
+    /// Maximum concurrently admitted commands, including preparation and response waits. Default: 128.
     pub max_pending_commands: usize,
+    /// Maximum queued writer records; a slot is reserved before encoding. Default: 128.
     pub max_writer_records: usize,
+    /// Shared byte budget for encoding, queued and in-flight output, including LF.
+    /// Held through write/flush. Default: 64 MiB.
     pub max_writer_bytes: usize,
+    /// Maximum queued events in the single-consumer stream. Default: 1,024.
     pub max_event_count: usize,
     /// Sum of queued events' original UTF-8 JSON record bytes, excluding LF/CR.
+    /// Default: 128 MiB; decoded representations may occupy more memory.
     pub max_event_bytes: usize,
+    /// Response deadline after local enqueue, including the write/flush wait. Default: 30 seconds.
+    /// Timeout leaves the send/execution outcome uncertain and does not retry the command.
     pub command_timeout: Duration,
+    /// Deadline for orderly connection close and write draining. Default: five seconds.
     pub close_timeout: Duration,
+    /// Extension dialog policy. Default: [`UiPolicy::Cancel`].
     pub ui_policy: UiPolicy,
 }
 impl Default for Config {

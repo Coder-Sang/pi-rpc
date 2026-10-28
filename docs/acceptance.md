@@ -1,6 +1,6 @@
 # Real Pi acceptance
 
-These checks are opt-in and are never run by the normal fake-only verification workflow. Start with the [README development requirements](../README.md#development). Commands below run from the repository root. Pi must be supplied separately.
+These checks are opt-in and are never run by the normal fake-only verification workflow. Start with the [development requirements](../CONTRIBUTING.md#development-requirements). Commands below run from the repository root. Pi must be supplied separately.
 
 ## Read-only release smoke
 

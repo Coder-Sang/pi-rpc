@@ -2,85 +2,25 @@
 
 ## Current status summary
 
-**pi-rpc 0.2.3 (development)** retains **Pi >=1.1.0, <=1.4.0 / Rust 1.88** and adds `PiProcess::spawn_with_version` for caller-declared local startup. This API is not included in published 0.2.2. Pi 1.4.0, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, remains the latest reviewed source baseline. No live Pi 1.4.0/model acceptance is claimed. Historical [0.2.2 publication results](#022-release-2026-10-27) retain their original uploaded source and scope.
+Git **0.2.3 development** supports **Pi >=1.1.0, <=1.4.0 / Rust 1.88**. The published release remains **0.2.2**. `spawn_with_version` is Git-only; the latest reviewed upstream baseline remains Pi 1.4.0, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`. Version admission, source review, synthetic tests and real execution are separate evidence.
 
-The [0.2.1 release](#021-release-2026-10-18) was published on 2026-10-18 after complete clean-commit verification and six successful hosted jobs. Its actual registry bytes, exact Rust 1.88.0 registry consumer, docs.rs and uploaded-commit tag are confirmed below. The separate 0.2.1 bookkeeping did not replace its uploaded source. The [0.2.0 release](#020-release-2026-10-16) retains its separately recorded results. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+The completed feature baseline **`b86883d05809d2e23575f654be700d72fb95c2d9`** passed [all six CI jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40656324472), including Windows stable and exact Rust 1.88.0, with six matching artifacts. Both Windows logs confirm the caller-declared startup regressions executed. The manual real-Pi job was skipped. This is evidence for that commit; subsequent source or documentation changes require their own gates.
 
-## Caller-declared startup development status (2026-10-28)
+Local macOS aarch64 verification of that baseline used stable **Rust 1.97.1** and exact **1.88.0**. Each compiler passed 670 four-feature test executions, 282 three-round stress executions and 356 Debug/Release boundary executions, plus packaged consumers. Strict stable lint/docs, 50 Python regressions, Markdown/generated-HTML links, package/source/license inspection and publication dry-run passed. The 106-file archive and complete logs/hashes are retained outside packaged source. Three snapshot mutation controls detected restored probing, ignored expectations and a bypassed legacy probe. No Pi or paid model was called.
 
-The new entrypoint validates the concrete declaration and existing expected-version policy locally, then uses the same RPC launch/supervision path as `spawn`. The existing method still probes, including exact locks. The fake's probe-forbidden profile and separate launch markers distinguish both paths without timing thresholds. Regression coverage includes default/zero probe deadlines, endpoints and numeric intermediate versions, legacy bounds, malformed declarations, exact prefix collisions, argument/cwd handling, bounded diagnostics, termination and single-terminal delivery. Public-path tests compile the new API and its Send future without polling it, including in packaged independent consumers. Real acceptance examples continue to use the probing method.
+For new results, follow [CONTRIBUTING](../CONTRIBUTING.md) and the [release gates](publishing.md#final-verification-before-upload). Store the candidate's own final SHA/archive/results outside packaged source using the procedure below; do not substitute this baseline or a historical release for a changed candidate.
 
-Targeted macOS aarch64 checks passed **33** subprocess/public-path test executions on each of stable **Rust 1.97.1** and exact **1.88.0**, plus stable strict all-target Clippy. Separate Rust 1.88.0 snapshot controls passed all three original assertions and detected three intentional faults: restoring the new entrypoint's probe, ignoring its expected-version match, and bypassing the old entrypoint's probe. Failure logs and snapshot evidence remain outside the crate; the working source was unchanged during those controls. These targeted results do not replace the complete final-candidate gates below.
+## Hosted CI
 
-The final clean 0.2.3 candidate requires complete local stable/exact 1.88.0 feature, stress, Debug/Release, Python, document, package/dry-run and independent-consumer checks, plus six matching hosted jobs and artifacts. Record its actual SHA, compiler, archive digest and results outside packaged source following [candidate evidence](#candidate-evidence); prior release runs do not substitute for this candidate. This update does not publish a crate, create a tag or call real Pi/paid models.
-
-## Pi 1.4.0 development status (2026-10-27)
-
-The 0.2.2 candidate retains public paths, field types, features, Rust 1.88 and dependency versions while extending default admission through 1.4.0. Both older fixed range configurations retain their own upper bounds; concrete versions remain exact locks. Fake probes cover defaults, legacy bounds, synthetic intermediate versions and rejection before probe/RPC launch. Acceptance entrypoint unit tests reject all three ranges and verify exact forwarding using only the std-only fake.
-
-Targeted stable and exact 1.88.0 checks cover new compatibility-field preservation on model/state/cycle/list responses, fragmented CRLF delivery of summaries larger than 64 KiB and paired recovery omissions, and native-v3 round trips retaining the original messages. Existing image/float/stack/UI/close regressions remain required. These tests exercise SDK transport and data preservation, not Pi's internal recovery, provider, classifier or worker behavior.
-
-The final clean candidate must pass the complete local feature/stress/Debug/Release/Python/document/package/dry-run/consumer checks and all six hosted jobs. Its actual commit, source hashes, archive digest, compiler and matching run are recorded outside the package following [candidate evidence](#candidate-evidence); historical results do not substitute for final-commit acceptance. Normal verification invokes no real Pi or paid model. The optional manual smoke remains pinned to Pi 1.2.0 and is skipped on ordinary pushes. The completed 0.2.2 release results below include registry bytes, exact-MSRV registry consumption, docs.rs and the actual uploaded-commit tag.
+The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the feature matrix, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, remains explicitly pinned to Pi 1.2.0 and is skipped on ordinary pushes.
 
 ## 0.2.2 completed baseline (2026-10-27)
 
-Completed baseline **`d372d64bccfa6d58efa18835192c1a978abeb0f5`** passed [all six hosted jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40465921098) on Linux/macOS/Windows with stable and exact **Rust 1.88.0**. Six matching evidence artifacts were present; the manual real-Pi job was skipped. Windows logs confirm the new exact-lock unit/subprocess and both acceptance-entrypoint regressions ran on each compiler. The baseline retains both legacy range bounds and covers Pi 1.4.0 metadata, large fragmented summaries, paired recovery edits and native history.
-
-Matching local macOS aarch64 checks used stable **Rust 1.97.1** and exact **1.88.0**:
-
-| Check | Stable | Rust 1.88.0 |
-|---|---|---|
-| Four-feature check/test matrix | 642 passing executions | 642 passing executions |
-| Three-round fake transport stress | 249 passing executions | 249 passing executions |
-| Debug/Release boundary regressions | 332 passing executions | 332 passing executions |
-| Fresh packaged consumer, four features | PASS | PASS |
-| Formatting, strict Clippy and rustdoc | PASS | Covered by stable strict checks |
-
-All **50** Python regressions, Markdown/generated-HTML links, whitespace checks, strict archive inspection and publication dry-run passed. All **103** tracked source hashes stayed unchanged. The inspected baseline archive contained **105 files**, **176738 bytes**, SHA-256 **`2443f9f00ff04627c90f1808df4210d623feb08f856916237d9ddb37e04f7e97`**; it is not the final release archive.
-
-Exact-lock tests reject `1.3.1` versus `1.3.10` in both directions after probing and before RPC startup; matching controls actually launch and close the fake RPC process. Both acceptance entrypoints exercise a seven-version, 49-pair exact-lock matrix. Separate local mutation controls ran 15 checks on Rust 1.88.0: seven expected passes and eight expected assertion failures detected both incorrect prefix-comparison directions. These checks used only the compiled fake, not real Pi or a paid model.
-
-## Pi 1.3.0 development status
-
-For the initial Pi 1.3 implementation on 2026-10-18, the local macOS checks passed stable and exact Rust 1.88.0 four-feature strict verification, both three-round stress suites, Debug/Release boundary regressions, 50 Python regressions, Markdown/generated-HTML and whitespace checks. The complete successful pass preserved all 99 tracked source hashes. Subsequent example-label and manual-CI-pin edits are checked separately and do not change SDK execution.
-
-The 0.2.1 work extends admission and adds synthetic version, tool-argument-error and model-metadata regressions, retaining public fields/features and Rust 1.88. The completed 0.2.1 baseline below has six-job native fake-only coverage, including Windows and exact Rust 1.88.0. Real-Pi acceptance remains limited to the separately recorded Pi 1.1.0/1.2.0 versions; these checks do not establish live Pi 1.3.0 execution on any platform. No real Pi or paid model is invoked by the development checks.
-
-An initial MSRV stress attempt failed `partial_record_at_process_exit_remains_protocol_error`; isolated recheck and a complete three-round repeat passed. The original log omitted the actual terminal value, so that individual failure cannot be conclusively attributed. Subsequent paused-clock comparisons reproduce an existing race in both 0.2.0 and the initial 0.2.1 code: a ready partial-record EOF gives `Protocol` normally but can be replaced by `ProcessExit` after delayed scheduling. The fix performs only bounded, nonwaiting terminal validation, preserving the 50 ms drain, 100 ms EOF grace and existing owner close deadline. Deterministic tests cover known/JSON/EOF errors, no dispatch or UI enqueue at cutoff, continuously ready byte bounds, 2 MiB stack boundaries, and pending/owner/event terminal order with reservation release. First-failure logs remain outside the package; the subprocess assertion now reports the actual terminal error. Expanded version-mismatch cases use distinct fake-executable paths to prevent alias collisions or executable rewrites. Field-preservation regressions include typed entries/tree responses, entry events and state model metadata. Read-budget regressions cover 4095/4096/4097 ready bytes with EOF or an open pipe, LF/CRLF records at the cutoff, and retention without validation of the single lookahead byte. The same terminal/resource checks also cover an exact 4 KiB tail. Current candidate results are tied to the source/CI identity described below.
+The historical development baseline `d372d64bccfa6d58efa18835192c1a978abeb0f5` passed [six jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40465921098), including Windows/exact 1.88.0. It is separate from the final uploaded 0.2.2 source and archive recorded below.
 
 ## 0.2.1 completed baseline (2026-10-18)
 
-Completed baseline **`d27fb2c8de7abe2dedb6aec5aced08d4096eb766`** passed [all six hosted jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500) on Linux/macOS/Windows with stable and exact **Rust 1.88.0**. Each job produced its matching `release-evidence-*` artifact; the manual real-Pi job was skipped. This baseline includes Pi 1.3.0 support, the bounded 4 KiB EOF probe, deterministic resource-release tests for blocked partial writes/flushes and queued records, and explicit shutdown-count assertions with negative controls that expose violations even after a background-task panic. Acceptance entrypoints reject both range expressions before probing; std-only fake probes verify the default `PI_VERSION`, exact forwarding and mismatch rejection before RPC startup, including model defaults with and without a provider. Three local mutation controls prove that older defaults, range substitution and latest-version substitution fail the expected assertions.
-
-The matching local macOS aarch64 verification used stable **Rust 1.97.1** and exact **1.88.0**:
-
-| Check | Stable | Rust 1.88.0 |
-|---|---|---|
-| Four-feature check/test matrix | 624 passing executions | 624 passing executions |
-| Three-round fake transport stress | 243 passing executions | 243 passing executions |
-| Debug/Release boundary regressions | 320 passing executions | 320 passing executions |
-| Fresh packaged consumer, four features | PASS | PASS |
-| Formatting, strict Clippy and rustdoc | PASS | Covered by stable strict checks |
-
-All **50** Python checker regressions, Markdown/generated-HTML links, whitespace checks, strict packaging and publication **dry-run** passed. All **102** tracked source hashes stayed unchanged during acceptance. The inspected local archive contained **104 files**, SHA-256 **`73cb3ef1455c9ffc4fab349047a7bfd60b1849785349a830254c9c475e15f9fe`**. The independent consumers used that verified source snapshot. This is a completed development baseline, not the final release archive or live Pi 1.3.0 acceptance.
-
-The final release documentation passed its own fresh checks and six-job run, recorded in the [0.2.1 release results](#021-release-2026-10-18). The matching [candidate evidence](#candidate-evidence) was preserved outside the package; the development baseline above was not substituted for those results.
-
-## Local verification (2026-10-16)
-
-The following historical 0.2.0 checks passed at completed baseline **`773ada9388d3183080f8da0036a8ce7245d97eb8`** on **macOS aarch64**, using stable **Rust 1.97.1** and exact **Rust 1.88.0**:
-
-| Check | Stable | Rust 1.88.0 |
-|---|---|---|
-| Four-feature check/test matrix | 562 passing executions | 562 passing executions |
-| Three-round fake transport stress | 243 passing executions | 243 passing executions |
-| Debug/Release boundary regressions | 284 passing executions | 284 passing executions |
-| Fresh packaged consumer, four features | PASS | PASS |
-| Formatting, strict Clippy and rustdoc | PASS | Covered by stable strict checks |
-
-The boundary suites cover stack-protected parsing, conversion, cloning, serialization, release and failure paths; floating-point bit preservation; image/capacity limits; UI replies and shutdown races. Version tests cover both endpoints, synthetic intermediate versions, malformed declarations and exact locks. Probe markers verify rejection before probing or RPC startup as appropriate. The compacted-session restoration regression runs without Pi or a model.
-
-All **50** Python checker regressions, local Markdown links/anchors and whitespace checks passed. Package creation, source/VCS/license/metadata inspection and publication **dry-run** passed from a clean source snapshot. Each independent consumer used fresh dependency resolution, exercised all four features and ran in-memory/native-session examples without Pi. Source bytes were compared against the checked snapshot; no dirty-package bypass was used.
+The historical development baseline `d27fb2c8de7abe2dedb6aec5aced08d4096eb766` passed [six jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500), including Windows/exact 1.88.0. It covers bounded EOF validation, deterministic blocked-write resource release, explicit shutdown-count assertions and concrete acceptance-entrypoint tests. Its results do not replace final release acceptance.
 
 ## Real Pi acceptance
 
@@ -99,14 +39,6 @@ The corrected fork/switch assertion compares saved active context and native his
 
 These local observations do not establish exhaustive model/event-variant coverage, remote-vendor deployment or live Pi execution on other platforms. The [opt-in acceptance guide](acceptance.md) documents isolation requirements. Real/paid tests are separate from the default CI matrix.
 
-## Hosted CI
-
-The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/1.88.0**, six jobs. Each executes its feature matrix, three stress rounds, native Debug/Release regressions, archive inspection and a fresh packaged consumer. The manual real-Pi job remains opt-in and disabled on normal pushes.
-
-The [completed 0.2.2 baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/40465921098) passed all six jobs for **`d372d64bccfa6d58efa18835192c1a978abeb0f5`**, including both Windows toolchains. Uploaded commit **`d69912fc4821085d300da5ba1fe9f942c76e22ec`** separately passed its [six release jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40468486669), with six matching candidate artifacts. Later documentation and tag workflow results do not replace that uploaded source.
-
-The [completed 0.2.1 baseline run](https://github.com/Coder-Sang/pi-rpc/actions/runs/39118567500) passed all six jobs for **`d27fb2c8de7abe2dedb6aec5aced08d4096eb766`**, including Windows stable and exact Rust 1.88.0. The README identifies the final release separately from this historical development baseline. The final uploaded commit **`6a7004d6f845857753bd64cfdbf0762807f1c405`** separately passed its [six release jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/39120347264), including both Windows toolchains; all six matching candidate artifacts were present. Later documentation commits have their own workflow results and do not replace the release source.
-
 ## Candidate evidence
 
 The current gates also check generated Rustdoc HTML on every feature configuration with stable and exact 1.88.0. Local HTML file/fragment targets and project guide URLs are validated against the generated output and source snapshot; source line ranges and Rustdoc's encoded generic anchors are supported. External sites are not fetched by this check.
@@ -122,7 +54,7 @@ The recorder checks metadata, licenses, archive safety, clean VCS identity and e
 
 A record attests only to its archive/source inspection, not to tests it did not execute. For CI acceptance, confirm **all six jobs succeeded for the same `source.commit`** and inspect their preceding test steps. Keep the relevant JSON and complete run link outside the crate archive, preserving them before CI artifact retention expires. Different platforms/Cargo versions can produce different archive digests; compare the eventual upload with the selected upload platform's archive, not with an assumed universal digest.
 
-The candidate's own commit and digest are recorded after it exists, outside the package. Documentation therefore records a completed baseline and the evidence procedure, rather than changing its own SHA after every verification run. Real-Pi observations above remain separately dated and scoped; these fake-only gates do not rerun or extend them.
+The candidate's own commit and digest are recorded after it exists, outside the package. Documentation records a completed baseline and this procedure rather than changing its own SHA after each run. Real-Pi observations above remain separately dated and scoped; these fake-only gates do not rerun or extend them.
 
 ## 0.2.2 release (2026-10-27)
 

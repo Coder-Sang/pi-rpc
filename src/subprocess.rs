@@ -19,11 +19,15 @@ use tokio::{
     task::JoinHandle,
 };
 
+/// Local executable, version admission, diagnostics and RPC connection options.
+/// The executable inherits the parent's environment; the host owns isolation.
 #[derive(Debug, Clone)]
 pub struct ProcessOptions {
+    /// Executable path or name resolved through process PATH. Default: `pi`.
     pub executable: PathBuf,
     /// Extra CLI arguments. Do not put secrets here.
     pub args: Vec<OsString>,
+    /// Child working directory. None inherits the caller's working directory.
     pub cwd: Option<PathBuf>,
     /// Either [`PI_VERSION_REQUIREMENT`] (the default), a previous fixed
     /// `">=1.1.0, <=1.2.0"` or `">=1.1.0, <=1.3.0"` expression,
@@ -34,7 +38,10 @@ pub struct ProcessOptions {
     /// Deadline for the `--version` probe in [`PiProcess::spawn`].
     /// Ignored by [`PiProcess::spawn_with_version`]; not an RPC readiness deadline.
     pub startup_timeout: Duration,
+    /// Retained stderr ring bytes. Default: 64 KiB; zero disables retention.
+    /// Stderr is always drained, and explicit diagnostic access can expose sensitive data.
     pub stderr_bytes: usize,
+    /// RPC admission, event/UI policy and close limits. Default: [`Config::default`].
     pub connection: Config,
 }
 impl Default for ProcessOptions {

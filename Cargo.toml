@@ -9,6 +9,8 @@ publish = ["crates-io"]
 license = "Apache-2.0"
 repository = "https://github.com/Coder-Sang/pi-rpc"
 keywords = ["pi", "rpc", "jsonl", "tokio", "async"]
+categories = ["asynchronous", "api-bindings"]
+exclude = ["/.github/"]
 
 [features]
 default = ["subprocess"]

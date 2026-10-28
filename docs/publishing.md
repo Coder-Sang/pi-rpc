@@ -1,72 +1,24 @@
 # Public release checklist
 
-## Current decision
-
-The current **0.2.3 development candidate** adds caller-declared local startup while retaining Pi 1.1.0–1.4.0, Rust 1.88 and existing public paths/features. This work authorizes one feature commit, pushing main and fake-only local/hosted verification; it does not authorize a crates.io upload or a new tag. The new API is not in published 0.2.2. Preserve the final clean candidate's own source/archive/CI identity outside the package using the [candidate evidence procedure](verification.md#candidate-evidence). Historical publication observations below remain bound to their uploaded source.
-
-Release **0.2.2** supports **Pi >=1.1.0, <=1.4.0 / Rust 1.88**, reviewed at fixed upstream commit `4a080252f06caf63a525d7873c5d94d3c23887e0`. It was published on **2026-10-27** from main commit **`d69912fc4821085d300da5ba1fe9f942c76e22ec`**, after complete local verification, strict package/dry-run/consumer checks and [six successful CI jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40468486669) for that clean source. The downloaded registry bytes, exact Rust 1.88.0 registry consumer, docs.rs, annotated `v0.2.2` tag and all eight frozen guide/license targets are confirmed in the [release record](verification.md#022-release-2026-10-27). This later bookkeeping records observations without changing the uploaded source or tag target. No real Pi or paid model was used by these release gates.
-
-Release **0.2.1** supports **Pi >=1.1.0, <=1.3.0**, retaining Rust **1.88**, public fields and features. Its latest reviewed source is `71023aec1546d6d677a65669c5665c0927ce0dd0`; live Pi 1.3.0 acceptance is not claimed. Version 0.2.1 was published on 2026-10-18 from **`6a7004d6f845857753bd64cfdbf0762807f1c405`**, after complete local verification and six successful hosted jobs for that commit. The registry bytes, exact Rust 1.88.0 registry consumer, docs.rs, immutable `v0.2.1` tag and frozen guide links are confirmed in the [release record](verification.md#021-release-2026-10-18).
-
-The [completed 0.2.1 development baseline](verification.md#021-completed-baseline-2026-10-18) is commit `d27fb2c8de7abe2dedb6aec5aced08d4096eb766`, with six successful native fake-only jobs and local stable/exact 1.88.0 package/consumer verification. The final release commit passed its own [six-job run](https://github.com/Coder-Sang/pi-rpc/actions/runs/39120347264) and [candidate evidence procedure](verification.md#candidate-evidence); the development baseline was not substituted for those checks. This later documentation bookkeeping records observed results without moving the release tag away from the actual uploaded commit.
-
-**pi-rpc 0.2.0** supports **Pi >=1.1.0, <=1.2.0**, with latest reviewed source commit **06a466935536f8c9bcacb2d5efc0fc021be1bdff**, and requires **Rust 1.88**. Version 0.2.0 was published on 2026-10-16; registry bytes, Rust 1.88.0 registry consumption, docs.rs and the exact uploaded commit tag are confirmed in the [release record](verification.md#020-release-2026-10-16). Cargo continues to permit publishing only to `crates-io`.
-
-The published [0.1.0](https://crates.io/crates/pi-rpc/0.1.0) remains pinned to Pi 1.1.0/Rust 1.85, with the immutable [v0.1.0 tag](https://github.com/Coder-Sang/pi-rpc/tree/v0.1.0) at **41a7348d418ce1e1a591fa66246cc9f21e5d26b8**. Its registry, docs.rs and hosted results are recorded in [verification](verification.md#010-release-2026-10-14); they do not establish 0.2.0 acceptance.
-
-The package declares the repository, nonblank description, README, Apache-2.0 license, keywords and all-feature docs.rs configuration. Original and Cargo-normalized manifests must agree. The checker enforces the current Rust 1.88 baseline, crates.io-only publishing, retained notices/changelog/provenance, source-document equality, archive safety and ignore-policy agreement. `.env.example` remains allowed outside excluded directories. These checks are bounded, not an exhaustive secret scan. See the [source review](provenance.md) and [compatibility notes](compatibility.md#upgrade-from-pi-110-to-120).
+This is the reusable maintainer procedure. Current Git source is **0.2.3 development**, while **0.2.2** remains published. Publication observations, uploaded commits, checksums, tags and historical acceptance live in [verification](verification.md); source and license scope live in [provenance](provenance.md). A completed historical checklist does not authorize or validate another upload.
 
 ## Version and release policy
 
-- **0.2.x** patch releases preserve documented public Rust paths, field types, feature names and the **1.88** minimum. Pi compatibility for 0.2.2 covers **1.1.0 through 1.4.0**; published 0.2.1 retains **1.1.0 through 1.3.0** and published 0.2.0 retains **1.1.0 through 1.2.0**. Local defaults accept the current range; concrete expectations retain exact locks. Both previous fixed `>=1.1.0, <=1.2.0` and `>=1.1.0, <=1.3.0` configurations retain their original upper bounds. Remote hosts declare their concrete Pi version. Prereleases and build metadata are rejected; range admission alone does not establish review of a future in-range patch release.
-- The published **0.1.x** line retains its **Pi 1.1.0 / Rust 1.85** contract. Raising the compiler baseline and expanding the Pi compatibility policy are explicit 0.2.0 migration requirements; the existing Rust public types/features are preserved.
-- Source-breaking changes, including variants added to exhaustively matched public enums, require a new minor series with migration notes. Protocol upgrades and higher MSRV require explicit review and documentation.
-- A dry-run does not reserve a name/version or prove registry acceptance or docs.rs success. Published version archives cannot be overwritten.
-- Finalize package-facing README/changelog/status text before packaging a release commit. After upload confirmation, tag the exact uploaded commit; later bookkeeping commits must not replace it as the tag target.
+- The 0.2.x series preserves documented public paths, field types, feature names and Rust **1.88**. Source-breaking changes, including variants added to exhaustively matched enums, require a new minor series and migration notes.
+- Current Pi admission covers canonical **1.1.0–1.4.0** releases. Both legacy fixed ranges ending in 1.2.0 and 1.3.0 retain their upper bounds; concrete expectations stay exact. See [compatibility](compatibility.md) for reviewed sources and version-specific behavior. Published 0.1.0 retains Pi 1.1.0/Rust 1.85.
+- Obtain release authorization before upload or tag creation. A dry-run neither reserves a version nor proves registry/docs.rs acceptance. Published archives cannot be overwritten.
+- Finalize package-facing documents before packaging the release commit. Tag the actual uploaded commit after confirmation. Later bookkeeping must not replace its tag target.
 
-## 0.2.2 release checklist
+## Prepare a release
 
-- [x] Authorize publication from main and an exact uploaded-commit tag (2026-10-27).
-- [x] Finalize registry installation, the 0.2.2 changelog date and immutable `v0.2.2` guide links before packaging.
-- [x] Review Pi 1.1.0–1.4.0 source and identical MIT notices; retain legacy range bounds, exact locks, public paths, features and Rust 1.88.
-- [x] Commit the final release source; pass every local gate, strict package/dry-run/consumer check and all six CI jobs for that same commit.
-- [x] Upload the verified commit and compare the downloaded registry archive, checksum and clean VCS identity with the pre-upload evidence.
-- [x] Verify an exact Rust 1.88.0 registry consumer in all four feature configurations and verify docs.rs with the optional APIs.
-- [x] Create/push `v0.2.2` at the actual uploaded commit, verify frozen guide links, and record confirmed results separately.
-
-The [completed 0.2.2 baseline](verification.md#022-completed-baseline-2026-10-27) identifies prior successful checks. The final release passed its own complete acceptance. The uploaded archive retains the pre-upload checklist state; these confirmed observations were added afterward without changing its source or tag target.
-
-## 0.2.1 release checklist
-
-- [x] Authorize the actual upload and exact uploaded-commit tag (2026-10-18).
-- [x] Finalize registry installation, the 0.2.1 changelog date and immutable `v0.2.1` guide links before packaging.
-- [x] Review Pi 1.1.0/1.2.0/1.3.0 source and identical MIT notices; retain SDK legacy configuration, public paths, features and Rust 1.88.
-- [x] Commit the release source; pass every local gate, strict package/dry-run/consumer check and all six CI jobs for that same commit.
-- [x] Upload the verified commit and compare the downloaded registry archive, checksum and clean VCS identity with the pre-upload evidence.
-- [x] Verify an exact Rust 1.88.0 registry consumer in all four feature configurations and verify docs.rs with the optional APIs.
-- [x] Create/push `v0.2.1` at the actual uploaded commit, verify frozen guide links, and record completed observations separately.
-
-The uploaded archive captures the pre-upload checklist state. The completed observations above were added after confirmation; this documentation bookkeeping does not change the uploaded archive or the `v0.2.1` target.
-
-## Completed source and content review
-
-The checked items here and in the historical 0.2.0 before/after-upload lists record the published **0.2.0** release. Source/license coverage through 0.2.2 is documented in [provenance](provenance.md).
-
-- [x] Compare fixed Pi 1.1.0/1.2.0 archives, RPC commands/events/UI, native sessions, model schemas and image/retry semantics. Preserve the identical pinned MIT notice in [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md).
-- [x] Retain Apache-2.0 and crate metadata; update metadata checks, negative regressions, fresh-consumer manifest and CI to Rust 1.88.
-- [x] Remove the direct `psm = "=0.1.27"` workaround and resolve `psm 0.1.32` with `ar_archive_writer 0.5.3`; keep stack/depth/float/capacity/close protections.
-- [x] Preserve the documented public Rust paths/features and cover version-range and exact-lock fake probes, with opt-in examples using the latest reviewed Pi 1.2.0 baseline.
-
-The [provenance review](provenance.md) describes package contents and license declarations. [Verification](verification.md) distinguishes local checks, real-Pi acceptance and hosted CI.
-
-## Before a separately authorized upload
-
-- [x] Obtain authorization for the actual **0.2.0** upload and release tag (2026-10-16).
-- [x] Finalize the README's registry installation example and remove development/unuploaded wording before packaging. Keep version claims neutral until upload confirmation.
-- [x] Finalize the **0.2.0** changelog heading and intended release date before packaging. Recheck if the date or any source text changes.
-- [x] Commit all package-facing files and run the complete checks below against that clean release commit, then confirm all six hosted jobs. Preserve the candidate JSON and its six-job run link outside the archive, following the [evidence procedure](verification.md#candidate-evidence).
+1. Select a version and review API, feature, MSRV and Pi compatibility changes. Keep the latest published installation example and Git-only API labels accurate until preparing the actual release source.
+2. Finalize Cargo.toml/Cargo.lock, README installation/version text and the CHANGELOG version/date. Use immutable release-tag links for package-facing project guides. Verify their corresponding files and anchors before the tag exists.
+3. Review [provenance](provenance.md), LICENSE and retained third-party notices. Confirm metadata, package contents, ignore-policy agreement, `.env.example` preservation and absence of private/generated material.
+4. Commit the intended release source on main. Run every gate below against that clean commit, then confirm all six CI jobs and matching artifacts for the same SHA. Any source/document change requires fresh evidence.
 
 ## Final verification before upload
+
+Development tools and platform requirements are in [CONTRIBUTING](../CONTRIBUTING.md#development-requirements). Run from the repository root:
 
 ```bash
 CARGO_NET_OFFLINE=true bash scripts/verify.sh
@@ -87,30 +39,28 @@ python3 scripts/record-evidence.py
 git diff --check
 ```
 
-Use offline mode only after dependencies/toolchains are downloaded. The fresh consumer and publishing rehearsal should have network access to resolve the registry index. `cargo package --locked` explicitly refreshes the standard archive; Cargo can place a publishing rehearsal's archive in a temporary subdirectory instead.
+Use offline mode only after dependencies/toolchains are cached. Fresh consumers and the publishing rehearsal may need network access for registry resolution. These gates use only in-memory transports and the compiled fake; they make no Pi or model requests.
 
-Archive selection uses Cargo metadata to resolve the current package version and effective target directory, including `CARGO_TARGET_DIR` and `.cargo/config.toml`. For a per-command `--target-dir`, pass the archive explicitly to the checker and consumer, for example `bash scripts/verify-consumer.sh --archive /absolute/path/to/pi-rpc-0.2.3.crate`.
+`cargo package --locked` refreshes the standard archive; a publishing rehearsal may use a temporary subdirectory instead. Archive selection resolves the package version and effective target directory through Cargo metadata, honoring `CARGO_TARGET_DIR` and `.cargo/config.toml`. For per-command `--target-dir`, pass `--archive /absolute/path/to/pi-rpc-0.2.3.crate` explicitly to the checker/consumer rather than relying on a stale default archive.
 
-The consumer checks clean VCS identity, version, metadata, notices, links and every archived source byte before extracting that exact snapshot into a fresh directory. It ignores stale unpacked directories and creates its own lockfile. All four feature configurations compile/run the public-path tests and in-memory example; both session configurations also run the native-session example. No Pi process is executed.
+Consumers validate clean VCS identity, metadata, notices, links and every archived source byte, then extract that exact snapshot into a fresh directory and resolve their own lockfiles. They compile/run public-path tests and in-memory examples under all four feature configurations; both session configurations run the native-session example. No Pi process is executed.
 
-The recorder writes `verification/release-evidence.json` under Cargo's effective target directory. CI uploads a separate `release-evidence-<os>-<toolchain>` artifact after each job's required checks. Confirm all six conclusions for the same commit; the JSON itself reports only archive/source inspection. Preserve the chosen upload platform's record before artifact expiration. The record includes no absolute paths or private runtime payloads. Different Cargo versions/platforms need not produce identical archive digests.
+## Inspect evidence and upload
 
-The 0.2.3 development README uses main guide links checked against its source snapshot. The published 0.2.2 README retains immutable `v0.2.2` guide links. Verify the corresponding source files/anchors before packaging, then fetch and compare all eight distinct guide/license targets after pushing the tag at the actual uploaded commit. Older releases retain their own tagged links. Both Markdown and generated-HTML checks map `main`, canonical three-part release tags (with optional `v`), and full 40-character lowercase commit IDs to the inspected source snapshot. Other repository `blob` references are rejected; use full commit IDs instead of abbreviated hashes. These offline checks validate files and anchors, not the existence or identity of a remote ref. Candidate commit/artifact identity and the remote tag must also be confirmed.
+The [candidate procedure](verification.md#candidate-evidence) records actual commit, compiler and archive identity outside packaged source. Confirm all six Linux/macOS/Windows × stable/1.88.0 jobs succeeded for that same commit and inspect their corresponding `release-evidence-*` artifacts. Preserve the selected upload platform's evidence before CI artifact expiry; archive digests may differ by Cargo/platform.
 
-After every local check and all six hosted jobs pass for the authorized clean release commit, record its SHA/digest and upload with `cargo publish --locked --registry crates-io`. Do not use `--allow-dirty` or skip package verification. Compare the actual registry archive checksum and `.cargo_vcs_info.json` with the recorded evidence.
+After all checks pass and upload is authorized, run `cargo publish --locked --registry crates-io` from the verified clean source. Keep strict package verification enabled. Compare the downloaded registry archive with the recorded pre-upload bytes, checksum and clean `.cargo_vcs_info.json`.
 
-Development requires stable Rust with rustfmt/Clippy, separately installed exact **1.88.0**, Bash, Git, **Python 3.11+** and a native C/assembly compiler. Windows uses Git Bash, MSVC and the Windows SDK. Native stack-switching dependencies still require their platform compiler; installing a Rust target alone does not prove cross-platform execution.
+## After upload
 
-The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) is configured for Linux/macOS/Windows on stable and exact 1.88.0. Consult the [hosted CI record](verification.md#hosted-ci) for completed jobs. [Local verification](verification.md#current-status-summary) and historical release results are recorded separately.
+1. Confirm the exact registry version and compare actual archive/source identity with the pre-upload evidence.
+2. Verify a fresh registry consumer on exact Rust 1.88.0 in all four feature configurations, using no SDK path/patch override.
+3. Verify docs.rs builds with all features and exposes the optional APIs.
+4. Create and push the version tag at the actual uploaded commit. Fetch every tagged README guide/license target and compare it with the release source.
+5. Create the matching GitHub Release from that existing tag, using the CHANGELOG summary and confirmed publication evidence. Record observed results separately; subsequent Git-only edits do not alter the uploaded archive.
 
-## After a separately authorized upload
+Markdown and generated-HTML checks map `main`, canonical release tags and full lowercase 40-character commit IDs to the inspected source snapshot. They validate files/anchors offline, not the existence or identity of remote refs. Confirm those refs and hosted pages separately. Development guides use main links; published archives retain their release snapshots.
 
-- [x] Confirm **0.2.0** in the registry, compare its actual bytes/VCS identity and run a fresh registry consumer on exact Rust 1.88.0.
-- [x] Confirm docs.rs builds with all features and optional APIs are visible.
-- [x] Record actual results and create/push **v0.2.0** pointing to the exact uploaded commit. A later documentation commit must not be substituted.
+## Opt-in real acceptance
 
-Post-upload Git-only README/changelog edits do not replace the uploaded archive. Corrections to published source require another version.
-
-## Opt-in live acceptance
-
-Real Pi and paid-model acceptance require an explicit request and are separate from normal verification. The current local endpoint/UI results and completed local hosted-model checks are recorded in [verification](verification.md#real-pi-acceptance); remote deployment and vendor acceptance remain unverified. Historical results apply only to their recorded versions. Hosts own executable installation, credentials, environment isolation and process policy. Persistent-setting RPCs may modify Pi's selected agent directory; follow the [isolated acceptance guide](acceptance.md#broader-real-pi-acceptance) before a separately authorized run.
+Normal release gates do not execute real Pi or paid models. Such acceptance needs a separate explicit request and the isolated environments in [acceptance](acceptance.md). Results apply only to the recorded Pi version, model, platform and date; source review or synthetic transport tests do not extend them. Hosts own executable installation, credentials, isolation and process policy.

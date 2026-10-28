@@ -26,13 +26,17 @@ REQUIRED_FILES = {
     "tests/fixtures/rpc_retry_extension.ts", "tests/fixtures/rpc_live_tool.ts",
     "scripts/check-rustdoc.py",
     "scripts/record-evidence.py",
+    "CONTRIBUTING.md", "SECURITY.md", "docs/connections.md", "docs/native-sessions.md",
 }
 PACKAGE_METADATA = {
     "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
     "edition": "2024", "rust-version": "1.88", "readme": "README.md",
     "repository": "https://github.com/Coder-Sang/pi-rpc",
     "keywords": ["pi", "rpc", "jsonl", "tokio", "async"],
+    "categories": ["asynchronous", "api-bindings"],
+    "exclude": ["/.github/"],
 }
+ROOT_DOCUMENTS = ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "CONTRIBUTING.md", "SECURITY.md")
 IGNORED_ROOT_DIRECTORIES = ("target", ".git", ".pi")
 IGNORED_DIRECTORIES = ("__pycache__",)
 IGNORED_BASENAMES = ("*.pyc", ".DS_Store", "Thumbs.db", "[Dd]esktop.ini", "*.swp", "*.swo", "*~",
@@ -103,7 +107,7 @@ def heading_anchors(text, name):
 
 def check_documents(files):
     """Check a mapping of POSIX relative names to bytes, never host targets."""
-    names = [*(n for n in ("README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md") if n in files),
+    names = [*(n for n in ROOT_DOCUMENTS if n in files),
              *sorted(n for n in files if n.startswith("docs/") and n.endswith(".md"))]
     require("README.md" in files, "missing README.md")
     links = 0
@@ -237,7 +241,7 @@ def read_root(root):
     require(root.is_dir(), f"not a directory: {root}")
     files = {}
     # Include potential local link destinations, but skip build/Git/private folders.
-    for name in ["README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "LICENSE", "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".gitignore"]:
+    for name in [*ROOT_DOCUMENTS, "LICENSE", "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".gitignore"]:
         path = root / name
         if path.is_file():
             require(not path.is_symlink(), f"symlink target not accepted: {name}")
@@ -316,10 +320,14 @@ def check_package_contents(prefix, files, source_root=None, expected_commit=None
     require(hashlib.sha256(notice).hexdigest() == PI_MIT_SHA256, "missing or changed pinned Pi MIT notice")
     check_ignore_policy(files[".gitignore"])
     require(not any(unwanted_package_file(n) for n in files), "unexpected sensitive/build file in package")
+    # GitHub configuration stays tracked in Git, but is not distributed by Cargo.
+    # Keep this separate from the ignore rules used by evidence-output guards.
+    require(not any(PurePosixPath(n).parts[0] == ".github" for n in files),
+            "repository-only .github file in package")
     documents, links = check_documents(files)
     if source_root:
         root, source = read_root(source_root)
-        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", "README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md"}
+        required_source = {"Cargo.toml", "Cargo.lock", "LICENSE", *ROOT_DOCUMENTS, ".gitignore", "docs/provenance.md", "docs/compatibility.md", "docs/verification.md", "docs/publishing.md", "docs/connections.md", "docs/native-sessions.md"}
         require(required_source <= source.keys(), f"missing source comparison files: {sorted(required_source - source.keys())}")
         require({n for n in source if n.startswith("docs/")} == {n for n in files if n.startswith("docs/")},
                 "package/source docs inventory differs")

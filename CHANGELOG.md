@@ -2,9 +2,14 @@
 
 ## 0.2.3 — Unreleased
 
-- Add `PiProcess::spawn_with_version(options, declared_version)` for caller-declared local versions, skipping the external `--version` probe while retaining supported-version admission, legacy range bounds and exact `expected_version` locks.
-- Keep `PiProcess::spawn`'s version probe unchanged, including exact expectations. Both methods share RPC startup, diagnostics, process supervision and cleanup; `startup_timeout` remains a probe-only deadline and is unused by the new method.
-- Add deterministic fake-process, validation, public-path and lifecycle regressions for the new entrypoint. This API is available in the 0.2.3 Git development version; the published 0.2.2 archive remains unchanged. Rust 1.88, existing public paths/features, Pi 1.1.0–1.4.0 support and dependency versions are retained.
+### Added
+
+- `PiProcess::spawn_with_version(options, declared_version)` starts local RPC directly from a caller-declared version, retaining supported-version admission, legacy range bounds and exact `expected_version` locks. This API is Git-only until 0.2.3 is published.
+
+### Changed
+
+- Retain `spawn`'s bounded version probe, including exact expectations. Both startup paths share supervision and cleanup; `startup_timeout` applies only to probing. Rust 1.88, public paths/features, Pi 1.1.0–1.4.0 and dependency versions remain unchanged.
+- Organize connection, native-session and contributor guides; clarify in-memory session encoding, Usage and memory budgets. Consolidate release instructions and verification records, add crate categories and omit GitHub-only configuration from the crate archive.
 
 ## 0.2.2 — 2026-10-27
 
@@ -52,3 +57,5 @@ Initial technical preview, pinned to Pi **1.1.0**. See the [stability and releas
 - Apache-2.0 project license, crates.io-only publishing metadata, all-feature docs.rs configuration and retained Pi MIT notices.
 
 No public API, feature or production behavior was changed by the publication-preparation work. Real Pi and paid-model acceptance remain opt-in; normal validation uses in-memory transports and the test fake.
+
+[Unreleased changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.2...main) · [0.2.2 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.1...v0.2.2) · [0.2.1 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.0...v0.2.1) · [0.2.0 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.1.0...v0.2.0)

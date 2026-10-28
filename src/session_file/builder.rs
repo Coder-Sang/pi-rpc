@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 /// Owns immutable history plus an ID index for linear-time bulk message construction.
 /// Existing SessionFile fields remain public; only this builder controls mutation.
+/// Append/finish validate structure and depth, without cumulative byte/count quotas.
+/// Apply [`super::SessionLimits`] when parsing/encoding and bound input in the host.
 #[derive(Debug)]
 pub struct SessionFileBuilder {
     file: SessionFile,

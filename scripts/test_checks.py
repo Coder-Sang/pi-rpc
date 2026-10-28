@@ -59,7 +59,7 @@ class DocumentChecks(unittest.TestCase):
                 check_documents({"README.md": text.encode()})
 
     def test_release_documents_local_links_checked(self):
-        for name in ["CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]:
+        for name in ["CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "CONTRIBUTING.md", "SECURITY.md"]:
             with self.subTest(name=name):
                 files = {"README.md": b"# Readme\n", name: b"[readme](README.md#readme)\n"}
                 self.assertEqual(check_documents(files), (2, 1))
@@ -81,6 +81,23 @@ class DocumentChecks(unittest.TestCase):
             failed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(failed.returncode, 1)
             self.assertIn("missing local link target", failed.stderr)
+
+    def test_community_documents_loaded_and_checked_by_cli(self):
+        with tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR")) as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text("[contribute](CONTRIBUTING.md)\n", encoding="utf-8")
+            for name in ["CONTRIBUTING.md", "SECURITY.md"]:
+                (root / name).write_text("[home](README.md)\n", encoding="utf-8")
+            command = [sys.executable, str(ROOT / "scripts/check-docs.py"), str(root)]
+            passed = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertIn("3 Markdown documents, 3 local links", passed.stdout)
+            for name in ["CONTRIBUTING.md", "SECURITY.md"]:
+                (root / name).write_text("[missing](absent.md)\n", encoding="utf-8")
+                failed = subprocess.run(command, capture_output=True, text=True)
+                self.assertEqual(failed.returncode, 1, name)
+                self.assertIn("missing local link target", failed.stderr)
+                (root / name).write_text("[home](README.md)\n", encoding="utf-8")
 
 
 class RustdocChecks(unittest.TestCase):
@@ -112,6 +129,18 @@ class RustdocChecks(unittest.TestCase):
             self.index.write_text(f'<a href="{target}">guide</a>', encoding="utf-8")
             with self.subTest(target=target), self.assertRaisesRegex(CheckError, "missing rustdoc link target"):
                 check_rustdoc(self.root, self.files)
+
+    def test_community_document_links_and_anchors_checked_in_html(self):
+        base = "https://github.com/Coder-Sang/pi-rpc/blob/main/"
+        for name in ["CONTRIBUTING.md", "SECURITY.md"]:
+            files = self.files | {name: b"# Reporting\n"}
+            self.index.write_text(f'<a href="{base}{name}#reporting">guide</a>', encoding="utf-8")
+            self.assertEqual(check_rustdoc(self.root, files), (1, 1))
+            with self.assertRaises(CheckError):
+                check_rustdoc(self.root, self.files)
+            self.index.write_text(f'<a href="{base}{name}#missing">guide</a>', encoding="utf-8")
+            with self.assertRaises(CheckError):
+                check_rustdoc(self.root, files)
 
     def test_missing_files_and_anchors_are_rejected(self):
         self.write("pi_rpc/item.html", '<h1 id="present">Item</h1>')
@@ -199,6 +228,8 @@ class PackageChecks(unittest.TestCase):
                     b'edition="2024"\nrust-version="1.88"\nreadme="README.md"\n'
                     b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
+                    b'categories=["asynchronous","api-bindings"]\n'
+                    b'exclude=["/.github/"]\n'
                     b'[package.metadata.docs.rs]\nall-features=true\n')
         self.files.update({"Cargo.toml": manifest, "Cargo.toml.orig": manifest,
                            ".gitignore": (ROOT / ".gitignore").read_bytes(),
@@ -220,7 +251,15 @@ class PackageChecks(unittest.TestCase):
 
     def test_complete_package(self):
         self.write_archive()
-        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (7, 2))
+        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (11, 2))
+
+    def test_repository_only_github_files_rejected_in_archive(self):
+        for name in [".github/workflows/verify.yml", ".github/ISSUE_TEMPLATE/bug_report.md"]:
+            self.files[name] = b"repository-only fixture\n"
+            self.write_archive()
+            with self.subTest(name=name), self.assertRaisesRegex(CheckError, "repository-only .github"):
+                check_package(self.archive)
+            del self.files[name]
 
     def test_evidence_binds_exact_archive_source_and_ci_without_private_paths(self):
         root = self.consumer_source_root()
@@ -379,6 +418,10 @@ class PackageChecks(unittest.TestCase):
              [b'', b'repository="https://example.invalid"\n', b'repository=false\n']),
             (b'keywords=["pi","rpc","jsonl","tokio","async"]\n',
              [b'', b'keywords=["pi"]\n', b'keywords="pi"\n']),
+            (b'categories=["asynchronous","api-bindings"]\n',
+             [b'', b'categories=["asynchronous"]\n', b'categories="api-bindings"\n']),
+            (b'exclude=["/.github/"]\n',
+             [b'', b'exclude=["/tests/"]\n', b'exclude="/.github/"\n']),
             (b'all-features=true\n', [b'', b'all-features=false\n', b'all-features=1\n']),
             (b'[package.metadata.docs.rs]\nall-features=true\n',
              [b'', b'metadata="invalid"\n', b'[package.metadata]\ndocs=false\n',
@@ -558,7 +601,7 @@ class PackageChecks(unittest.TestCase):
     def source_root(self):
         root = Path(self.temp.name) / "source"
         root.mkdir(exist_ok=True)
-        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", ".gitignore", *sorted(n for n in self.files if n.startswith("docs/"))]:
+        for name in ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "CONTRIBUTING.md", "SECURITY.md", ".gitignore", *sorted(n for n in self.files if n.startswith("docs/"))]:
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(self.files[name])
@@ -567,7 +610,7 @@ class PackageChecks(unittest.TestCase):
     def test_source_mismatch(self):
         root = self.source_root()
         self.write_archive()
-        for name in ["README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md"]:
+        for name in ["README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "CONTRIBUTING.md", "SECURITY.md", "docs/provenance.md", "docs/connections.md", "docs/native-sessions.md"]:
             with self.subTest(name=name):
                 path = root / name
                 saved = path.read_bytes()
@@ -580,7 +623,7 @@ class PackageChecks(unittest.TestCase):
         root = self.source_root()
         self.write_archive()
         check_package(self.archive, source_root=root)
-        for name in ["LICENSE", "Cargo.lock", "README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "docs/verification.md"]:
+        for name in ["LICENSE", "Cargo.lock", "README.md", ".gitignore", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "CONTRIBUTING.md", "SECURITY.md", "docs/provenance.md", "docs/verification.md", "docs/connections.md", "docs/native-sessions.md"]:
             with self.subTest(name=name):
                 path = root / name
                 saved = path.read_bytes()

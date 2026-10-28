@@ -91,7 +91,7 @@ Do not wait only for `AssistantEvent::Error` or a top-level `Err` to detect a fa
 
 `extension_error`, compaction errors and retry failure fields also remain ordinary events. Command rejection is returned by the corresponding command future as `Error::Rejected` and is nonterminal.
 
-Connection failures arrive through `recv()` as one `Err`: transport failure, EOF/process exit, malformed known records, configured capacity overflow or close termination. The consumer drains already buffered events first, receives exactly one authoritative terminal reason, then receives `None` on subsequent calls. Cancelling a pending receive does not consume that reason. The connection owner and outstanding commands observe the same published terminal error. In the README example, terminal errors are returned to the caller; the host can treat orderly `Closed` according to its lifecycle policy.
+Connection failures arrive through `recv()` as one `Err`: transport failure, EOF/process exit, malformed known records, configured capacity overflow or close termination. The consumer drains already buffered events first, receives exactly one authoritative terminal reason, then receives `None` on subsequent calls. Cancelling a pending receive does not consume that reason. The connection owner and outstanding commands observe the same published terminal error. The [connection guide's consume example](connections.md#commands-acceptance-and-errors) returns terminal errors to the caller; the host can treat orderly `Closed` according to its lifecycle policy.
 
 ## Pi 1.3.0 tool argument diagnostics
 

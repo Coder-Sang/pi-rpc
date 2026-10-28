@@ -1,5 +1,8 @@
 //! Pi-native v3 JSONL sessions only. No history RPC, vendor conversion, prompt
 //! injection, filesystem discovery, delivery, or model-context replay is provided.
+//! See the [native-session guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/native-sessions.md)
+//! for JSONL, Usage, limits and memory behavior.
+#![doc = include_str!("../docs/native-sessions.md")]
 use crate::{
     Error, Result, codec, json,
     protocol::{EntryData, Extra, Message, MessageContent, SessionEntry},
@@ -30,15 +33,22 @@ pub enum HeaderType {
     #[serde(rename = "session")]
     Session,
 }
+/// Owned native-v3 header and entries. Public mutation is revalidated on encode/append.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionFile {
     pub header: SessionHeader,
     pub entries: Vec<SessionEntry>,
 }
+/// Serialized-size and entry-count quotas applied by [`SessionFile::parse`] and
+/// [`SessionFile::encode`]. These do not limit builder accumulation or process memory.
+/// JSON nesting is separately fixed at [`codec::MAX_JSON_DEPTH`].
 #[derive(Debug, Clone, Copy)]
 pub struct SessionLimits {
+    /// Maximum JSON bytes per header or entry, excluding LF/CRLF. Default: 32 MiB.
     pub max_record_bytes: usize,
+    /// Maximum whole-file bytes, including every line ending. Default: 64 MiB.
     pub max_file_bytes: usize,
+    /// Maximum entries after the header. Default: 100,000.
     pub max_entries: usize,
 }
 impl Default for SessionLimits {
@@ -51,7 +61,8 @@ impl Default for SessionLimits {
     }
 }
 impl SessionFile {
-    /// New native v3 header. IDs, ISO entry timestamp and cwd are caller-owned.
+    /// Creates a native-v3 header without validation. IDs, timestamp and cwd are caller-owned.
+    /// Use [`SessionFileBuilder::new`] for immediate validation or call [`Self::validate`].
     pub fn new(
         id: impl Into<String>,
         timestamp: impl Into<String>,
@@ -107,6 +118,13 @@ impl SessionFile {
         file.validate()?;
         Ok(file)
     }
+    /// Encodes and validates the complete LF-terminated JSONL file in memory.
+    ///
+    /// Returns a full output buffer; this does not stream to a file or writer.
+    /// Record/file/count budgets are checked before full semantic validation, so
+    /// capacity errors can take precedence. Existing input, output and validation
+    /// temporaries can coexist; quotas do not bound peak memory. The caller owns
+    /// delivery and any atomic file replacement.
     pub fn encode(&self, limits: SessionLimits) -> Result<Vec<u8>> {
         // Reject over-budget output before validation can clone message fields.
         if self.entries.len() > limits.max_entries {
