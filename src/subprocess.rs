@@ -28,8 +28,11 @@ pub struct ProcessOptions {
     /// Either [`PI_VERSION_REQUIREMENT`] (the default), a previous fixed
     /// `">=1.1.0, <=1.2.0"` or `">=1.1.0, <=1.3.0"` expression,
     /// or an exact supported release. Each previous expression retains its
-    /// original upper bound. Other expressions are rejected before probing.
+    /// original upper bound. Both startup methods enforce this expectation;
+    /// other expressions are rejected before any child is started.
     pub expected_version: String,
+    /// Deadline for the `--version` probe in [`PiProcess::spawn`].
+    /// Ignored by [`PiProcess::spawn_with_version`]; not an RPC readiness deadline.
     pub startup_timeout: Duration,
     pub stderr_bytes: usize,
     pub connection: Config,
@@ -137,8 +140,37 @@ async fn verify(options: &ProcessOptions) -> Result<String> {
 impl PiProcess {
     /// Runs only `--version` to verify the supported range and optional exact
     /// version expectation before launching `--mode rpc`.
+    /// A concrete [`ProcessOptions::expected_version`] still performs the probe.
+    /// Use [`Self::spawn_with_version`] to supply a trusted version without probing.
     pub async fn spawn(options: ProcessOptions) -> Result<(PiClient, PiEvents, Self)> {
         let actual_version = verify(&options).await?;
+        Self::spawn_rpc(options, &actual_version)
+    }
+    /// Starts RPC using a caller-declared version, without running `--version`.
+    ///
+    /// The caller guarantees that the executable actually runs this release.
+    /// The declaration must be a canonical supported concrete version, without
+    /// surrounding whitespace, and satisfy [`ProcessOptions::expected_version`].
+    /// Invalid or mismatched versions return [`Error::Version`] before any child
+    /// is started. This does not verify the executable's actual version.
+    ///
+    /// [`ProcessOptions::startup_timeout`] is unused. Like [`Self::spawn`], this
+    /// establishes background I/O without sending initialization RPCs or waiting
+    /// for application readiness. Process ownership and cleanup are identical.
+    pub async fn spawn_with_version(
+        options: ProcessOptions,
+        declared_version: &str,
+    ) -> Result<(PiClient, PiEvents, Self)> {
+        let expectation = Expectation::new(&options.expected_version)?;
+        if !expectation.matches(declared_version) {
+            return Err(Error::Version);
+        }
+        Self::spawn_rpc(options, declared_version)
+    }
+    fn spawn_rpc(
+        options: ProcessOptions,
+        actual_version: &str,
+    ) -> Result<(PiClient, PiEvents, Self)> {
         let mut child = base_command(&options)
             .args(&options.args)
             .args(["--mode", "rpc"])
@@ -151,7 +183,7 @@ impl PiProcess {
         let writer = child.stdin.take().unwrap();
         let mut stderr = child.stderr.take().unwrap();
         let (exit_tx, exit) = watch::channel(None);
-        let mut transport = Transport::new(reader, writer, &actual_version)?;
+        let mut transport = Transport::new(reader, writer, actual_version)?;
         transport.exit = Some(exit.clone());
         let (client, events, connection) = PiConnection::connect(transport, options.connection)?;
         let diagnostics = Diagnostics {

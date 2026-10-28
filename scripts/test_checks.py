@@ -184,7 +184,7 @@ class RustdocChecks(unittest.TestCase):
 class PackageChecks(unittest.TestCase):
     def test_repository_metadata_matches_the_0_2_release_policy(self):
         package = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]
-        self.assertEqual(package["version"], "0.2.2")
+        self.assertEqual(package["version"], "0.2.3")
         self.assertEqual(package["rust-version"], "1.88")
         for name, value in PACKAGE_METADATA.items():
             self.assertEqual(package[name], value, name)

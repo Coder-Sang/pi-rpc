@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3 — Unreleased
+
+- Add `PiProcess::spawn_with_version(options, declared_version)` for caller-declared local versions, skipping the external `--version` probe while retaining supported-version admission, legacy range bounds and exact `expected_version` locks.
+- Keep `PiProcess::spawn`'s version probe unchanged, including exact expectations. Both methods share RPC startup, diagnostics, process supervision and cleanup; `startup_timeout` remains a probe-only deadline and is unused by the new method.
+- Add deterministic fake-process, validation, public-path and lifecycle regressions for the new entrypoint. This API is available in the 0.2.3 Git development version; the published 0.2.2 archive remains unchanged. Rust 1.88, existing public paths/features, Pi 1.1.0–1.4.0 support and dependency versions are retained.
+
 ## 0.2.2 — 2026-10-27
 
 - Extend inclusive Pi admission to **1.1.0 through 1.4.0**, retaining Rust **1.88**, public paths, field types and features. The fixed `>=1.1.0, <=1.2.0` and `>=1.1.0, <=1.3.0` expectations keep their original upper bounds; concrete expectations retain exact matching.

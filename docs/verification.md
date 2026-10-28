@@ -2,9 +2,17 @@
 
 ## Current status summary
 
-**pi-rpc 0.2.2** supports **Pi >=1.1.0, <=1.4.0** and requires **Rust 1.88**. Pi **1.4.0**, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, is the latest reviewed source baseline. Supported admission, source review and actual runtime acceptance are distinct; see [compatibility](compatibility.md#pi-140-source-review-2026-10-27). No live Pi 1.4.0/model acceptance is claimed. The [0.2.2 release](#022-release-2026-10-27) was published on 2026-10-27; its registry bytes, exact Rust 1.88.0 registry consumer, docs.rs and uploaded-commit tag are confirmed below.
+**pi-rpc 0.2.3 (development)** retains **Pi >=1.1.0, <=1.4.0 / Rust 1.88** and adds `PiProcess::spawn_with_version` for caller-declared local startup. This API is not included in published 0.2.2. Pi 1.4.0, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, remains the latest reviewed source baseline. No live Pi 1.4.0/model acceptance is claimed. Historical [0.2.2 publication results](#022-release-2026-10-27) retain their original uploaded source and scope.
 
 The [0.2.1 release](#021-release-2026-10-18) was published on 2026-10-18 after complete clean-commit verification and six successful hosted jobs. Its actual registry bytes, exact Rust 1.88.0 registry consumer, docs.rs and uploaded-commit tag are confirmed below. The separate 0.2.1 bookkeeping did not replace its uploaded source. The [0.2.0 release](#020-release-2026-10-16) retains its separately recorded results. This record separates local verification, prior real-Pi acceptance and hosted CI. Normal verification uses fake/in-memory transports and makes no paid-model requests.
+
+## Caller-declared startup development status (2026-10-28)
+
+The new entrypoint validates the concrete declaration and existing expected-version policy locally, then uses the same RPC launch/supervision path as `spawn`. The existing method still probes, including exact locks. The fake's probe-forbidden profile and separate launch markers distinguish both paths without timing thresholds. Regression coverage includes default/zero probe deadlines, endpoints and numeric intermediate versions, legacy bounds, malformed declarations, exact prefix collisions, argument/cwd handling, bounded diagnostics, termination and single-terminal delivery. Public-path tests compile the new API and its Send future without polling it, including in packaged independent consumers. Real acceptance examples continue to use the probing method.
+
+Targeted macOS aarch64 checks passed **33** subprocess/public-path test executions on each of stable **Rust 1.97.1** and exact **1.88.0**, plus stable strict all-target Clippy. Separate Rust 1.88.0 snapshot controls passed all three original assertions and detected three intentional faults: restoring the new entrypoint's probe, ignoring its expected-version match, and bypassing the old entrypoint's probe. Failure logs and snapshot evidence remain outside the crate; the working source was unchanged during those controls. These targeted results do not replace the complete final-candidate gates below.
+
+The final clean 0.2.3 candidate requires complete local stable/exact 1.88.0 feature, stress, Debug/Release, Python, document, package/dry-run and independent-consumer checks, plus six matching hosted jobs and artifacts. Record its actual SHA, compiler, archive digest and results outside packaged source following [candidate evidence](#candidate-evidence); prior release runs do not substitute for this candidate. This update does not publish a crate, create a tag or call real Pi/paid models.
 
 ## Pi 1.4.0 development status (2026-10-27)
 

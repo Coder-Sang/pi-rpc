@@ -15,6 +15,9 @@ fn main() {
             b"probe",
         )
         .unwrap();
+        if name.contains("probe-forbidden") {
+            std::process::exit(86);
+        }
         if name.contains("probe-hang") {
             std::thread::sleep(Duration::from_secs(60));
         }
@@ -70,6 +73,12 @@ fn main() {
     )
     .unwrap();
     assert!(args.windows(2).any(|w| w == ["--mode", "rpc"]));
+    if let Some(expected) = args.windows(2).find(|w| w[0] == "--expect-cwd") {
+        assert_eq!(
+            std::env::current_dir().unwrap().canonicalize().unwrap(),
+            std::path::Path::new(&expected[1]).canonicalize().unwrap()
+        );
+    }
     let mode = args
         .windows(2)
         .find(|w| w[0] == "--fake-mode")

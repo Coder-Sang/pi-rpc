@@ -1,5 +1,7 @@
 #![cfg(feature = "subprocess")]
 use pi_rpc::{Config, Error, PiEvents, PiProcess, ProcessOptions, protocol::Event};
+#[path = "subprocess/declared.rs"]
+mod declared;
 #[tokio::test]
 async fn child_exit_with_descendant_holding_stdout_resolves_pending_and_owner() {
     let (c, mut e, mut p) = PiProcess::spawn(options("descendant-exit")).await.unwrap();

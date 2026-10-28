@@ -4,14 +4,15 @@ A bounded Tokio async JSONL client for **Pi 1.1.0 through 1.4.0**. Rust imports 
 
 | Crate series | Pi support | Minimum Rust | Availability |
 |---|---|---|---|
+| **0.2.3 (development)** | **>=1.1.0, <=1.4.0** | **1.88** | Git/path candidate; unpublished |
 | **0.2.2** | **>=1.1.0, <=1.4.0** | **1.88** (edition 2024) | [crates.io](https://crates.io/crates/pi-rpc/0.2.2) |
 | **0.2.1** | **>=1.1.0, <=1.3.0** | **1.88** | [crates.io](https://crates.io/crates/pi-rpc/0.2.1) |
 | **0.2.0** | **>=1.1.0, <=1.2.0** | **1.88** | [crates.io](https://crates.io/crates/pi-rpc/0.2.0) |
 | **0.1.0** | **1.1.0** | **1.85** | [crates.io](https://crates.io/crates/pi-rpc/0.1.0) |
 
-The 0.2.2 release passed [all six Linux/macOS/Windows × stable/exact 1.88.0 jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40468486669) for uploaded commit `d69912fc4821085d300da5ba1fe9f942c76e22ec`. Registry bytes, the exact Rust 1.88.0 registry consumer, docs.rs and the uploaded-commit tag are confirmed in the [publication record](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#022-release-2026-10-27). Each [Verify job](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) publishes a `release-evidence-*` artifact binding its actual commit, compiler and crate digest; see the [evidence procedure](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/verification.md#candidate-evidence). Real Pi acceptance is recorded separately. Pi is a separately installed executable.
+The 0.2.2 release passed [all six Linux/macOS/Windows × stable/exact 1.88.0 jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40468486669) for uploaded commit `d69912fc4821085d300da5ba1fe9f942c76e22ec`. Registry bytes, the exact Rust 1.88.0 registry consumer, docs.rs and the uploaded-commit tag are confirmed in the [publication record](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#022-release-2026-10-27). Each [Verify job](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) publishes a `release-evidence-*` artifact binding its actual commit, compiler and crate digest; see the [evidence procedure](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#candidate-evidence). Real Pi acceptance is recorded separately. Pi is a separately installed executable.
 
-The latest reviewed Pi source baseline is **1.4.0**. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/LICENSE), with retained [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/THIRD_PARTY_NOTICES.md).
+The latest reviewed Pi source baseline is **1.4.0**. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md) for the fixed upstream commits, review coverage and version policy. Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/main/LICENSE), with retained [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/main/THIRD_PARTY_NOTICES.md).
 
 ## Installation
 
@@ -23,7 +24,7 @@ pi-rpc = "0.2.2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-To consume a Git candidate, choose a successful six-job [Verify run](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml), read `source.commit` from its `release-evidence-*` artifact, and replace the registry dependency with `git = "https://github.com/Coder-Sang/pi-rpc.git"` and `rev` set to that exact commit. A local checkout can instead use `path = "../pi-rpc"`.
+The unpublished **0.2.3** Git candidate adds `PiProcess::spawn_with_version`; the published 0.2.2 dependency above does not contain that API. To consume a Git candidate, choose a successful six-job [Verify run](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml), read `source.commit` from its `release-evidence-*` artifact, and replace the registry dependency with `git = "https://github.com/Coder-Sang/pi-rpc.git"` and `rev` set to that exact commit. Each candidate requires its own completed checks and evidence. A local checkout can instead use `path = "../pi-rpc"`.
 
 The published `pi-rpc = "0.2.0"` supports Pi 1.1.0–1.2.0. The published dependency `pi-rpc = "0.1.0"` retains the older Pi 1.1.0/Rust 1.85 contract. Commit your application's `Cargo.lock` and update dependencies deliberately. The feature options below apply to Git, path and registry dependencies.
 
@@ -31,7 +32,7 @@ The published `pi-rpc = "0.2.0"` supports Pi 1.1.0–1.2.0. The published depend
 
 The **0.2.x** series preserves documented public paths, field types, feature names and the **Rust 1.88** minimum. Pi version admission accepts canonical three-component releases in the inclusive **1.1.0–1.4.0** range; prereleases and build metadata are rejected. In-range version admission does not establish source review or runtime acceptance of a newly published patch release.
 
-This crate remains a technical preview. Patch releases preserve the Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. See the [changelog](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/CHANGELOG.md), [compatibility evidence](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/compatibility.md#version-range-and-review-evidence) and [release policy](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/publishing.md#version-and-release-policy).
+This crate remains a technical preview. Patch releases preserve the Rust API; source-breaking changes, including changes to exhaustively matched enums, require a new minor series with migration notes. See the [changelog](https://github.com/Coder-Sang/pi-rpc/blob/main/CHANGELOG.md), [compatibility evidence](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md#version-range-and-review-evidence) and [release policy](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md#version-and-release-policy).
 
 ### Cargo features
 
@@ -48,7 +49,7 @@ For injected transport only, add `default-features = false` to the dependency. T
 - `codec`: strict LF JSONL, CRLF decoding, fragmented/coalesced byte streams, bounded records. Unicode U+2028/U+2029 inside strings do not split records. Nonempty unterminated EOF is an error.
 - `transport`: inject any ordered `AsyncRead + AsyncWrite` pair without an SDK dependency. The remote host **declares** its Pi version. There is no RPC version handshake.
 - `client`: cloneable command handle, ID-correlated responses, one continuous reader, one serialized writer, one single-consumer ordered event stream.
-- `subprocess` (default): non-PTY local Pi with separate stdout/stderr, bounded diagnostics, range or exact `--version` verification and lifecycle ownership.
+- `subprocess` (default): non-PTY local Pi with separate stdout/stderr, bounded diagnostics, version-probed or caller-declared startup and lifecycle ownership.
 - `session_file` (optional): build/parse native v3 session JSONL and inspect raw branches. Not a vendor history converter or model-context replay engine.
 
 Requires a live Tokio runtime. Owners should be explicitly closed/terminated before shutting down that runtime. Dropping a `PiClient` clone is inert. Dropping `PiConnection` aborts its I/O tasks and drops the transport, with remaining clients receiving `Closed`. Dropping `PiProcess` also signals child termination, and its supervisor reaps the child. Explicit termination waits for cleanup. This manages the direct child, not arbitrary detached descendant process trees.
@@ -100,7 +101,26 @@ consumer.await.expect("event task");
 # Ok(()) }
 ```
 
-The executable is probed with `--version` before `--mode rpc`. By default, `ProcessOptions.expected_version` equals `PI_VERSION_REQUIREMENT` (`">=1.1.0, <=1.4.0"`) and accepts any canonical release in that inclusive range after trimming probe output. Set `expected_version: "1.1.0".into()` (or another supported concrete version) to require an exact match. The previous fixed expressions `">=1.1.0, <=1.2.0"` and `">=1.1.0, <=1.3.0"` each retain their original upper bound. Only these three fixed range expressions and supported concrete versions are accepted; arbitrary constraint expressions are rejected before probing. `PI_VERSION` is `"1.4.0"`, the latest reviewed release, and `SOURCE_COMMIT` identifies its source. Injected transports must declare the actual concrete version, without surrounding whitespace; a range expression is not a remote version. Startup timeout and probe output are bounded. The executable inherits the environment. Library code does not directly read/write Pi configuration or credentials, but commands such as `set_auto_retry`, `set_auto_compaction`, `set_steering_mode` and `set_follow_up_mode` cause **Pi to persist settings**. Pi may also refresh authentication. The opt-in examples have their own documented scratch-file behavior. CLI options, isolation and access policy belong to the host. No PTY is ever allocated.
+`PiProcess::spawn` probes the executable with `--version` before `--mode rpc`, including when an exact `expected_version` is configured. By default, `ProcessOptions.expected_version` equals `PI_VERSION_REQUIREMENT` (`">=1.1.0, <=1.4.0"`) and accepts any canonical release in that inclusive range after trimming probe output. Set `expected_version: "1.1.0".into()` (or another supported concrete version) to require an exact match. The previous fixed expressions `">=1.1.0, <=1.2.0"` and `">=1.1.0, <=1.3.0"` each retain their original upper bound. Only these three fixed range expressions and supported concrete versions are accepted; arbitrary constraint expressions are rejected before any child starts. `PI_VERSION` is `"1.4.0"`, the latest reviewed release, and `SOURCE_COMMIT` identifies its source. Injected transports must declare the actual concrete version, without surrounding whitespace; a range expression is not a remote version.
+
+In the **0.2.3 Git development version**, a host that already knows the installed release can skip the external version probe:
+
+```rust,no_run
+# #[cfg(feature="subprocess")]
+# async fn declared_start() -> pi_rpc::Result<()> {
+use pi_rpc::{PiProcess, ProcessOptions};
+let (client, mut events, mut process) =
+    PiProcess::spawn_with_version(ProcessOptions::default(), "1.4.0").await?;
+let consumer = tokio::spawn(async move { while events.recv().await.is_some() {} });
+let state = client.get_state().await?; // Explicit caller request, not startup initialization.
+process.close().await;
+consumer.await.expect("event task");
+# Ok(()) }
+```
+
+The host guarantees that the executable actually runs the declared release. `spawn_with_version` only validates that declaration locally against the supported range and `expected_version`, then starts the same RPC process and supervision. Declarations must be concrete canonical releases: whitespace, range expressions, prereleases and build metadata are rejected. Invalid or mismatched versions return `Error::Version` before any child starts. Both older expectation ranges and exact locks still apply.
+
+`startup_timeout` controls only `spawn`'s version probe (default five seconds, stdout/stderr each limited to 4 KiB); it is unused by `spawn_with_version`. Both startup methods establish background I/O without an automatic `get_state`, version handshake or application-readiness wait. The executable inherits the environment. Library code does not directly read/write Pi configuration or credentials, but commands such as `set_auto_retry`, `set_auto_compaction`, `set_steering_mode` and `set_follow_up_mode` cause **Pi to persist settings**. Pi may also refresh authentication. The opt-in examples have their own documented scratch-file behavior. CLI options, isolation and access policy belong to the host. No PTY is ever allocated.
 
 `examples/local.rs` accepts an optional executable path argument, enabling the same example to run against the test fake rather than a configured Pi installation.
 
@@ -144,7 +164,7 @@ async fn consume(mut events: PiEvents) -> pi_rpc::Result<()> {
 }
 ```
 
-See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
+See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
 
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 
@@ -242,12 +262,12 @@ git diff --check
 
 These checks use only in-memory transports and the compiled test fake. They exercise all four feature configurations, strict lint/docs, floating-point precision, stack safety, capacity/UI/close regressions and Debug/Release boundaries. They do not run real Pi or paid-model requests.
 
-Release guide links target the immutable `v0.2.2` tag; the source crate includes the matching document snapshot. Confirmed publication observations are maintained on `main` without changing the uploaded archive or tag. Older releases retain their own tagged guides.
+Development guide links use `main`; the source crate includes the matching document snapshot. Published 0.2.2 retains its immutable `v0.2.2` guides and uploaded source. Candidate commit and archive identity are recorded separately from historical publication observations.
 
-For package creation, archive/source/license checks, publish dry-run, candidate evidence and fresh independent consumers on both toolchains, follow the [release checklist](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/publishing.md#final-verification-before-upload). It covers custom Cargo target directories and explicit archive selection. Actual local, hosted and real-Pi results are recorded in [verification](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/verification.md). Document/package checks cover local links and known unwanted content; they are not an exhaustive credential audit.
+For package creation, archive/source/license checks, publish dry-run, candidate evidence and fresh independent consumers on both toolchains, follow the [release checklist](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md#final-verification-before-upload). It covers custom Cargo target directories and explicit archive selection. Actual local, hosted and real-Pi results are recorded in [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md). Document/package checks cover local links and known unwanted content; they are not an exhaustive credential audit.
 
 The fake-only image tests cover four near-limit images, a 15 MiB original represented as 20 MiB Base64, exact record/envelope limits, image event replay and complete history overflow. For an informational seven-sample Release comparison of single-pass versus reserved two-pass encoding, run `cargo test --locked --release --all-features --lib image_encoding_measurement -- --ignored --nocapture`. It prints elapsed medians and reserved output bytes, not process RSS, and has no timing threshold.
 
 ## Real Pi acceptance
 
-Normal verification uses only the test fake. Separate opt-in checks cover read-only Pi RPCs, synthetic extension behavior and paid model acceptance; see the [real Pi acceptance guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.2.2/docs/acceptance.md). Those examples can persist settings or modify scratch files, and require the disposable environments described there.
+Normal verification uses only the test fake. Separate opt-in checks cover read-only Pi RPCs, synthetic extension behavior and paid model acceptance; see the [real Pi acceptance guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/acceptance.md). Those examples can persist settings or modify scratch files, and require the disposable environments described there.

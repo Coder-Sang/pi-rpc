@@ -208,6 +208,27 @@ fn subprocess_paths_and_root_aliases_remain_available() {
     let _diagnostics: Option<pi_rpc::subprocess::Diagnostics> = None;
 }
 
+#[cfg(feature = "subprocess")]
+#[test]
+fn declared_version_startup_paths_return_send_futures() {
+    fn check_future(
+        _future: impl std::future::Future<
+            Output = pi_rpc::Result<(pi_rpc::PiClient, pi_rpc::PiEvents, pi_rpc::PiProcess)>,
+        > + Send,
+    ) {
+        // Dropped without polling: this also runs in fresh consumers without Pi.
+    }
+    let options = || pi_rpc::ProcessOptions {
+        executable: "compile-only-never-run-pi".into(),
+        ..Default::default()
+    };
+    check_future(pi_rpc::PiProcess::spawn_with_version(options(), "1.4.0"));
+    check_future(pi_rpc::subprocess::PiProcess::spawn_with_version(
+        options(),
+        "1.4.0",
+    ));
+}
+
 #[cfg(feature = "session_file")]
 #[test]
 fn native_session_paths_remain_available() {

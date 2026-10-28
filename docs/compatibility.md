@@ -1,6 +1,12 @@
 # Source coverage and compatibility
 
-**pi-rpc 0.2.2** supports **Pi >=1.1.0, <=1.4.0**, with Rust **1.88**. The latest reviewed release is [Pi 1.4.0](https://github.com/earendil-works/pi/releases/tag/v1.4.0), fixed commit [`4a080252f06caf63a525d7873c5d94d3c23887e0`](https://github.com/earendil-works/pi/tree/4a080252f06caf63a525d7873c5d94d3c23887e0). Published 0.2.1 retains Pi 1.1.0–1.3.0; published 0.2.0 retains Pi 1.1.0–1.2.0; published 0.1.0 retains Pi 1.1.0/Rust 1.85. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
+**pi-rpc 0.2.3 (development)** retains **Pi >=1.1.0, <=1.4.0**, with Rust **1.88**. Published 0.2.2 supports the same range but does not include the new caller-declared local startup API. The latest reviewed release is [Pi 1.4.0](https://github.com/earendil-works/pi/releases/tag/v1.4.0), fixed commit [`4a080252f06caf63a525d7873c5d94d3c23887e0`](https://github.com/earendil-works/pi/tree/4a080252f06caf63a525d7873c5d94d3c23887e0). Published 0.2.1 retains Pi 1.1.0–1.3.0; published 0.2.0 retains Pi 1.1.0–1.2.0; published 0.1.0 retains Pi 1.1.0/Rust 1.85. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
+
+## Caller-declared local startup (0.2.3 development)
+
+`PiProcess::spawn_with_version(options, declared_version)` skips the external version probe. The caller guarantees the executable's actual release; the SDK checks a concrete canonical declaration against both its supported range and `options.expected_version` before starting any child. Declared versions use the same strict format as injected Transport versions, without surrounding whitespace or range expressions. Both legacy expectation ranges retain their own upper bounds, and exact locks remain exact, including patch-prefix collisions such as 1.3.1/1.3.10.
+
+`PiProcess::spawn` retains its original bounded probe, including when a concrete expectation is selected. `startup_timeout` applies only to that probe and is unused by the new entrypoint. Both methods share the existing RPC process, diagnostics, connection and cleanup implementation; neither sends an automatic initialization RPC or waits for application readiness. The new method changes local launch policy, not the shared wire schema or Pi-owned execution behavior. Real-Pi acceptance examples continue to probe with `spawn`.
 
 ## Version range and review evidence
 

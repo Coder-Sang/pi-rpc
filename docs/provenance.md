@@ -1,6 +1,6 @@
 # Release provenance and package review
 
-The **0.2.2** review covers **Pi 1.1.0–1.4.0 / Rust 1.88**. Fixed source archives were compared; [compatibility](compatibility.md#upgrade-from-pi-110-to-120), the [Pi 1.3.0 review](compatibility.md#pi-130-source-review-2026-10-18) and [Pi 1.4.0 review](compatibility.md#pi-140-source-review-2026-10-27) record the successive comparisons. All four reviewed releases have identical Pi MIT license bytes. Published 0.2.1 retains Pi 1.1.0–1.3.0; published 0.2.0 retains Pi 1.1.0–1.2.0. Source review, [candidate verification](verification.md#candidate-evidence) and [real-Pi acceptance](verification.md#real-pi-acceptance) are separate evidence.
+The **0.2.3 development** source retains the **Pi 1.1.0–1.4.0 / Rust 1.88** review from published 0.2.2. The caller-declared startup method and fake-process regressions are project-authored; no dependencies or upstream source baselines changed. Fixed source archives were compared; [compatibility](compatibility.md#upgrade-from-pi-110-to-120), the [Pi 1.3.0 review](compatibility.md#pi-130-source-review-2026-10-18) and [Pi 1.4.0 review](compatibility.md#pi-140-source-review-2026-10-27) record the successive comparisons. All four reviewed releases have identical Pi MIT license bytes. Published 0.2.1 retains Pi 1.1.0–1.3.0; published 0.2.0 retains Pi 1.1.0–1.2.0. Source review, [candidate verification](verification.md#candidate-evidence) and [real-Pi acceptance](verification.md#real-pi-acceptance) are separate evidence.
 
 ## Material inventory
 
@@ -17,7 +17,7 @@ The tracked-file inventory and introduction commits were inspected. No Pi source
 
 ## Dependency metadata
 
-The 0.2.0 upgrade's locked all-feature metadata contains **41** non-project packages, all with license declarations; the 0.2.1 and 0.2.2 work retain that dependency set. Build dependencies introduced in 0.2.0 are `ar_archive_writer 0.5.3` (**Apache-2.0 WITH LLVM-exception**) and `object 0.39.1` (**Apache-2.0 OR MIT**); `psm 0.1.32` declares **MIT OR Apache-2.0** and Rust **1.88.0**. These crates remain separately resolved and are not vendored. Their declarations do not change the license of this project's original code.
+The 0.2.0 upgrade's locked all-feature metadata contains **41** non-project packages, all with license declarations; the 0.2.1 through 0.2.3 work retain that dependency set. Build dependencies introduced in 0.2.0 are `ar_archive_writer 0.5.3` (**Apache-2.0 WITH LLVM-exception**) and `object 0.39.1` (**Apache-2.0 OR MIT**); `psm 0.1.32` declares **MIT OR Apache-2.0** and Rust **1.88.0**. These crates remain separately resolved and are not vendored. Their declarations do not change the license of this project's original code.
 
 Individual dependency licenses remain authoritative. This is a source-package review, not a binary redistribution license inventory for downstream applications.
 
