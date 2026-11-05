@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Build README caller-test variants from parsed TOML dependencies, accepting path, version-string, version-table and equivalent formatting. Preserve dependency options and the existing cfg/body/feature/version negative controls for every spelling.
 - Keep caller feature gates out of the copyable README example. Gate its Rustdoc inclusion in the library, compile an ordinary caller with no local features, and reject restored gates, unchecked example bodies and mismatched dependency features/versions. Packaged consumption checks the archived README separately.
 - Align test/example helper feature conditions and check all 32 protocol/subprocess/session_file combinations with all targets, including strict stable Clippy without Pi14. Preserve profile-free codec/native-file coverage.
 - Check formatting of macro include! sources and standalone fixtures explicitly, with negative controls that catch files Cargo formatting does not discover. Verify feature-matrix selection and fail-fast behavior without running Pi.

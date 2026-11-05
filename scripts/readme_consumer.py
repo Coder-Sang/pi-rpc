@@ -8,6 +8,21 @@ import tomllib
 from validation_checks import require
 
 
+def toml_dependencies(dependencies):
+    def value(item):
+        if isinstance(item, dict):
+            return "{ " + ", ".join(json.dumps(key, ensure_ascii=False) + " = " + value(entry)
+                                     for key, entry in item.items()) + " }"
+        if isinstance(item, list):
+            return "[" + ", ".join(value(entry) for entry in item) + "]"
+        require(isinstance(item, (str, bool)), "unsupported README dependency value")
+        return json.dumps(item, ensure_ascii=False)
+
+    return "[dependencies]\n" + "".join(
+        json.dumps(name, ensure_ascii=False) + " = " + value(specification) + "\n"
+        for name, specification in dependencies.items())
+
+
 def readme_consumer_sources(readme, package_root, version):
     def block(language):
         matches = re.findall(r"^```" + re.escape(language) + r"\s*\n(.*?)^```\s*$",
@@ -26,11 +41,8 @@ def readme_consumer_sources(readme, package_root, version):
         options.pop(source, None)
     options["path"] = Path(package_root).resolve().as_posix()
     options.setdefault("version", "=" + version)
-    dependency = "pi-rpc = { " + ", ".join(
-        key + " = " + json.dumps(value, ensure_ascii=False) for key, value in options.items()) + " }"
-    dependencies, count = re.subn(r"^pi-rpc\s*=\s*[^\n]+$", lambda _: dependency,
-                                  dependencies, flags=re.MULTILINE)
-    require(count == 1, "README pi-rpc dependency must occupy one line")
+    manifest["dependencies"]["pi-rpc"] = options
+    dependencies = toml_dependencies(manifest["dependencies"])
 
     example = block("rust,no_run")
     require(re.search(r"\basync fn inspect_session\s*\(", example) is not None,

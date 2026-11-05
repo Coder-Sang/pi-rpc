@@ -16,11 +16,48 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from readme_consumer import check_readme_rustdoc
+from readme_consumer import check_readme_rustdoc, readme_consumer_sources, toml_dependencies
 from validation_checks import CheckError, PACKAGE_METADATA, PROTOCOL_FEATURES, REQUIRED_FILES, check_protocol_features, check_documents, check_package, check_rustdoc, read_archive, release_evidence, unwanted_package_file
 from prepare_consumer import prepare_consumer
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+class ReadmeConsumerChecks(unittest.TestCase):
+    def test_dependency_forms_preserve_options_and_other_dependencies(self):
+        forms = [
+            ('pi-rpc = "0.3.0"', {"version": "0.3.0"}),
+            ('pi-rpc={path="../pi-rpc"}', {"version": "=0.3.0"}),
+            ("'pi-rpc' = {version='0.3.0', default-features=false, features=['subprocess','pi_1_5']} # SDK",
+             {"version": "0.3.0", "default-features": False, "features": ["subprocess", "pi_1_5"]}),
+            ('  "pi-rpc"\t= { path="../pi-rpc", version="0.3.0" }', {"version": "0.3.0"}),
+            ('[dependencies."pi-rpc"]\nversion = "0.3.0"\ndefault-features = false\n'
+             'features = ["subprocess", "pi_1_5"]',
+             {"version": "0.3.0", "default-features": False, "features": ["subprocess", "pi_1_5"]}),
+        ]
+        other = {"version": "1", "default-features": False, "features": ["rt", "macros"]}
+        for declaration, expected in forms:
+            for newline in ["\n", "\r\n"]:
+                with self.subTest(declaration=declaration, newline=repr(newline)):
+                    readme = ('```toml\n[dependencies]\ntokio = {version="1", default-features=false, '
+                              'features=["rt", "macros"]}\n' + declaration + '\n```\n'
+                              '```rust,no_run\nasync fn inspect_session() {}\n```\n').replace("\n", newline)
+                    sources = readme_consumer_sources(readme, ROOT, "0.3.0")
+                    manifest = tomllib.loads(sources["Cargo.toml"])
+                    self.assertNotIn("features", manifest)
+                    self.assertEqual(manifest["dependencies"], {
+                        "pi-rpc": expected | {"path": ROOT.resolve().as_posix()}, "tokio": other})
+                    self.assertIn("fn main() { let _ = inspect_session; }", sources["src/main.rs"])
+
+    def test_dependency_renderer_round_trips_toml_values(self):
+        dependencies = {
+            "vendor.sdk": {"version": "1", "default-features": False, "optional": True,
+                           "features": ["quotes\"", "backslash\\", "line\nfeed", "中文"]},
+            "tokio": "1",
+        }
+        self.assertEqual(tomllib.loads(toml_dependencies(dependencies)), {"dependencies": dependencies})
+        with self.assertRaisesRegex(CheckError, "unsupported README dependency value"):
+            toml_dependencies({"pi-rpc": {"version": 3}})
 
 
 class DocumentChecks(unittest.TestCase):

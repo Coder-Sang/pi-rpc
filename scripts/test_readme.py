@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Compile the copied README and reject regressions; never execute its Pi call."""
+import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -10,9 +12,32 @@ import unittest
 
 sys.dont_write_bytecode = True
 from prepare_consumer import cargo_package_location
-from readme_consumer import readme_consumer_sources
+from readme_consumer import readme_consumer_sources, toml_dependencies
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def dependency_example(readme):
+    matches = list(re.finditer(r"^```toml\s*\n(.*?)^```\s*$", readme, re.MULTILINE | re.DOTALL))
+    if len(matches) != 1:
+        raise AssertionError("expected one README dependency example")
+    document = tomllib.loads(matches[0][1])
+    if set(document) != {"dependencies"} or "pi-rpc" not in document["dependencies"]:
+        raise AssertionError("expected a standalone pi-rpc dependency example")
+    return matches[0], document["dependencies"]
+
+
+def dependency_variant(readme, specification, declaration=None):
+    block, dependencies = dependency_example(readme)
+    expected = dependencies | {"pi-rpc": specification}
+    if declaration is None:
+        text = toml_dependencies(expected)
+    else:
+        text = toml_dependencies({name: value for name, value in dependencies.items() if name != "pi-rpc"})
+        text += declaration + "\n"
+    if tomllib.loads(text) != {"dependencies": expected}:
+        raise AssertionError("dependency fixture changes unintended TOML values")
+    return readme[:block.start(1)] + text + readme[block.end(1):]
 
 
 class ReadmeConsumer(unittest.TestCase):
@@ -51,7 +76,11 @@ class ReadmeConsumer(unittest.TestCase):
 
     def check(self, readme):
         sources = self.write_sources(readme)
-        self.assertNotIn("features", tomllib.loads(sources["Cargo.toml"]))
+        generated = tomllib.loads(sources["Cargo.toml"])
+        self.assertNotIn("features", generated)
+        _, documented = dependency_example(readme)
+        self.assertEqual({name: value for name, value in generated["dependencies"].items() if name != "pi-rpc"},
+                         {name: value for name, value in documented.items() if name != "pi-rpc"})
         self.assertIn("fn main() { let _ = inspect_session; }", sources["src/main.rs"])
         return self.cargo("check")
 
@@ -59,57 +88,94 @@ class ReadmeConsumer(unittest.TestCase):
         result = self.check(readme)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def forms(self):
+        yield "documented", self.readme
+        path = {"path": "../pi-rpc"}
+        version = json.dumps(self.version)
+        fixtures = [
+            ("path", path, 'pi-rpc = { path = "../pi-rpc" }'),
+            ("version_string", self.version, 'pi-rpc = ' + version),
+            ("version_table", {"version": self.version}, 'pi-rpc = { version = ' + version + ' }'),
+            ("compact_path", path, 'pi-rpc={path="../pi-rpc"}'),
+            ("literal_quotes", path, "'pi-rpc' = {path='../pi-rpc'} # SDK"),
+            ("indented_reordered", path | {"version": self.version},
+             '  "pi-rpc"\t= { version = ' + version + ', path = "../pi-rpc" } # SDK'),
+            ("dependency_subtable", path | {"version": self.version},
+             '[dependencies."pi-rpc"]\nversion = ' + version + '\npath = "../pi-rpc"'),
+        ]
+        for name, specification, declaration in fixtures:
+            yield name, dependency_variant(self.readme, specification, declaration)
+        yield "crlf", dependency_variant(self.readme, path).replace("\n", "\r\n")
+
+    def options(self, readme, updates):
+        _, dependencies = dependency_example(readme)
+        original = dependencies["pi-rpc"]
+        options = dict(original) if isinstance(original, dict) else {"version": original}
+        return dependency_variant(readme, options | updates)
+
+    def record_form(self, name):
+        print(f"README dependency form: {self._testMethodName} / {name}", flush=True)
+
     def test_compiles_without_local_features(self):
-        self.assert_compiles(self.readme)
+        for name, readme in self.forms():
+            with self.subTest(form=name):
+                self.record_form(name)
+                self.assert_compiles(readme)
 
     def test_original_local_feature_gate_is_rejected(self):
-        self.assert_compiles(self.readme)
-        gate = '#[cfg(all(feature = "subprocess", feature = "pi_1_5"))]\n'
-        self.assertIn("async fn inspect_session", self.readme)
-        mutated = self.readme.replace("async fn inspect_session", gate + "async fn inspect_session", 1)
-        result = self.check(mutated)
-        self.assertNotEqual(result.returncode, 0, "local cfg silently removed the copied example")
-        self.assertIn("E0425", result.stderr)
-        self.assertIn("inspect_session", result.stderr)
+        for name, readme in self.forms():
+            with self.subTest(form=name):
+                self.record_form(name)
+                self.assert_compiles(readme)
+                gate = '#[cfg(all(feature = "subprocess", feature = "pi_1_5"))]\n'
+                self.assertIn("async fn inspect_session", readme)
+                result = self.check(readme.replace("async fn inspect_session", gate + "async fn inspect_session", 1))
+                self.assertNotEqual(result.returncode, 0, "local cfg silently removed the copied example")
+                self.assertIn("E0425", result.stderr)
+                self.assertIn("inspect_session", result.stderr)
 
     def test_example_body_is_checked(self):
-        self.assert_compiles(self.readme)
-        call = "PiProcess::<Pi15>::spawn("
-        self.assertIn(call, self.readme)
-        result = self.check(self.readme.replace(call, "PiProcess::<Pi15>::missing_readme_method(", 1))
-        self.assertNotEqual(result.returncode, 0, "the example body was not type checked")
-        self.assertIn("E0599", result.stderr)
-        self.assertNotIn("E0425", result.stderr)
+        for name, readme in self.forms():
+            with self.subTest(form=name):
+                self.record_form(name)
+                self.assert_compiles(readme)
+                call = "PiProcess::<Pi15>::spawn("
+                self.assertIn(call, readme)
+                result = self.check(readme.replace(call, "PiProcess::<Pi15>::missing_readme_method(", 1))
+                self.assertNotEqual(result.returncode, 0, "the example body was not type checked")
+                self.assertIn("E0599", result.stderr)
+                self.assertNotIn("E0425", result.stderr)
 
     def test_dependency_features_are_honored(self):
-        self.assert_compiles(self.readme)
-        dependency = 'pi-rpc = { path = "../pi-rpc" }'
-        self.assertIn(dependency, self.readme)
-        for protocol, success in [("pi_1_5", True), ("pi_1_4", False)]:
-            with self.subTest(protocol=protocol):
-                configured = 'pi-rpc = { path = "../pi-rpc", default-features = false, features = ["subprocess", "' + protocol + '"] }'
-                result = self.check(self.readme.replace(dependency, configured, 1))
-                if success:
-                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                else:
-                    self.assertNotEqual(result.returncode, 0, "documented dependency features were overridden")
-                    self.assertIn("E0432", result.stderr)
-                    self.assertIn("Pi15", result.stderr)
+        for name, readme in self.forms():
+            with self.subTest(form=name):
+                self.record_form(name)
+                self.assert_compiles(readme)
+                for protocol, success in [("pi_1_5", True), ("pi_1_4", False)]:
+                    with self.subTest(protocol=protocol):
+                        configured = self.options(readme, {"default-features": False, "features": ["subprocess", protocol]})
+                        result = self.check(configured)
+                        if success:
+                            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        else:
+                            self.assertNotEqual(result.returncode, 0, "documented dependency features were overridden")
+                            self.assertIn("E0432", result.stderr)
+                            self.assertIn("Pi15", result.stderr)
 
     def test_documented_version_is_honored(self):
-        self.assert_compiles(self.readme)
-        dependency = 'pi-rpc = { path = "../pi-rpc" }'
-        self.assertIn(dependency, self.readme)
-        for version, success in [(self.version, True), ("0.2.2", False)]:
-            with self.subTest(version=version):
-                configured = 'pi-rpc = { path = "../pi-rpc", version = "' + version + '" }'
-                result = self.check(self.readme.replace(dependency, configured, 1))
-                if success:
-                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                else:
-                    self.assertNotEqual(result.returncode, 0, "documented dependency version was overridden")
-                    self.assertIn("failed to select a version", result.stderr)
-                    self.assertIn("0.2.2", result.stderr)
+        for name, readme in self.forms():
+            with self.subTest(form=name):
+                self.record_form(name)
+                self.assert_compiles(readme)
+                for version, success in [(self.version, True), ("0.2.2", False)]:
+                    with self.subTest(version=version):
+                        result = self.check(self.options(readme, {"version": version}))
+                        if success:
+                            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        else:
+                            self.assertNotEqual(result.returncode, 0, "documented dependency version was overridden")
+                            self.assertIn("failed to select a version", result.stderr)
+                            self.assertIn("0.2.2", result.stderr)
 
 
 if __name__ == "__main__":
