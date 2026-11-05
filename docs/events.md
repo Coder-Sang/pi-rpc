@@ -1,12 +1,12 @@
-# Consuming Pi 1.1.0–1.4.0 events
+# Consuming versioned Pi 1.3.0–1.5.0 events
 
-`PiConnection::connect` returns a `PiClient`, a single `PiEvents` consumer and the connection owner. `PiEvents::recv().await` returns `Option<Result<Event>>`. Events remain ordered across the whole session and are not scoped to the latest prompt. The host adapter owns conversation/SSE correlation and run-outcome policy. See the [README](../README.md) for connection ownership and the [compatibility contract](compatibility.md) for the supported version range, reviewed sources and limits.
+`PiConnection::<P>::connect` returns `PiClient<P>`, a single `PiEvents<P>` consumer and the connection owner. `PiEvents<P>::recv().await` returns `Option<Result<P::Event>>`. Select events from `protocol::v1_3`, `v1_4` or `v1_5`; each namespace has distinct nominal Event, KnownEvent and AssistantEvent types. AutoConnection/AutoProcess preserve these typed handles in their version variant. See [migration](migration-0.3.md) for features and version selection. Events remain ordered across the whole session and are not scoped to the latest prompt. The host adapter owns conversation/SSE correlation and run-outcome policy. See the [README](../README.md) for connection ownership and the [compatibility contract](compatibility.md) for the supported version range, reviewed sources and limits.
 
 ## Event families
 
 | Outer variant | Meaning |
 |---|---|
-| `Event::Known` | One of the 24 supported ordinary Pi 1.1.0–1.4.0 event types |
+| `Event::Known` | One of the 24 supported ordinary audited Pi 1.3.0–1.5.0 event types |
 | `Event::Ui` | An extension UI request, including one-way notifications |
 | `Event::Unknown` | A record with an unrecognized string `type`; its complete JSON is preserved |
 | `Event::UncorrelatedResponse` | A validated command response with no ID |
@@ -29,7 +29,7 @@ Pi 1.2.0 marks a run busy while `before_agent_start` hooks prepare it, before pr
 
 ## Text, thinking and tool calls
 
-Pi's [wire transformation](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/modes/json-event.ts) removes cumulative assistant `message` and `partial` snapshots from `message_update`. The wire retains cumulative `usage` and an `assistantMessageEvent` with `contentIndex` and the current block update.
+Pi's [wire transformation](https://github.com/earendil-works/pi/blob/f9a26365568127461c47a07a37dcb42c140a3ac5/packages/coding-agent/src/modes/json-event.ts) removes cumulative assistant `message` and `partial` snapshots from `message_update`. The wire retains cumulative `usage` and an `assistantMessageEvent` with `contentIndex` and the current block update.
 
 Maintain separate content blocks by `contentIndex`, including multiple text blocks in the same message:
 
@@ -37,13 +37,13 @@ Maintain separate content blocks by `contentIndex`, including multiple text bloc
 - `toolcall_start` provides the block's `id` and `toolName`. `toolcall_delta` appends serialized argument fragments; each fragment need not be valid standalone JSON. `toolcall_end.toolCall` replaces the reconstructed tool-call block with its complete arguments and metadata.
 - `message_end.message` replaces the complete accumulated message. Preserve native content fields such as text/thinking signatures, redaction flags, tool namespace and provider metadata. The SDK delivers these records and does not assemble an application-level response.
 
-The exported Assistant update enum admits 12 shapes: `start`, the three text shapes, the three thinking shapes, the three tool-call shapes, `done` and `error`. The normal [agent loop](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/agent/src/agent-loop.ts#L416) translates provider `start`/`done`/`error` into native message boundaries. Most normal streamed updates are the nine block shapes. A provider can fail before its first delta and still produce `message_start` followed by `message_end`.
+The exported Assistant update enum admits 12 shapes: `start`, the three text shapes, the three thinking shapes, the three tool-call shapes, `done` and `error`. The normal [agent loop](https://github.com/earendil-works/pi/blob/f9a26365568127461c47a07a37dcb42c140a3ac5/packages/agent/src/agent-loop.ts) translates provider `start`/`done`/`error` into native message boundaries. Most normal streamed updates are the nine block shapes. A provider can fail before its first delta and still produce `message_start` followed by `message_end`.
 
 Tool-call content and actual tool execution have separate lifecycles. Tool execution events preserve `toolCallId`, optional `parentToolCallId`, open args/results and extension fields. Execution completion order may differ from tool-call content order. Correlate by IDs rather than adjacency. `tool_execution_end.isError` reports a tool outcome; it does not end the connection. Tool result payloads can include images and opaque details.
 
 ## Custom messages
 
-Pi's [custom-message ingestion](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/coding-agent/src/core/agent-session.ts#L2318) emits native `message_start` and `message_end` records for appended custom messages. Read `Message.role == "custom"` and its open `fields`: `customType`, `content`, `display`, `details`, `timestamp` and extension metadata. Content may be a string or an array of text/image blocks, including an empty array.
+Pi's [custom-message ingestion](https://github.com/earendil-works/pi/blob/f9a26365568127461c47a07a37dcb42c140a3ac5/packages/coding-agent/src/core/agent-session.ts) emits native `message_start` and `message_end` records for appended custom messages. Read `Message.role == "custom"` and its open `fields`: `customType`, `content`, `display`, `details`, `timestamp` and extension metadata. Content may be a string or an array of text/image blocks, including an empty array.
 
 The SDK delivers both `display=true` and `display=false` messages. The host chooses its presentation policy; `display=false` is not a transport filter. Additional extension-defined message roles are preserved as native messages too.
 
@@ -63,7 +63,7 @@ Closing skips automatic replies while continuing to deliver late UI events and f
 
 ## Millisecond fields
 
-The public integer types remain `UiMethod.timeout: Option<u64>`, `KnownEvent::AutoRetryStart.delay_ms: u64` and `KnownEvent::SummarizationRetryScheduled.delay_ms: u64`. Pi can emit fractional milliseconds: dialog options use `number`, and a fractional retry delay cap can be returned by [retryDelayMs](https://github.com/earendil-works/pi/blob/06a466935536f8c9bcacb2d5efc0fc021be1bdff/packages/ai/src/utils/retry.ts#L129).
+The public integer types remain `UiMethod.timeout: Option<u64>`, `KnownEvent::AutoRetryStart.delay_ms: u64` and `KnownEvent::SummarizationRetryScheduled.delay_ms: u64`. Pi can emit fractional milliseconds: dialog options use `number`, and a fractional retry delay cap can be returned by [retryDelayMs](https://github.com/earendil-works/pi/blob/f9a26365568127461c47a07a37dcb42c140a3ac5/packages/ai/src/utils/retry.ts).
 
 | Wire value | Public integer value |
 |---|---|
@@ -104,3 +104,9 @@ Pi 1.4.0 uses the same RPC event and native-v3 schemas. New classifier `compat.i
 Compaction and branch summaries use the model's output limit rather than a fixed summary cap; `reserveTokens` controls when compaction starts. Configured SDK record/event byte limits still apply. Retry classification and tool restoration also change inside Pi, so retry frequency and the next model request can differ across versions even with identical wire shapes.
 
 Recovery can append separate `context_edit` records with `replacement: null` for the failed assistant attempt and its matching tool results. Those messages remain in native history while disappearing from projected `get_messages` context. Forward `entry_appended`, retry and compaction events in order, and preserve raw history independently; do not apply another SDK-side projection. Synthetic fragmented CRLF and native-file regressions cover this shape and larger summaries. They test transport/preservation, not live Pi recovery behavior. See the [fixed source review](compatibility.md#pi-140-source-review-2026-10-27).
+
+## Pi 1.5.0 and provider metadata
+
+The reviewed 1.5.0 RPC types, event declarations, JSON event transformation and native-v3 schema match 1.4.0. They have distinct Rust protocol types in 0.3, while sharing audited implementation templates. This separates version contracts without promising identical provider outputs, retry sequences or tool-error text.
+
+Optional `Usage.cost.totalFromProvider` is retained in `Cost.extra`, including absent/false/true distinctions. `Message.fields["responseModel"]` remains open and may equal the requested model. Provider total cost is preserved independently of component estimates; the SDK does not recompute it or infer its origin. Tool argument diagnostics from Pi's pi-schema validation remain opaque strings/data. See the [1.5 source review](compatibility.md#pi-150-source-review-2026-11-04).

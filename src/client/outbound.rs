@@ -1,5 +1,6 @@
 //! Writer reservations, bounded encoding and one-way UI submissions.
 use super::PiClient;
+use crate::PiProtocol;
 use crate::{
     Error, Result, codec,
     protocol::{UiAnswer, UiRequest},
@@ -32,7 +33,7 @@ impl PreparedRecord {
         rx
     }
 }
-impl PiClient {
+impl<P: PiProtocol> PiClient<P> {
     pub(super) fn prepare_record<T: serde::Serialize>(&self, value: &T) -> Result<PreparedRecord> {
         let slot = self
             .writer

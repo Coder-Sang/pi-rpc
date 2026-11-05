@@ -2,17 +2,19 @@
 
 ## Current status summary
 
-Git **0.2.3 development** supports **Pi >=1.1.0, <=1.4.0 / Rust 1.88**. The published release remains **0.2.2**. `spawn_with_version` is Git-only; the latest reviewed upstream baseline remains Pi 1.4.0, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`. Version admission, source review, synthetic tests and real execution are separate evidence.
+Git **0.3.0 development** supports **Pi >=1.3.0, <=1.5.0 / Rust 1.88** with versioned protocol types. The published release remains **0.2.2**. Latest reviewed source is Pi 1.5.0 commit `f9a26365568127461c47a07a37dcb42c140a3ac5`. Admission, source review, synthetic verification and live execution are distinct evidence.
 
-The completed feature baseline **`b86883d05809d2e23575f654be700d72fb95c2d9`** passed [all six CI jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40656324472), including Windows stable and exact Rust 1.88.0, with six matching artifacts. Both Windows logs confirm the caller-declared startup regressions executed. The manual real-Pi job was skipped. This is evidence for that commit; subsequent source or documentation changes require their own gates.
+The 0.3 series is unpublished development. Each candidate requires local gates and six successful native CI jobs for the same commit before claiming cross-platform acceptance; the actual commit, run, logs and archive identities remain outside packaged source. Registry/docs.rs publication and real-Pi/model acceptance are separate. Local gates use Rust 1.99.1 and exact 1.88.0, all four main configurations, all eight protocol combinations, type-isolation positive/negative controls, pressure/boundary tests and fresh packaged consumers. Preserve actual results, first failures and before/after hashes outside the archive. Strict candidate packaging uses the clean commit being verified. Earlier local uncommitted checks used byte-identical temporary clean snapshots; those snapshot identities must never be presented as main or as candidates verified by hosted CI.
 
-Local macOS aarch64 verification of that baseline used stable **Rust 1.97.1** and exact **1.88.0**. Each compiler passed 670 four-feature test executions, 282 three-round stress executions and 356 Debug/Release boundary executions, plus packaged consumers. Strict stable lint/docs, 50 Python regressions, Markdown/generated-HTML links, package/source/license inspection and publication dry-run passed. The 106-file archive and complete logs/hashes are retained outside packaged source. Three snapshot mutation controls detected restored probing, ignored expectations and a bypassed legacy probe. No Pi or paid model was called.
+The historical documentation baseline `cbb7f6ea3ccb8e329d339b7534c55324d1e8a170` passed [six jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40729102276), with matching artifacts. This historical 0.2.3 development evidence includes Windows/exact 1.88.0 but does not validate the new generic API or Pi 1.5.0. Earlier declared-startup baseline `b86883d05809d2e23575f654be700d72fb95c2d9` passed [its six jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40656324472). No 0.2.3 was published.
 
-For new results, follow [CONTRIBUTING](../CONTRIBUTING.md) and the [release gates](publishing.md#final-verification-before-upload). Store the candidate's own final SHA/archive/results outside packaged source using the procedure below; do not substitute this baseline or a historical release for a changed candidate.
+Follow [CONTRIBUTING](../CONTRIBUTING.md) and [release gates](publishing.md#final-verification-before-upload) for new results; a changed candidate requires its own evidence.
+
+The optional `protocol_bench` Release example measures fixed synthetic event parsing/decoding, command encoding and 1,000/2,000/4,000-message builder runs with seven-sample medians. Compare identical features/dependencies on 1.88.0 and 1.99.1; timings are observations, not portable performance thresholds or proof that raising MSRV improves throughput.
 
 ## Hosted CI
 
-The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the feature matrix, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, remains explicitly pinned to Pi 1.2.0 and is skipped on ordinary pushes.
+The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the main/protocol feature matrices and type-isolation checks, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, is explicitly pinned to Pi 1.5.0 and is skipped on ordinary pushes.
 
 ## 0.2.2 completed baseline (2026-10-27)
 

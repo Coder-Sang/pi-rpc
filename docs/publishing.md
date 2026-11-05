@@ -1,11 +1,11 @@
 # Public release checklist
 
-This is the reusable maintainer procedure. Current Git source is **0.2.3 development**, while **0.2.2** remains published. Publication observations, uploaded commits, checksums, tags and historical acceptance live in [verification](verification.md); source and license scope live in [provenance](provenance.md). A completed historical checklist does not authorize or validate another upload.
+This is the reusable maintainer procedure. Current Git source is **0.3.0 development**, while **0.2.2** remains published. Publication observations, uploaded commits, checksums, tags and historical acceptance live in [verification](verification.md); source and license scope live in [provenance](provenance.md). A completed historical checklist does not authorize or validate another upload.
 
 ## Version and release policy
 
-- The 0.2.x series preserves documented public paths, field types, feature names and Rust **1.88**. Source-breaking changes, including variants added to exhaustively matched enums, require a new minor series and migration notes.
-- Current Pi admission covers canonical **1.1.0–1.4.0** releases. Both legacy fixed ranges ending in 1.2.0 and 1.3.0 retain their upper bounds; concrete expectations stay exact. See [compatibility](compatibility.md) for reviewed sources and version-specific behavior. Published 0.1.0 retains Pi 1.1.0/Rust 1.85.
+- Published 0.2.x retains its historical contract. Development 0.3 introduces explicit protocol parameters, nominal per-version events and new default protocol features; see [migration](migration-0.3.md). Rust **1.88** remains the minimum. Further source-breaking changes, including exhaustive-enum additions, require another minor series and migration notes.
+- Current Pi admission covers canonical **1.3.0–1.5.0** releases, subject to the compiled protocol features. Old fixed ranges ending in 1.3.0/1.4.0 retain their caps and intersect the current range; the old 1.2.0 range is rejected. Concrete expectations stay exact. See [compatibility](compatibility.md) for reviewed sources and version-specific behavior. Published 0.1.0 retains Pi 1.1.0/Rust 1.85.
 - Obtain release authorization before upload or tag creation. A dry-run neither reserves a version nor proves registry/docs.rs acceptance. Published archives cannot be overwritten.
 - Finalize package-facing documents before packaging the release commit. Tag the actual uploaded commit after confirmation. Later bookkeeping must not replace its tag target.
 
@@ -39,9 +39,11 @@ python3 scripts/record-evidence.py
 git diff --check
 ```
 
-Use offline mode only after dependencies/toolchains are cached. Fresh consumers and the publishing rehearsal may need network access for registry resolution. These gates use only in-memory transports and the compiled fake; they make no Pi or model requests.
+Use offline mode only after dependencies/toolchains are cached. Fresh consumers and the publishing rehearsal may need network access for registry resolution. These gates use only in-memory transports, compile-fail controls and the compiled fake; they make no Pi or model requests.
 
-`cargo package --locked` refreshes the standard archive; a publishing rehearsal may use a temporary subdirectory instead. Archive selection resolves the package version and effective target directory through Cargo metadata, honoring `CARGO_TARGET_DIR` and `.cargo/config.toml`. For per-command `--target-dir`, pass `--archive /absolute/path/to/pi-rpc-0.2.3.crate` explicitly to the checker/consumer rather than relying on a stale default archive.
+`cargo package --locked` refreshes the standard archive; a publishing rehearsal may use a temporary subdirectory instead. Archive selection resolves the package version and effective target directory through Cargo metadata, honoring `CARGO_TARGET_DIR` and `.cargo/config.toml`. For per-command `--target-dir`, pass `--archive /absolute/path/to/pi-rpc-0.3.0.crate` explicitly to the checker/consumer rather than relying on a stale default archive.
+
+For an explicitly local uncommitted development check, use a byte-identical temporary clean snapshot and label its identity separately from main; this does not waive clean archive checks or authorize a release.
 
 Consumers validate clean VCS identity, metadata, notices, links and every archived source byte, then extract that exact snapshot into a fresh directory and resolve their own lockfiles. They compile/run public-path tests and in-memory examples under all four feature configurations; both session configurations run the native-session example. No Pi process is executed.
 

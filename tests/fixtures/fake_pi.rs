@@ -9,6 +9,18 @@ fn main() {
         .file_name()
         .unwrap()
         .to_string_lossy();
+    #[cfg(target_os = "macos")]
+    let name = if name == "fake-pi" {
+        std::path::Path::new(&args[0])
+            .parent()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.strip_suffix(".case"))
+            .unwrap_or(name.as_ref())
+            .to_owned()
+    } else {
+        name.into_owned()
+    };
     if args.iter().any(|a| a == "--version") {
         std::fs::write(
             std::path::Path::new(&args[0]).with_extension("probe-started"),
@@ -29,6 +41,12 @@ fn main() {
             io::stdout().write_all(b"\xff\n").unwrap();
             return;
         }
+        if let Ok(version) =
+            std::fs::read_to_string(std::path::Path::new(&args[0]).with_extension("version"))
+        {
+            println!("{version}");
+            return;
+        }
         println!(
             "{}",
             if name.contains("wrong-version") {
@@ -39,6 +57,12 @@ fn main() {
                 "1.1.0"
             } else if name.contains("baseline-version") {
                 "1.2.0"
+            } else if name.contains("minor-prefix-short-version") {
+                "1.4.1"
+            } else if name.contains("minor-patch-version") {
+                "1.4.10"
+            } else if name.contains("latest-version") {
+                "1.5.0"
             } else if name.contains("prefix-short-version") {
                 "1.3.1"
             } else if name.contains("prior-version") {
@@ -52,7 +76,7 @@ fn main() {
             } else if name.contains("numeric-version") {
                 "1.1.10"
             } else if name.contains("future-version") {
-                "1.4.1"
+                "1.5.1"
             } else if name.contains("prerelease-version") {
                 "1.4.0-rc.1"
             } else if name.contains("metadata-version") {
@@ -60,7 +84,7 @@ fn main() {
             } else if name.contains("leading-zero-version") {
                 "1.01.0"
             } else if name.contains("padded-version") {
-                " \t1.1.0\r\n "
+                " \t1.4.0\r\n "
             } else {
                 "1.4.0"
             }
@@ -70,6 +94,11 @@ fn main() {
     std::fs::write(
         std::path::Path::new(&args[0]).with_extension("rpc-started"),
         b"rpc",
+    )
+    .unwrap();
+    std::fs::write(
+        std::path::Path::new(&args[0]).with_extension("rpc-pid"),
+        std::process::id().to_string(),
     )
     .unwrap();
     assert!(args.windows(2).any(|w| w == ["--mode", "rpc"]));
@@ -96,6 +125,11 @@ fn main() {
     )
     .unwrap();
     out.flush().unwrap();
+    std::fs::write(
+        std::path::Path::new(&args[0]).with_extension("ready-written"),
+        b"ready",
+    )
+    .unwrap();
     if mode == "descendant-exit" {
         // Hold stdout open independently after the direct child has exited.
         let _descendant = std::process::Command::new(&args[0])

@@ -4,9 +4,12 @@
 //! Prepare opaque private auth/models copies in root/agent if needed. Bash-only
 //! persistence was observed with Pi 1.2.0; export/clone/switch are native boundaries.
 //! Pi itself owns configuration/authentication. This example never reads either.
+type PiClient = pi_rpc::PiClient<pi_rpc::Pi15>;
+type PiProcess = pi_rpc::PiProcess<pi_rpc::Pi15>;
+use pi_rpc::protocol::v1_5::{Event, KnownEvent};
 use pi_rpc::{
-    Config, Error, PiClient, PiProcess, ProcessOptions,
-    protocol::{Event, KnownEvent, QueueMode, SessionTreeNode, ThinkingLevel},
+    Config, Error, ProcessOptions,
+    protocol::{QueueMode, SessionTreeNode, ThinkingLevel},
 };
 use std::{path::Path, time::Duration};
 use tokio::sync::mpsc;

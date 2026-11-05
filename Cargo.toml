@@ -1,9 +1,9 @@
 [package]
 name = "pi-rpc"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.4.0"
+description = "Bounded asynchronous Tokio JSONL client with typed protocols for Pi 1.3.0 through 1.5.0"
 readme = "README.md"
 publish = ["crates-io"]
 license = "Apache-2.0"
@@ -13,9 +13,12 @@ categories = ["asynchronous", "api-bindings"]
 exclude = ["/.github/"]
 
 [features]
-default = ["subprocess"]
+default = ["subprocess", "pi_1_4", "pi_1_5"]
 subprocess = ["tokio/process"]
 session_file = []
+pi_1_3 = []
+pi_1_4 = []
+pi_1_5 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -50,25 +53,33 @@ test = true
 
 [[example]]
 name = "model_smoke"
-required-features = ["subprocess"]
+required-features = ["subprocess", "pi_1_5"]
 test = true
 
 [[example]]
 name = "rpc_extension_smoke"
-required-features = ["subprocess"]
+required-features = ["subprocess", "pi_1_5"]
 
 [[example]]
 name = "rpc_state_smoke"
-required-features = ["subprocess"]
+required-features = ["subprocess", "pi_1_5"]
 
 [[example]]
 name = "rpc_live_smoke"
-required-features = ["subprocess"]
+required-features = ["subprocess", "pi_1_5"]
 
 [[example]]
 name = "rpc_session_smoke"
-required-features = ["subprocess"]
+required-features = ["subprocess", "pi_1_5"]
 
 [[example]]
 name = "session_validation_bench"
 required-features = ["session_file"]
+
+[[example]]
+name = "injected"
+required-features = ["pi_1_4"]
+
+[[example]]
+name = "protocol_bench"
+required-features = ["pi_1_4", "session_file"]

@@ -3,10 +3,39 @@ use crate::{Error, Result, version};
 use tokio::io::{AsyncRead, AsyncWrite};
 pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
 pub type Writer = Box<dyn AsyncWrite + Unpin + Send>;
+/// How the concrete Pi version was obtained. Neither source implies RPC readiness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VersionSource {
+    /// Collected by the bounded local `--version` probe.
+    Probed,
+    /// Trusted declaration supplied by the caller.
+    Declared,
+}
+/// Immutable concrete-version metadata belonging to one connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionInfo {
+    version: String,
+    source: VersionSource,
+}
+impl ConnectionInfo {
+    pub(crate) fn new(version: &str, source: VersionSource) -> Self {
+        Self {
+            version: version.into(),
+            source,
+        }
+    }
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+    pub fn source(&self) -> VersionSource {
+        self.source
+    }
+}
 pub struct Transport {
     pub(crate) reader: Reader,
     pub(crate) writer: Writer,
     pub(crate) exit: Option<tokio::sync::watch::Receiver<Option<Error>>>,
+    pub(crate) info: ConnectionInfo,
 }
 impl Transport {
     /// The remote caller declares the installed version. There is no RPC
@@ -24,6 +53,10 @@ impl Transport {
             reader: Box::new(reader),
             writer: Box::new(writer),
             exit: None,
+            info: ConnectionInfo::new(declared_version, VersionSource::Declared),
         })
+    }
+    pub fn info(&self) -> &ConnectionInfo {
+        &self.info
     }
 }

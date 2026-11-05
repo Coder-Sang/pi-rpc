@@ -1,5 +1,7 @@
 //! Session operations on a scratch-only Pi session, optionally paid --compact.
-use pi_rpc::{Error, PiProcess, ProcessOptions, protocol::*};
+type PiProcess = pi_rpc::PiProcess<pi_rpc::Pi15>;
+use pi_rpc::protocol::v1_5::{Event, KnownEvent};
+use pi_rpc::{Error, ProcessOptions, protocol::*};
 use std::path::PathBuf;
 
 #[tokio::main(flavor = "current_thread")]

@@ -1,8 +1,8 @@
 //! Local non-PTY subprocess lifecycle. No config files or credentials are read
 //! by this crate. The executable inherits its environment and controls Pi setup.
 use crate::{
-    Config, Error, PI_VERSION_REQUIREMENT, PiClient, PiConnection, PiEvents, Result, Transport,
-    version::Expectation,
+    Config, ConnectionInfo, Error, PI_VERSION_REQUIREMENT, PiClient, PiConnection, PiEvents,
+    PiProtocol, Result, Transport, VersionSource, version::Expectation,
 };
 use std::{
     collections::VecDeque,
@@ -19,6 +19,9 @@ use tokio::{
     task::JoinHandle,
 };
 
+mod auto;
+pub use auto::{AutoProcess, spawn_auto, spawn_auto_with_version};
+
 /// Local executable, version admission, diagnostics and RPC connection options.
 /// The executable inherits the parent's environment; the host owns isolation.
 #[derive(Debug, Clone)]
@@ -30,9 +33,10 @@ pub struct ProcessOptions {
     /// Child working directory. None inherits the caller's working directory.
     pub cwd: Option<PathBuf>,
     /// Either [`PI_VERSION_REQUIREMENT`] (the default), a previous fixed
-    /// `">=1.1.0, <=1.2.0"` or `">=1.1.0, <=1.3.0"` expression,
+    /// `">=1.1.0, <=1.3.0"` or `">=1.1.0, <=1.4.0"` expression,
     /// or an exact supported release. Each previous expression retains its
-    /// original upper bound. Both startup methods enforce this expectation;
+    /// original upper bound, intersected with the current supported range.
+    /// Both startup methods enforce this expectation;
     /// other expressions are rejected before any child is started.
     pub expected_version: String,
     /// Deadline for the `--version` probe in [`PiProcess::spawn`].
@@ -70,8 +74,8 @@ impl Diagnostics {
 }
 /// Owns the local child and connection. Cloned PiClient handles never own/kill it.
 /// Drop signals termination and cleanup. Explicit terminate also awaits reaping.
-pub struct PiProcess {
-    connection: PiConnection,
+pub struct PiProcess<P: PiProtocol> {
+    connection: PiConnection<P>,
     diagnostics: Diagnostics,
     kill: Option<oneshot::Sender<()>>,
     supervisor: Option<JoinHandle<()>>,
@@ -144,14 +148,17 @@ async fn verify(options: &ProcessOptions) -> Result<String> {
         }
     }
 }
-impl PiProcess {
+impl<P: PiProtocol> PiProcess<P> {
+    pub fn info(&self) -> &ConnectionInfo {
+        self.connection.info()
+    }
     /// Runs only `--version` to verify the supported range and optional exact
     /// version expectation before launching `--mode rpc`.
     /// A concrete [`ProcessOptions::expected_version`] still performs the probe.
     /// Use [`Self::spawn_with_version`] to supply a trusted version without probing.
-    pub async fn spawn(options: ProcessOptions) -> Result<(PiClient, PiEvents, Self)> {
+    pub async fn spawn(options: ProcessOptions) -> Result<(PiClient<P>, PiEvents<P>, Self)> {
         let actual_version = verify(&options).await?;
-        Self::spawn_rpc(options, &actual_version)
+        Self::spawn_rpc(options, &actual_version, VersionSource::Probed)
     }
     /// Starts RPC using a caller-declared version, without running `--version`.
     ///
@@ -167,17 +174,21 @@ impl PiProcess {
     pub async fn spawn_with_version(
         options: ProcessOptions,
         declared_version: &str,
-    ) -> Result<(PiClient, PiEvents, Self)> {
+    ) -> Result<(PiClient<P>, PiEvents<P>, Self)> {
         let expectation = Expectation::new(&options.expected_version)?;
         if !expectation.matches(declared_version) {
             return Err(Error::Version);
         }
-        Self::spawn_rpc(options, declared_version)
+        Self::spawn_rpc(options, declared_version, VersionSource::Declared)
     }
     fn spawn_rpc(
         options: ProcessOptions,
         actual_version: &str,
-    ) -> Result<(PiClient, PiEvents, Self)> {
+        source: VersionSource,
+    ) -> Result<(PiClient<P>, PiEvents<P>, Self)> {
+        if !P::matches_version(actual_version) {
+            return Err(Error::Version);
+        }
         let mut child = base_command(&options)
             .args(&options.args)
             .args(["--mode", "rpc"])
@@ -191,6 +202,7 @@ impl PiProcess {
         let mut stderr = child.stderr.take().unwrap();
         let (exit_tx, exit) = watch::channel(None);
         let mut transport = Transport::new(reader, writer, actual_version)?;
+        transport.info = ConnectionInfo::new(actual_version, source);
         transport.exit = Some(exit.clone());
         let (client, events, connection) = PiConnection::connect(transport, options.connection)?;
         let diagnostics = Diagnostics {
@@ -286,7 +298,7 @@ async fn kill_and_reap(child: &mut Child) -> Error {
         .map(|s| Error::ProcessExit(s.code()))
         .unwrap_or_else(|e| Error::Transport(e.to_string()))
 }
-impl Drop for PiProcess {
+impl<P: PiProtocol> Drop for PiProcess<P> {
     fn drop(&mut self) {
         if let Some(k) = self.kill.take() {
             let _ = k.send(());

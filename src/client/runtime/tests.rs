@@ -1,8 +1,7 @@
+use crate::protocol::v1_4::Event;
+type PiConnection = crate::PiConnection<crate::Pi14>;
 use super::*;
-use crate::{
-    client::{Config, PiConnection},
-    transport::Transport,
-};
+use crate::{client::Config, transport::Transport};
 use std::{
     future::Future,
     pin::Pin,
@@ -24,7 +23,7 @@ async fn deadline_case(initial: &[u8], tail: &[u8], eof: bool, limit: usize) -> 
         ..Config::default()
     };
     let (client, _events, owner) =
-        PiConnection::connect(Transport::new(r, w, crate::PI_VERSION).unwrap(), config).unwrap();
+        PiConnection::connect(Transport::new(r, w, "1.4.0").unwrap(), config).unwrap();
     let slots = client.writer.capacity();
     let (reader, mut peer) = tokio::io::duplex(16384);
     peer.write_all(initial).await.unwrap();
@@ -230,7 +229,7 @@ async fn exit_deadline_protocol_failure_reaches_pending_owner_and_events_once() 
                 reads: reads.clone(),
             },
             Flushed(Some(flushed_tx)),
-            crate::PI_VERSION,
+            "1.4.0",
         )
         .unwrap();
         transport.exit = Some(exit);
@@ -264,7 +263,9 @@ async fn exit_deadline_protocol_failure_reaches_pending_owner_and_events_once() 
         assert_eq!(command.await.unwrap(), Err(terminal.clone()));
         assert_eq!(
             events.recv().await,
-            Some(Ok(Event::Known(crate::protocol::KnownEvent::AgentStart)))
+            Some(Ok(Event::Known(
+                crate::protocol::v1_4::KnownEvent::AgentStart
+            )))
         );
         assert_eq!(events.recv().await, Some(Err(terminal.clone())));
         assert_eq!(events.recv().await, None);
@@ -405,7 +406,7 @@ async fn protocol_termination_case(
             shutdown_on_drop,
             _drop_notice: WriterDropNotice(Some(dropped_tx)),
         },
-        crate::PI_VERSION,
+        "1.4.0",
     )
     .unwrap();
     transport.exit = Some(exit);
@@ -488,7 +489,9 @@ async fn protocol_termination_case(
     assert_eq!(queued.await, Err(terminal.clone()));
     assert_eq!(
         events.recv().await,
-        Some(Ok(Event::Known(crate::protocol::KnownEvent::AgentStart)))
+        Some(Ok(Event::Known(
+            crate::protocol::v1_4::KnownEvent::AgentStart
+        )))
     );
     assert_eq!(events.recv().await, Some(Err(terminal.clone())));
     assert_eq!(events.recv().await, None);

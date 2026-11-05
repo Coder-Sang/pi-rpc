@@ -1,5 +1,9 @@
 #![cfg(feature = "subprocess")]
-use pi_rpc::{Config, Error, PiEvents, PiProcess, ProcessOptions, protocol::Event};
+#![cfg(feature = "pi_1_4")]
+type PiEvents = pi_rpc::PiEvents<pi_rpc::Pi14>;
+type PiProcess = pi_rpc::PiProcess<pi_rpc::Pi14>;
+type PiClient = pi_rpc::PiClient<pi_rpc::Pi14>;
+use pi_rpc::{Config, Error, ProcessOptions};
 #[path = "subprocess/declared.rs"]
 mod declared;
 #[tokio::test]
@@ -37,36 +41,10 @@ async fn stdout_eof_while_child_lives_fails_promptly_and_reaps() {
     assert!(out.stdout.is_empty());
     terminal_once(&mut e, Error::Eof).await;
 }
-use std::{path::PathBuf, sync::OnceLock, time::Duration};
-fn fixture() -> PathBuf {
-    static BINARY: OnceLock<(tempfile::TempDir, PathBuf)> = OnceLock::new();
-    BINARY
-        .get_or_init(|| {
-            let dir = tempfile::tempdir().unwrap();
-            let binary = dir
-                .path()
-                .join(format!("fake-pi{}", std::env::consts::EXE_SUFFIX));
-            let status = std::process::Command::new("rustc")
-                .args(["--edition=2024", "tests/fixtures/fake_pi.rs", "-o"])
-                .arg(&binary)
-                .status()
-                .unwrap();
-            assert!(status.success());
-            (dir, binary)
-        })
-        .1
-        .clone()
-}
-fn named_fixture(path: &std::path::Path) {
-    // Linux aliases share tempfile's filesystem and reuse the immutable inode:
-    // a concurrent fork can briefly inherit a copy's writable descriptor and
-    // make exec fail with ETXTBSY, even after copy exits. Other platforms retain
-    // their original executable-copy behavior.
-    #[cfg(target_os = "linux")]
-    std::fs::hard_link(fixture(), path).unwrap();
-    #[cfg(not(target_os = "linux"))]
-    std::fs::copy(fixture(), path).unwrap();
-}
+use std::time::Duration;
+#[path = "support/fake_process.rs"]
+mod fake_process;
+use fake_process::{fixture, named_fixture};
 fn options(mode: &str) -> ProcessOptions {
     ProcessOptions {
         executable: fixture(),
@@ -74,18 +52,38 @@ fn options(mode: &str) -> ProcessOptions {
         ..Default::default()
     }
 }
-async fn ready(events: &mut PiEvents) -> u32 {
-    let e = tokio::time::timeout(Duration::from_secs(3), events.recv())
+trait ReadyEvent {
+    fn ready_pid(self) -> u32;
+}
+macro_rules! ready_event {
+    ($module:ident) => {
+        impl ReadyEvent for pi_rpc::protocol::$module::Event {
+            fn ready_pid(self) -> u32 {
+                let pi_rpc::protocol::$module::Event::Unknown(value) = self else {
+                    panic!("expected fake ready")
+                };
+                value["pid"].as_u64().unwrap() as u32
+            }
+        }
+    };
+}
+#[cfg(feature = "pi_1_3")]
+ready_event!(v1_3);
+ready_event!(v1_4);
+#[cfg(feature = "pi_1_5")]
+ready_event!(v1_5);
+async fn ready<P: pi_rpc::PiProtocol>(events: &mut pi_rpc::PiEvents<P>) -> u32
+where
+    P::Event: ReadyEvent,
+{
+    tokio::time::timeout(Duration::from_secs(3), events.recv())
         .await
         .unwrap()
         .unwrap()
-        .unwrap();
-    let Event::Unknown(v) = e else {
-        panic!("expected fake ready")
-    };
-    v["pid"].as_u64().unwrap() as u32
+        .unwrap()
+        .ready_pid()
 }
-async fn terminal_once(events: &mut PiEvents, reason: Error) {
+async fn terminal_once<P: pi_rpc::PiProtocol>(events: &mut pi_rpc::PiEvents<P>, reason: Error) {
     assert_eq!(
         tokio::time::timeout(Duration::from_secs(3), events.recv())
             .await
@@ -101,59 +99,8 @@ async fn terminal_once(events: &mut PiEvents, reason: Error) {
 }
 
 #[cfg(windows)]
-mod windows_process {
-    use std::ffi::c_void;
-
-    const SYNCHRONIZE: u32 = 0x0010_0000;
-    const WAIT_OBJECT_0: u32 = 0;
-    const WAIT_TIMEOUT: u32 = 258;
-
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
-        fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
-        fn CloseHandle(handle: *mut c_void) -> i32;
-    }
-
-    pub struct Process(*mut c_void);
-    impl Process {
-        pub fn open(pid: u32) -> Self {
-            // SAFETY: requests only observation rights for the ready child.
-            let handle = unsafe { OpenProcess(SYNCHRONIZE, 0, pid) };
-            assert!(
-                !handle.is_null(),
-                "OpenProcess: {}",
-                std::io::Error::last_os_error()
-            );
-            Self(handle)
-        }
-        pub fn assert_alive(&self) {
-            // SAFETY: this object retains a valid handle until Drop.
-            assert_eq!(unsafe { WaitForSingleObject(self.0, 0) }, WAIT_TIMEOUT);
-        }
-        pub async fn wait_terminated(&self) {
-            tokio::time::timeout(super::Duration::from_secs(3), async {
-                loop {
-                    // A retained handle observes the original child, not a
-                    // later process that happens to reuse its PID.
-                    match unsafe { WaitForSingleObject(self.0, 0) } {
-                        WAIT_OBJECT_0 => break,
-                        WAIT_TIMEOUT => tokio::time::sleep(super::Duration::from_millis(10)).await,
-                        result => panic!("WaitForSingleObject failed: {result:#x}"),
-                    }
-                }
-            })
-            .await
-            .unwrap();
-        }
-    }
-    impl Drop for Process {
-        fn drop(&mut self) {
-            // SAFETY: uniquely owned handle, closed exactly once.
-            assert_ne!(unsafe { CloseHandle(self.0) }, 0);
-        }
-    }
-}
+#[path = "support/windows_process.rs"]
+mod windows_process;
 
 #[cfg(windows)]
 #[tokio::test]
@@ -293,7 +240,7 @@ async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        named_fixture(&path);
+        let path = named_fixture(&path);
         let result = PiProcess::spawn(ProcessOptions {
             executable: path.clone(),
             startup_timeout: if name == "probe-hang" {
@@ -323,38 +270,25 @@ async fn version_mismatch_and_bounded_probe_fail_before_rpc_launch() {
 #[tokio::test]
 async fn default_range_and_exact_locks_run_supported_versions() {
     let dir = tempfile::tempdir().unwrap();
-    // Intermediate profiles are synthetic range tests, not published Pi versions.
+    // Synthetic patch releases exercise numeric version matching in Pi14.
     for name in [
         "current-version",
-        "previous-version",
-        "baseline-version",
-        "patch-version",
-        "prior-version",
-        "prior-patch",
-        "intermediate-version",
-        "numeric-version",
+        "minor-patch-version",
+        "minor-prefix-short-version",
         "padded-version",
     ] {
         let path = dir
             .path()
             .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        named_fixture(&path);
+        let path = named_fixture(&path);
         let actual = match name {
-            "previous-version" | "padded-version" => "1.1.0",
-            "intermediate-version" => "1.1.1",
-            "numeric-version" => "1.1.10",
-            "baseline-version" => "1.2.0",
-            "patch-version" => "1.2.10",
-            "prior-version" => "1.3.0",
-            "prior-patch" => "1.3.10",
+            "minor-patch-version" => "1.4.10",
+            "minor-prefix-short-version" => "1.4.1",
             _ => "1.4.0",
         };
         let mut expectations = vec![pi_rpc::PI_VERSION_REQUIREMENT, actual];
-        if matches!(actual, "1.1.0" | "1.1.1" | "1.1.10" | "1.2.0") {
-            expectations.push(">=1.1.0, <=1.2.0");
-        }
-        if actual != "1.3.10" && actual != "1.4.0" {
-            expectations.push(">=1.1.0, <=1.3.0");
+        if actual == "1.4.0" {
+            expectations.push(">=1.1.0, <=1.4.0");
         }
         for expected in expectations {
             let (client, mut events, mut owner) = PiProcess::spawn(ProcessOptions {
@@ -378,16 +312,11 @@ async fn default_range_and_exact_locks_run_supported_versions() {
 async fn exact_lock_mismatch_never_launches_rpc() {
     let dir = tempfile::tempdir().unwrap();
     for (index, (name, expected)) in [
-        ("previous-version", "1.2.0"),
-        ("current-version", "1.1.0"),
         ("current-version", "1.3.0"),
         ("prior-version", "1.4.0"),
-        ("baseline-version", "1.3.0"),
-        ("prior-version", ">=1.1.0, <=1.2.0"),
         ("current-version", ">=1.1.0, <=1.3.0"),
         ("prior-patch", ">=1.1.0, <=1.3.0"),
-        ("current-version", ">=1.1.0, <=1.2.0"),
-        ("patch-version", ">=1.1.0, <=1.2.0"),
+        ("minor-patch-version", ">=1.1.0, <=1.4.0"),
     ]
     .into_iter()
     .enumerate()
@@ -395,7 +324,7 @@ async fn exact_lock_mismatch_never_launches_rpc() {
         let path = dir
             .path()
             .join(format!("{name}-{index}{}", std::env::consts::EXE_SUFFIX));
-        named_fixture(&path);
+        let path = named_fixture(&path);
         let error = PiProcess::spawn(ProcessOptions {
             executable: path.clone(),
             expected_version: expected.into(),
@@ -409,6 +338,7 @@ async fn exact_lock_mismatch_never_launches_rpc() {
     }
 }
 
+#[cfg(feature = "pi_1_3")]
 #[tokio::test]
 async fn exact_lock_patch_prefix_mismatches_never_launch_rpc() {
     let dir = tempfile::tempdir().unwrap();
@@ -423,8 +353,8 @@ async fn exact_lock_patch_prefix_mismatches_never_launch_rpc() {
                 "{profile}-exact-{accepted}{}",
                 std::env::consts::EXE_SUFFIX
             ));
-            named_fixture(&path);
-            let result = PiProcess::spawn(ProcessOptions {
+            let path = named_fixture(&path);
+            let result = pi_rpc::PiProcess::<pi_rpc::Pi13>::spawn(ProcessOptions {
                 executable: path.clone(),
                 expected_version: expected.into(),
                 ..Default::default()
@@ -469,7 +399,7 @@ async fn invalid_expectations_fail_before_executable_probe() {
     let path = dir
         .path()
         .join(format!("current-version{}", std::env::consts::EXE_SUFFIX));
-    named_fixture(&path);
+    let path = named_fixture(&path);
     for expected in [
         "",
         "*",
@@ -479,7 +409,9 @@ async fn invalid_expectations_fail_before_executable_probe() {
         ">=1.1.0,<=1.3.0",
         ">=1.1.0,<=1.4.0",
         "1.0.4",
-        "1.4.1",
+        "1.5.1",
+        ">=1.1.0, <=1.2.0",
+        "1.2.0",
         "1.1.0-rc.1",
         "1.2.0+build",
         "1.01.0",

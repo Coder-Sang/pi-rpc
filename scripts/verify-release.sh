@@ -23,7 +23,7 @@ fi
 # cannot redirect the fresh build while an older runner is executed.
 host=$(rustc -vV | awk '/^host: / { print $2 }')
 test -n "$host"
-cargo build --locked --example release_smoke --target "$host" --target-dir "$PWD/target"
+cargo build --locked --features pi_1_3 --example release_smoke --target "$host" --target-dir "$PWD/target"
 runner="$PWD/target/$host/debug/examples/release_smoke"
 # Host-provided scratch directory avoids writing in the project or real HOME.
 scratch="${JCODE_SCRATCH_DIR:-${TMPDIR:-/tmp}}"

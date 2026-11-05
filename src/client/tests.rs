@@ -1,3 +1,6 @@
+type PiClient = crate::PiClient<crate::Pi14>;
+type PiConnection = crate::PiConnection<crate::Pi14>;
+type PiEvents = crate::PiEvents<crate::Pi14>;
 use super::*;
 use crate::{codec, protocol::*};
 use serde_json::Value;
@@ -46,7 +49,7 @@ async fn image_encoding_measurement() {
 
 fn budget_fixture(config: Config) -> (PiClient, PiEvents, PiConnection) {
     PiConnection::connect(
-        Transport::new(tokio::io::empty(), tokio::io::sink(), crate::PI_VERSION).unwrap(),
+        Transport::new(tokio::io::empty(), tokio::io::sink(), "1.4.0").unwrap(),
         config,
     )
     .unwrap()
@@ -70,7 +73,7 @@ async fn dropped_unsubmitted_and_submitted_futures_release_pending_slots() {
     let (local, _peer) = tokio::io::duplex(1);
     let (r, w) = tokio::io::split(local);
     let (client, _events, owner) = PiConnection::connect(
-        Transport::new(r, w, crate::PI_VERSION).unwrap(),
+        Transport::new(r, w, "1.4.0").unwrap(),
         Config {
             max_pending_commands: 1,
             ..Config::default()
@@ -163,7 +166,7 @@ async fn write_and_flush_errors_return_reserved_bytes() {
     for fail_flush in [false, true] {
         let (input, _peer) = tokio::io::duplex(64);
         let (client, _events, mut owner) = PiConnection::connect(
-            Transport::new(input, FailingWriter { fail_flush }, crate::PI_VERSION).unwrap(),
+            Transport::new(input, FailingWriter { fail_flush }, "1.4.0").unwrap(),
             Config {
                 max_writer_bytes: 5,
                 ..Config::default()
@@ -320,11 +323,9 @@ async fn one_way_admission_skips_construction_after_close_or_terminal() {
     for terminal in [None, Some(Error::Transport("failed writer".into()))] {
         let (local, _peer) = tokio::io::duplex(1024);
         let (r, w) = tokio::io::split(local);
-        let (client, _events, owner) = PiConnection::connect(
-            Transport::new(r, w, crate::PI_VERSION).unwrap(),
-            Config::default(),
-        )
-        .unwrap();
+        let (client, _events, owner) =
+            PiConnection::connect(Transport::new(r, w, "1.4.0").unwrap(), Config::default())
+                .unwrap();
         let expected = terminal.clone().unwrap_or(Error::Closed);
         if let Some(error) = terminal {
             client.shared.finish(error);
@@ -366,11 +367,9 @@ async fn one_way_admission_rechecks_close_and_terminal_after_serialization() {
     for terminal in [None, Some(Error::Transport("racing writer failure".into()))] {
         let (local, _peer) = tokio::io::duplex(1024);
         let (r, w) = tokio::io::split(local);
-        let (client, _events, owner) = PiConnection::connect(
-            Transport::new(r, w, crate::PI_VERSION).unwrap(),
-            Config::default(),
-        )
-        .unwrap();
+        let (client, _events, owner) =
+            PiConnection::connect(Transport::new(r, w, "1.4.0").unwrap(), Config::default())
+                .unwrap();
         let records = client.writer.capacity();
         let bytes = client.budget.available_permits();
         let expected = terminal.clone().unwrap_or(Error::Closed);
@@ -395,6 +394,7 @@ async fn closed_event_channel_waits_for_publication_and_cancelled_recv_keeps_err
     let (tx, rx) = mpsc::channel(1);
     let (terminal, terminal_rx) = watch::channel(None);
     let mut events = PiEvents {
+        info: Arc::new(ConnectionInfo::new("1.4.0", crate::VersionSource::Declared)),
         rx,
         terminal: terminal_rx,
         error_delivered: false,
@@ -418,6 +418,7 @@ async fn terminal_authority_disappearing_after_event_close_returns_closed_once()
     let (tx, rx) = mpsc::channel(1);
     let (terminal, terminal_rx) = watch::channel(None);
     let mut events = PiEvents {
+        info: Arc::new(ConnectionInfo::new("1.4.0", crate::VersionSource::Declared)),
         rx,
         terminal: terminal_rx,
         error_delivered: false,

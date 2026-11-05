@@ -16,7 +16,7 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from validation_checks import CheckError, PACKAGE_METADATA, REQUIRED_FILES, check_documents, check_package, check_rustdoc, read_archive, release_evidence, unwanted_package_file
+from validation_checks import CheckError, PACKAGE_METADATA, PROTOCOL_FEATURES, REQUIRED_FILES, check_protocol_features, check_documents, check_package, check_rustdoc, read_archive, release_evidence, unwanted_package_file
 from prepare_consumer import prepare_consumer
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -211,12 +211,24 @@ class RustdocChecks(unittest.TestCase):
 
 
 class PackageChecks(unittest.TestCase):
-    def test_repository_metadata_matches_the_0_2_release_policy(self):
+    def test_repository_metadata_matches_the_0_3_release_policy(self):
         package = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]
-        self.assertEqual(package["version"], "0.2.3")
+        self.assertEqual(package["version"], "0.3.0")
         self.assertEqual(package["rust-version"], "1.88")
+        check_protocol_features(tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8")), "Cargo.toml")
         for name, value in PACKAGE_METADATA.items():
             self.assertEqual(package[name], value, name)
+
+    def test_protocol_features_reject_removed_profiles_changed_defaults_and_dependencies(self):
+        document = {"features": PROTOCOL_FEATURES}
+        check_protocol_features(document, "fixture")
+        mutations = [{}, PROTOCOL_FEATURES | {"default": ["subprocess", "pi_1_5"]},
+                     PROTOCOL_FEATURES | {"default": ["subprocess", "pi_1_3", "pi_1_4", "pi_1_5"]},
+                     PROTOCOL_FEATURES | {"pi_1_4": ["pi_1_5"]},
+                     {key: value for key, value in PROTOCOL_FEATURES.items() if key != "pi_1_3"}]
+        for features in mutations:
+            with self.subTest(features=features), self.assertRaisesRegex(CheckError, "protocol features"):
+                check_protocol_features({"features": features}, "fixture")
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR"))
@@ -230,7 +242,9 @@ class PackageChecks(unittest.TestCase):
                     b'keywords=["pi","rpc","jsonl","tokio","async"]\n'
                     b'categories=["asynchronous","api-bindings"]\n'
                     b'exclude=["/.github/"]\n'
-                    b'[package.metadata.docs.rs]\nall-features=true\n')
+                    b'[package.metadata.docs.rs]\nall-features=true\n'
+                    b'[features]\ndefault=["subprocess","pi_1_4","pi_1_5"]\n'
+                    b'subprocess=["tokio/process"]\nsession_file=[]\npi_1_3=[]\npi_1_4=[]\npi_1_5=[]\n')
         self.files.update({"Cargo.toml": manifest, "Cargo.toml.orig": manifest,
                            ".gitignore": (ROOT / ".gitignore").read_bytes(),
                            "LICENSE": (ROOT / "LICENSE").read_bytes(),
@@ -251,7 +265,7 @@ class PackageChecks(unittest.TestCase):
 
     def test_complete_package(self):
         self.write_archive()
-        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (11, 2))
+        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (12, 2))
 
     def test_repository_only_github_files_rejected_in_archive(self):
         for name in [".github/workflows/verify.yml", ".github/ISSUE_TEMPLATE/bug_report.md"]:

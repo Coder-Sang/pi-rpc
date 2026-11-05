@@ -1,4 +1,4 @@
-//! Async, bounded Pi 1.1.0–1.4.0 RPC with explicit transport and process ownership.
+//! Async, bounded Pi 1.3.0–1.5.0 RPC with statically versioned events.
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 pub mod client;
@@ -13,17 +13,24 @@ pub mod subprocess;
 pub mod transport;
 mod version;
 
-pub use client::{Config, PiClient, PiConnection, PiEvents, UiPolicy};
+pub use client::{AutoConnection, Config, PiClient, PiConnection, PiEvents, UiPolicy};
+#[cfg(feature = "pi_1_3")]
+pub use protocol::Pi13;
+#[cfg(feature = "pi_1_4")]
+pub use protocol::Pi14;
+#[cfg(feature = "pi_1_5")]
+pub use protocol::Pi15;
+pub use protocol::PiProtocol;
 #[cfg(feature = "subprocess")]
-pub use subprocess::{PiProcess, ProcessOptions};
-pub use transport::Transport;
+pub use subprocess::{AutoProcess, PiProcess, ProcessOptions};
+pub use transport::{ConnectionInfo, Transport, VersionSource};
 
 /// Latest reviewed Pi release; not the entire supported version range.
-pub const PI_VERSION: &str = "1.4.0";
+pub const PI_VERSION: &str = "1.5.0";
 /// Inclusive supported range of canonical three-component Pi releases.
-pub const PI_VERSION_REQUIREMENT: &str = ">=1.1.0, <=1.4.0";
+pub const PI_VERSION_REQUIREMENT: &str = ">=1.3.0, <=1.5.0";
 /// Upstream commit of the latest reviewed release, [`PI_VERSION`].
-pub const SOURCE_COMMIT: &str = "4a080252f06caf63a525d7873c5d94d3c23887e0";
+pub const SOURCE_COMMIT: &str = "f9a26365568127461c47a07a37dcb42c140a3ac5";
 
 /// Terminal errors are also delivered to every outstanding command and the owner.
 /// Error messages never include inbound records or submitted prompts.
@@ -53,5 +60,12 @@ pub enum Error {
     Terminated,
     #[error("unsupported or mismatched Pi version (supported {PI_VERSION_REQUIREMENT})")]
     Version,
+    #[error("Pi {version} requires the {feature} feature")]
+    VersionNotEnabled {
+        version: String,
+        feature: &'static str,
+    },
+    #[error("no Pi protocol feature is enabled")]
+    NoProtocolEnabled,
 }
 pub type Result<T> = std::result::Result<T, Error>;

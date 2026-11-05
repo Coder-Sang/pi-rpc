@@ -1,22 +1,18 @@
 //! Strict record dispatch and preservation of unknown event records.
-use super::{AssistantEvent, ContentBlock, KnownEvent, Response, UiRequest};
+use super::{PiProtocol, Response, Sealed, UiRequest};
 use crate::{Error, Result, json};
 use serde_json::Value;
 
+/// The event type associated with an explicit Pi protocol.
+pub type Event<P> = <P as PiProtocol>::Event;
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum Event {
-    Known(KnownEvent),
-    Ui(UiRequest),
-    Unknown(Value),
-    UncorrelatedResponse(Response),
-}
-#[derive(Debug, Clone, PartialEq)]
-pub enum Record {
+pub enum Record<P: PiProtocol> {
     Response(Response),
-    Event(Event),
+    Event(Event<P>),
 }
 /// Strict known-record parsing, with raw preservation only for unknown types.
-pub fn decode_record(v: Value) -> Result<Record> {
+pub fn decode_record<P: PiProtocol>(v: Value) -> Result<Record<P>> {
     if let Err(error) = json::check_value_depth(&v) {
         json::drop_value(v);
         return Err(error);
@@ -75,7 +71,7 @@ pub fn decode_record(v: Value) -> Result<Record> {
     }
     if kind == "extension_ui_request" {
         let u: UiRequest = json::decode(&v).map_err(|_| invalid())?;
-        return Ok(Record::Event(Event::Ui(u)));
+        return Ok(Record::Event(<P as Sealed>::ui(u)));
     }
     const KNOWN: &[&str] = &[
         "agent_start",
@@ -113,30 +109,8 @@ pub fn decode_record(v: Value) -> Result<Record> {
         if required.iter().any(|key| v.get(key).is_none()) {
             return Err(invalid());
         }
-        let e: KnownEvent = json::decode(&v).map_err(|_| invalid())?;
-        if let KnownEvent::MessageUpdate {
-            assistant_message_event,
-            ..
-        } = &e
-        {
-            let valid = match assistant_message_event {
-                AssistantEvent::ToolcallEnd { tool_call, .. } => {
-                    matches!(tool_call, ContentBlock::ToolCall { .. })
-                }
-                AssistantEvent::Done { reason, message } => {
-                    message.role == "assistant"
-                        && matches!(reason.as_str(), "stop" | "length" | "toolUse" | "deferred")
-                }
-                AssistantEvent::Error { reason, error } => {
-                    error.role == "assistant" && matches!(reason.as_str(), "aborted" | "error")
-                }
-                _ => true,
-            };
-            if !valid {
-                return Err(invalid());
-            }
-        }
-        return Ok(Record::Event(Event::Known(e)));
+        let event = <P as Sealed>::known(&v).map_err(|_| invalid())?;
+        return Ok(Record::Event(event));
     }
-    Ok(Record::Event(Event::Unknown(v)))
+    Ok(Record::Event(<P as Sealed>::unknown(v)))
 }

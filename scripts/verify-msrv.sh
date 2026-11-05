@@ -16,11 +16,13 @@ for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
     all) flags=(--all-features) ;;
-    none) flags=(--no-default-features) ;;
-    session_only) flags=(--no-default-features --features session_file) ;;
+    none) flags=(--no-default-features --features pi_1_4) ;;
+    session_only) flags=(--no-default-features --features session_file,pi_1_4) ;;
   esac
   cargo +1.88.0 check --locked ${flags[@]+"${flags[@]}"} --all-targets
   cargo +1.88.0 test --locked ${flags[@]+"${flags[@]}"}
   RUSTDOCFLAGS='-D warnings' cargo +1.88.0 doc --locked ${flags[@]+"${flags[@]}"} --no-deps
   "$python_command" scripts/check-rustdoc.py
 done
+
+bash scripts/verify-protocols.sh

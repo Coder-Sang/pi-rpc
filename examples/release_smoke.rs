@@ -1,5 +1,7 @@
 //! Read-only RPC acceptance against a caller-supplied, isolated Pi executable.
-use pi_rpc::{Error, PI_VERSION, PiProcess, ProcessOptions};
+use pi_rpc::{
+    AutoProcess, Error, PI_VERSION, PiClient, PiEvents, PiProcess, PiProtocol, ProcessOptions,
+};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> pi_rpc::Result<()> {
@@ -18,7 +20,7 @@ async fn run(mut args: impl Iterator<Item = std::ffi::OsString>) -> pi_rpc::Resu
     // Acceptance must identify a concrete release, not merely admit a range.
     // Transport validates a concrete supported version without performing I/O.
     pi_rpc::Transport::new(tokio::io::empty(), tokio::io::sink(), &expected_version)?;
-    let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+    let process = pi_rpc::subprocess::spawn_auto(ProcessOptions {
         expected_version: expected_version.clone(),
         executable: executable.into(),
         args: [
@@ -36,6 +38,34 @@ async fn run(mut args: impl Iterator<Item = std::ffi::OsString>) -> pi_rpc::Resu
         ..Default::default()
     })
     .await?;
+    match process {
+        #[cfg(feature = "pi_1_3")]
+        AutoProcess::V1_3 {
+            client,
+            events,
+            process,
+        } => accept(client, events, process).await,
+        #[cfg(feature = "pi_1_4")]
+        AutoProcess::V1_4 {
+            client,
+            events,
+            process,
+        } => accept(client, events, process).await,
+        #[cfg(feature = "pi_1_5")]
+        AutoProcess::V1_5 {
+            client,
+            events,
+            process,
+        } => accept(client, events, process).await,
+        _ => Err(pi_rpc::Error::Version),
+    }
+}
+async fn accept<P: PiProtocol>(
+    client: PiClient<P>,
+    mut events: PiEvents<P>,
+    mut process: PiProcess<P>,
+) -> pi_rpc::Result<()> {
+    let expected_version = process.info().version().to_owned();
     let consumer = tokio::spawn(async move {
         let mut terminal = None;
         while let Some(record) = events.recv().await {
@@ -83,8 +113,9 @@ mod tests {
             pi_rpc::PI_VERSION_REQUIREMENT,
             ">=1.1.0, <=1.2.0",
             ">=1.1.0, <=1.3.0",
+            ">=1.1.0, <=1.4.0",
             "1.0.9",
-            "1.4.1",
+            "1.5.1",
             "1.01.0",
             "1.3.0 ",
             "v1.3.0",
@@ -106,7 +137,7 @@ mod tests {
             )
             .await
             .expect("acceptance entrypoint stalled");
-            probe.assert_outcome(result, PI_VERSION);
+            probe.assert_outcome(result, PI_VERSION, true);
         }
     }
 
@@ -122,7 +153,7 @@ mod tests {
                 )
                 .await
                 .expect("acceptance entrypoint stalled");
-                probe.assert_outcome(result, expected);
+                probe.assert_outcome(result, expected, true);
             }
         }
     }

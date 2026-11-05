@@ -4,46 +4,46 @@
 [![API documentation](https://docs.rs/pi-rpc/badge.svg)](https://docs.rs/pi-rpc)
 [![Verify](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml/badge.svg?branch=main)](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml)
 
-A bounded, asynchronous Tokio JSONL client for **Pi 1.1.0 through 1.4.0**. Rust imports use `pi_rpc`. The crate provides typed commands, ordered session events, local subprocess ownership, injected transports and optional native session files. Install the Pi executable separately.
+A bounded, asynchronous Tokio JSONL client with versioned protocol types for Pi. It provides typed commands, ordered session events, local process ownership, injected transports and optional native v3 session files. Install Pi separately; Rust imports use `pi_rpc`.
 
 | Source | Pi support | Minimum Rust |
 |---|---|---|
-| **crates.io 0.2.2** | **>=1.1.0, <=1.4.0** | **1.88**, edition 2024 |
-| **Git 0.2.3 development** | Same range; adds `PiProcess::spawn_with_version` | **1.88** |
+| **crates.io 0.2.2** | **>=1.1.0, <=1.4.0**, previous API | **1.88**, edition 2024 |
+| **Git 0.3.0 development** | **>=1.3.0, <=1.5.0**, versioned API below | **1.88**, edition 2024 |
 
-The badges and hosted API documentation describe the latest published release. The new startup API is currently available only from Git or a local checkout. See the [changelog](https://github.com/Coder-Sang/pi-rpc/blob/main/CHANGELOG.md) and [verification records](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md) for release history and completed checks.
+The badges describe published packages and committed main. Each 0.3 development candidate requires verification of its own commit and archive. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/migration-0.3.md), [changelog](https://github.com/Coder-Sang/pi-rpc/blob/main/CHANGELOG.md) and [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md).
 
-## Installation
+## Installation and features
+
+The published API remains available with `pi-rpc = "0.2.2"`. Its tagged documentation and [release evidence](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#022-release-2026-10-27) remain unchanged. For the **unpublished 0.3 API**, use a local checkout or a Git dependency pinned to an independently verified commit:
 
 ```toml
 [dependencies]
-pi-rpc = "0.2.2"
+pi-rpc = { path = "../pi-rpc" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-This requirement accepts compatible 0.2.x updates. To pin a historical release, use `pi-rpc = "=0.2.0"` (Pi 1.1.0–1.2.0, Rust 1.88) or `pi-rpc = "=0.1.0"` (Pi 1.1.0, Rust 1.85). Commit the application's `Cargo.lock` and update deliberately.
-
-For unpublished 0.2.3, replace the registry dependency with a Git dependency pinned by `rev` to a verified commit, or use `path = "../pi-rpc"`. The [candidate evidence procedure](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md#candidate-evidence) explains how to identify a commit whose six CI jobs passed.
-
-### Cargo features
-
 | Feature | Default | Enables |
 |---|---|---|
-| `subprocess` | Yes | Local `PiProcess` and `ProcessOptions` |
-| `session_file` | No | Native v3 `SessionFile`, `SessionLimits` and `SessionFileBuilder` |
+| `subprocess` | Yes | Local process APIs and supervision |
+| `pi_1_3` | No | `Pi13` and `protocol::v1_3` for Pi 1.3.x |
+| `pi_1_4` | Yes | `Pi14` and `protocol::v1_4` for Pi 1.4.x |
+| `pi_1_5` | Yes | `Pi15` and `protocol::v1_5`, currently Pi 1.5.0 |
+| `session_file` | No | Native v3 parsing, encoding and `SessionFileBuilder` |
 
-Use `default-features = false` for injected transports only. Add `features = ["session_file"]` for native sessions, with or without default features. `protocol`, `codec`, `transport` and `client` are always available modules.
+Protocol features are additive. All connections must also satisfy the global 1.3.0–1.5.0 range. For Transport-only Pi 1.4, use `default-features = false, features = ["pi_1_4"]`. Native sessions and JSONL codec utilities work without a protocol feature; connecting requires one. No protocol feature changes another version's event type.
 
-## Local subprocess
+## Typed local process
 
-Call this read-only example from a live Tokio runtime with `subprocess` enabled. It installs an event consumer, queries state and closes the owned process:
+The following examples require the **Git 0.3 API**. Select the protocol explicitly; consume events before submitting commands:
 
 ```rust,no_run
-#[cfg(feature = "subprocess")]
+#[cfg(all(feature = "subprocess", feature = "pi_1_5"))]
 async fn inspect_session() -> pi_rpc::Result<()> {
-    use pi_rpc::{PiProcess, ProcessOptions};
+    use pi_rpc::{Pi15, PiProcess, ProcessOptions};
+    use pi_rpc::protocol::v1_5::{Event, KnownEvent};
 
-    let (client, mut events, mut process) = PiProcess::spawn(ProcessOptions {
+    let (client, mut events, mut process) = PiProcess::<Pi15>::spawn(ProcessOptions {
         executable: "/absolute/path/to/pi".into(),
         args: vec!["--no-session".into()],
         ..Default::default()
@@ -51,8 +51,9 @@ async fn inspect_session() -> pi_rpc::Result<()> {
     let consumer = tokio::spawn(async move {
         while let Some(record) = events.recv().await {
             match record {
-                Ok(event) => { /* Handle the session event. */ }
-                Err(terminal) => break,
+                Ok(Event::Known(KnownEvent::AgentStart)) => { /* Pi15 event */ }
+                Ok(_) => {}
+                Err(_) => break,
             }
         }
     });
@@ -64,64 +65,42 @@ async fn inspect_session() -> pi_rpc::Result<()> {
 }
 ```
 
-`spawn` checks `--version` before starting `--mode rpc`, including with an exact `expected_version`. Its default expectation is `">=1.1.0, <=1.4.0"`. The older fixed ranges ending in 1.2.0 and 1.3.0 retain their original upper bounds. A concrete expectation such as `"1.3.0"` requires an exact match. Other range syntax is rejected.
+`spawn` runs the bounded `--version` probe, then checks the actual version against `Pi15` and `expected_version` before starting RPC. The default expectation is `">=1.3.0, <=1.5.0"`. Previous ranges ending in 1.3.0 or 1.4.0 retain their upper bounds and intersect the new supported range; the former range ending in 1.2.0 is rejected. A concrete expectation remains an exact lock.
 
-In the **0.2.3 Git development version**, a host that knows the executable's release can skip the probe:
+When the host already knows the installed release, `PiProcess::<Pi15>::spawn_with_version(options, "1.5.0")` skips the probe. The caller guarantees the declaration is accurate; all admission checks still apply. `startup_timeout` controls only probing. Neither entrypoint sends initialization RPCs or waits for application readiness.
 
-```rust,no_run
-#[cfg(feature = "subprocess")]
-async fn start_with_known_version() -> pi_rpc::Result<()> {
-    use pi_rpc::{PiProcess, ProcessOptions};
+For automatic selection, `subprocess::spawn_auto(options)` probes and returns an `AutoProcess` variant containing the corresponding typed client, event stream and process owner. `spawn_auto_with_version(options, version)` selects from a trusted declaration. Match the variant once to obtain static types; unavailable protocol features cause an explicit error, never fallback. Every handle exposes immutable `info()` with the concrete version and `Probed`/`Declared` source.
 
-    let (client, mut events, mut process) =
-        PiProcess::spawn_with_version(ProcessOptions::default(), "1.4.0").await?;
-    let consumer = tokio::spawn(async move { while events.recv().await.is_some() {} });
-    process.close().await;
-    consumer.await.expect("event consumer");
-    Ok(())
-}
-```
-
-The caller guarantees the declaration is accurate. The method enforces the supported range and `expected_version` without checking the executable's reported version. Declarations must be canonical three-part releases without whitespace, prerelease or build metadata. `startup_timeout` only controls `spawn`'s probe; it is unused by `spawn_with_version`. Neither method sends initialization RPCs or waits for application readiness.
-
-Pi inherits the process environment. Some configuration RPCs persist Pi settings, and Pi may refresh authentication. The host owns installation, credentials, isolation and access policy. See the [connection guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md) for diagnostics, manual UI configuration and lifecycle details.
+Pi inherits the process environment. The host owns installation, credentials, isolation and access policy. Pi can persist settings or refresh authentication. See [connections](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md) for lifecycle, diagnostics and Manual UI configuration.
 
 ## Injected transport
 
-Adapt an ordered `AsyncRead + AsyncWrite` pair with `Transport::new(reader, writer, declared_version)`, then call `PiConnection::connect(transport, config)`. The host declares the actual concrete version and owns remote stderr, delivery and process termination. There is no remote version handshake.
+Create `Transport::new(reader, writer, concrete_version)`, then call `PiConnection::<Pi14>::connect(transport, config)` for a statically selected profile, or `client::connect_auto(transport, config)` for an `AutoConnection`. The remote host supplies the installed version and owns remote stderr, delivery and termination. There is no remote handshake.
 
-Run `cargo run --example injected --no-default-features` for a complete in-memory example using no Pi or model. The [connection guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md#injected-transport) also shows transport setup.
+Run `cargo run --example injected --no-default-features --features pi_1_4` for a complete in-memory example using no Pi or model.
 
 ## Events, ownership and limits
 
-- All 33 commands have typed methods. Prompt acceptance means started, queued or handled; it does not mean completion.
-- Consume `PiEvents` continuously: one ordered session stream, generally without originating command IDs. See the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for text, thinking, tools, custom messages and UI.
-- Choose `UiPolicy::Manual` before connecting to answer dialogs. The default cancels every dialog and still delivers its event. One-way UI notifications receive no reply.
-- Keep the connection/process owner alive. Dropping a client clone is inert; dropping an owner stops I/O and a local process owner also signals child termination. Explicit close/termination waits for cleanup while the runtime is alive.
-- `clear_queue`, `abort`, orderly `close` and forced `terminate` have separate meanings. A timeout or cancelled command future can leave an uncertain outcome; the SDK does not automatically retry it.
+- `PiEvents<P>` returns only `P::Event`. Each supported minor has distinct `Event`, `KnownEvent` and `AssistantEvent` types. Provider, tool and extension payloads remain open JSON; the SDK does not infer provider semantics.
+- All 33 commands have typed methods. Prompt acceptance means started, queued or handled; it does not mean completion. Events form one ordered session stream, generally without originating command IDs. See [event consumption](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md).
+- Choose `UiPolicy::Manual` before connecting to answer dialogs. The default cancels dialogs and still delivers their events. One-way UI notifications receive no reply.
+- Keep the connection/process owner alive. Dropping a client clone is inert; dropping an owner stops I/O and a local process owner also signals child termination. Explicit close/termination waits for cleanup while the runtime lives.
+- `clear_queue`, `abort`, orderly `close` and forced `terminate` have separate meanings. Cancelled or timed-out commands can have uncertain outcomes; the SDK does not automatically retry them.
 - Defaults are 32 MiB per JSON record, 64 MiB of writer bytes, 128 MiB of queued event wire bytes, 128 pending commands, 128 writer records and 1,024 events. `Config` adjusts these limits. JSON depth is fixed at 512 containers. Wire budgets do not bound process memory.
-- Oversized/malformed inbound records and event overflow terminate the connection. Buffered events drain before one terminal error, followed by `None`. Model errors remain ordinary message outcomes.
-
-See [connections and capacity](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md#bounds-and-backpressure) for images, historical responses, admission and shutdown behavior.
+- Malformed/oversized inbound records and event overflow terminate the connection. Buffered events drain before one terminal error, followed by `None`. Model errors remain ordinary message outcomes.
 
 ## Native sessions
 
-With `session_file`, build Pi-native v3 JSONL using `SessionFileBuilder`, or parse caller-supplied bytes with `SessionFile::parse`. Native roles, usage, images, custom data and branch/checkpoint records are preserved. There is no `import_history` RPC or vendor-history conversion.
+With `session_file`, build native v3 JSONL with `SessionFileBuilder`, or parse caller-supplied bytes with `SessionFile::parse`. Native roles, Usage, images, custom fields and branches are preserved. Session files are format-based and do not select a Pi protocol type.
 
-`encode()` returns a complete `Vec<u8>`; it does not stream to a file or `Write`. `SessionLimits` adjusts record/file bytes and entry count at parse/encode time. Builder appends do not enforce those cumulative budgets. File delivery, `--session`, permissions and atomic replacement belong to the host.
+`encode()` returns a complete `Vec<u8>`; it does not stream to `Write`. `SessionLimits` adjusts record/file bytes and entry count during parsing/encoding. Builder appends do not enforce cumulative byte/count budgets. File delivery, permissions and atomic replacement belong to the host. See [native sessions](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/native-sessions.md).
 
-The [native-session guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/native-sessions.md) covers construction, JSONL, Usage, images, validation and memory. Run `cargo run --example native_session --features session_file` for an offline, in-memory example.
+## Stability and development
 
-## Version and stability policy
+The 0.3 minor introduces the versioned API and defaults described above; migrate explicitly from 0.2. Rust 1.88 remains the minimum. `PI_VERSION = "1.5.0"` and `SOURCE_COMMIT` identify the latest reviewed source. In-range future patch releases pass admission but still require source review and verification; admission does not establish live acceptance. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md) and [release policy](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md#version-and-release-policy).
 
-The 0.2.x technical preview preserves documented public Rust paths, field types, features and Rust 1.88. Source-breaking changes, including additions to exhaustively matched enums, require a new minor series with migration notes.
+Development uses current stable Rust with rustfmt/Clippy and exact Rust 1.88.0, Bash, Git, Python 3.11+ and a native C/assembly compiler. Windows requires Git Bash, MSVC and the Windows SDK. Normal verification uses only in-memory transports and compiled fake processes.
 
-Pi admission covers canonical releases in the inclusive 1.1.0–1.4.0 range. `PI_VERSION` (1.4.0) and `SOURCE_COMMIT` identify the latest reviewed upstream baseline. Admission alone does not establish review or live acceptance of a future in-range release. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md) and the [release policy](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md#version-and-release-policy).
+Read [CONTRIBUTING](https://github.com/Coder-Sang/pi-rpc/blob/main/CONTRIBUTING.md), [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md) and [publishing](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md). [Real acceptance](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/acceptance.md) is separately opt-in and may persist settings or incur charges. Synthetic verification does not establish real-Pi or paid-model acceptance; candidate evidence is recorded separately.
 
-## Development
-
-Development requires stable Rust with rustfmt/Clippy, exact Rust 1.88.0, Bash, Git, Python 3.11+ and a native C/assembly compiler. Windows uses Git Bash, MSVC and the Windows SDK. Normal verification uses only in-memory transports and a compiled fake Pi.
-
-Read [CONTRIBUTING](https://github.com/Coder-Sang/pi-rpc/blob/main/CONTRIBUTING.md) for commands, [verification](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/verification.md) for results/evidence, and [publishing](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/publishing.md) for release gates. Development guides use `main`; published archives retain their tagged snapshots. [Real Pi acceptance](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/acceptance.md) is separately opt-in and may persist settings or incur model charges.
-
-Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/main/LICENSE), with retained [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/main/THIRD_PARTY_NOTICES.md). See [provenance](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/provenance.md) and [security reporting](https://github.com/Coder-Sang/pi-rpc/blob/main/SECURITY.md).
+Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/main/LICENSE), with [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/main/THIRD_PARTY_NOTICES.md). See [provenance](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/provenance.md) and [security reporting](https://github.com/Coder-Sang/pi-rpc/blob/main/SECURITY.md).

@@ -1,8 +1,18 @@
+#![cfg(feature = "pi_1_4")]
+type PiConnection = pi_rpc::PiConnection<pi_rpc::Pi14>;
+const PI_VERSION: &str = "1.4.0";
+use pi_rpc::protocol::v1_4::Event;
+type Record = pi_rpc::protocol::Record<pi_rpc::Pi14>;
+fn decode_record(
+    value: serde_json::Value,
+) -> pi_rpc::Result<pi_rpc::protocol::Record<pi_rpc::Pi14>> {
+    pi_rpc::protocol::decode_record::<pi_rpc::Pi14>(value)
+}
 mod support;
 use pi_rpc::{
-    Config, Error, PI_VERSION, PiConnection, Transport,
+    Config, Error, Transport,
     codec::{self, JsonlReader, MAX_JSON_DEPTH},
-    protocol::{Event, Record, Response, Tree, decode_record},
+    protocol::{Response, Tree},
 };
 use serde_json::{Value, json};
 use std::{process::Command, time::Duration};

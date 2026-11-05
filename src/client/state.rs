@@ -192,5 +192,5 @@ impl Drop for PendingGuard {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "pi_1_4"))]
 mod tests;

@@ -1,10 +1,12 @@
 //! Real Pi extension UI acceptance, with no model inference for UI commands.
 //! Run with PI_CODING_AGENT_DIR and PI_CODING_AGENT_SESSION_DIR inside isolated cwd.
+type PiClient = pi_rpc::PiClient<pi_rpc::Pi15>;
+type PiEvents = pi_rpc::PiEvents<pi_rpc::Pi15>;
+type PiProcess = pi_rpc::PiProcess<pi_rpc::Pi15>;
+use pi_rpc::protocol::v1_5::{Event, KnownEvent};
 use pi_rpc::{
-    Config, Error, PiClient, PiEvents, PiProcess, ProcessOptions, UiPolicy,
-    protocol::{
-        CompactionReason, EntryData, Event, KnownEvent, PromptDisposition, UiAnswer, UiMethod,
-    },
+    Config, Error, ProcessOptions, UiPolicy,
+    protocol::{CompactionReason, EntryData, PromptDisposition, UiAnswer, UiMethod},
 };
 use std::{
     collections::BTreeSet,

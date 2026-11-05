@@ -27,6 +27,15 @@ REQUIRED_FILES = {
     "scripts/check-rustdoc.py",
     "scripts/record-evidence.py",
     "CONTRIBUTING.md", "SECURITY.md", "docs/connections.md", "docs/native-sessions.md",
+    "docs/migration-0.3.md", "src/protocol/profile.rs", "src/protocol/event_types.rs",
+    "src/client/auto.rs", "src/subprocess/auto.rs", "scripts/check-protocol-types.py",
+    "scripts/verify-protocols.sh", "tests/versioned.rs", "tests/versioned/process.rs",
+    "tests/support/fake_process.rs", "tests/support/protocol_fixtures.rs",
+}
+PROTOCOL_FEATURES = {
+    "default": ["subprocess", "pi_1_4", "pi_1_5"],
+    "subprocess": ["tokio/process"], "session_file": [],
+    "pi_1_3": [], "pi_1_4": [], "pi_1_5": [],
 }
 PACKAGE_METADATA = {
     "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
@@ -300,6 +309,11 @@ def check_package_metadata(metadata, name):
     require(current.get("all-features") is True, f"{name}: docs.rs all-features must be true")
 
 
+def check_protocol_features(manifest, name):
+    require(manifest.get("features") == PROTOCOL_FEATURES,
+            f"{name}: protocol features/defaults differ from the additive feature contract")
+
+
 def check_package(path, source_root=None, expected_commit=None):
     prefix, files = read_archive(path)
     return check_package_contents(prefix, files, source_root, expected_commit)
@@ -308,8 +322,11 @@ def check_package(path, source_root=None, expected_commit=None):
 def check_package_contents(prefix, files, source_root=None, expected_commit=None):
     """Validate the same in-memory archive snapshot that a consumer will use."""
     require(REQUIRED_FILES <= files.keys(), f"missing package files: {sorted(REQUIRED_FILES - files.keys())}")
-    manifest = tomllib.loads(files["Cargo.toml"].decode("utf-8")).get("package")
-    original = tomllib.loads(files["Cargo.toml.orig"].decode("utf-8")).get("package")
+    parsed = {name: tomllib.loads(files[name].decode("utf-8")) for name in ["Cargo.toml", "Cargo.toml.orig"]}
+    for name, document in parsed.items():
+        check_protocol_features(document, name)
+    manifest = parsed["Cargo.toml"].get("package")
+    original = parsed["Cargo.toml.orig"].get("package")
     for name, metadata in [("Cargo.toml", manifest), ("Cargo.toml.orig", original)]:
         check_package_metadata(metadata, name)
     require(prefix == f"{manifest['name']}-{manifest['version']}", "package root does not match manifest")

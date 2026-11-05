@@ -13,8 +13,8 @@ for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
     all) flags=(--all-features) ;;
-    none) flags=(--no-default-features) ;;
-    session_only) flags=(--no-default-features --features session_file) ;;
+    none) flags=(--no-default-features --features pi_1_4) ;;
+    session_only) flags=(--no-default-features --features session_file,pi_1_4) ;;
   esac
   cargo check --locked ${flags[@]+"${flags[@]}"} --all-targets
   cargo test --locked ${flags[@]+"${flags[@]}"}
@@ -22,7 +22,7 @@ for configuration in default all none session_only; do
   RUSTDOCFLAGS='-D warnings' cargo doc --locked ${flags[@]+"${flags[@]}"} --no-deps
   "$python_command" scripts/check-rustdoc.py
 done
-cargo run --locked --example injected --no-default-features
+cargo run --locked --example injected --no-default-features --features pi_1_4
 cargo run --locked --example injected --all-features
 cargo run --locked --example native_session --no-default-features --features session_file
 cargo run --locked --example native_session --all-features
@@ -38,3 +38,5 @@ if command -v cygpath >/dev/null 2>&1; then
 fi
 cargo run --locked --example local -- "$fake"
 cargo run --locked --example local --all-features -- "$fake"
+
+bash scripts/verify-protocols.sh

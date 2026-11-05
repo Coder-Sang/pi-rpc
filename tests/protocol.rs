@@ -1,36 +1,47 @@
-use pi_rpc::{Error, protocol::*};
-use serde_json::{Value, json};
-fn assert_fixture_names(fixtures: &[Value], key: &str, expected: &[&str]) {
-    let names: std::collections::BTreeSet<_> = fixtures
-        .iter()
-        .map(|fixture| fixture[key].as_str().unwrap())
-        .collect();
-    assert_eq!(names.len(), fixtures.len(), "duplicate {key} fixture");
-    assert_eq!(names, expected.iter().copied().collect());
+//! Run the complete wire suite independently for every enabled protocol.
+#[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
+macro_rules! protocol_suite {
+    ($module:ident, $profile:ident) => {
+        mod $module {
+            use pi_rpc::protocol::$module::{Event, KnownEvent};
+            use pi_rpc::{Error, protocol::*};
+            use serde_json::{Value, json};
+            type Record = pi_rpc::protocol::Record<pi_rpc::$profile>;
+            fn decode_record(value: Value) -> pi_rpc::Result<Record> {
+                pi_rpc::protocol::decode_record::<pi_rpc::$profile>(value)
+            }
+            include!("support/protocol_fixtures.rs");
+            const STACK_TEST: &str = concat!(
+                stringify!($module),
+                "::stack::boundary_parse_convert_clone_serialize_and_drop_on_two_mib_stack"
+            );
+            mod stack {
+                include!("protocol/stack.rs");
+            }
+            mod command {
+                include!("protocol/command.rs");
+            }
+            mod event {
+                include!("protocol/event.rs");
+            }
+            mod message {
+                include!("protocol/message.rs");
+            }
+            mod response {
+                include!("protocol/response.rs");
+            }
+            mod ui {
+                include!("protocol/ui.rs");
+            }
+            mod response_negative {
+                include!("protocol/response_negative.rs");
+            }
+        }
+    };
 }
-fn usage() -> Value {
-    json!({"input":1,"output":2,"cacheRead":0,"cacheWrite":0,"totalTokens":3,"reasoning":1,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}})
-}
-fn user() -> Value {
-    json!({"role":"user","content":"native","timestamp":123})
-}
-fn assistant() -> Value {
-    json!({"role":"assistant","content":[],"api":"provider-native","provider":"future-provider","model":"future-model","usage":usage(),"stopReason":"stop","timestamp":123,"opaque":{"provider":true}})
-}
-fn tool_result() -> Value {
-    json!({"role":"toolResult","content":[],"toolCallId":"t","toolName":"open","isError":false,"timestamp":123,"details":{"opaque":true}})
-}
-
-#[path = "protocol/command.rs"]
-mod command;
-#[path = "protocol/event.rs"]
-mod event;
-#[path = "protocol/message.rs"]
-mod message;
-#[path = "protocol/response.rs"]
-mod response;
-#[path = "protocol/ui.rs"]
-mod ui;
-
-#[path = "protocol/response_negative.rs"]
-mod response_negative;
+#[cfg(feature = "pi_1_3")]
+protocol_suite!(v1_3, Pi13);
+#[cfg(feature = "pi_1_4")]
+protocol_suite!(v1_4, Pi14);
+#[cfg(feature = "pi_1_5")]
+protocol_suite!(v1_5, Pi15);

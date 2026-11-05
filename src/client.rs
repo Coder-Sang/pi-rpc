@@ -1,12 +1,13 @@
 //! One continuous reader, one serialized writer, ID-correlated command futures.
 #![doc = include_str!("../docs/connections.md")]
 use crate::{
-    Error, Result,
+    ConnectionInfo, Error, PiProtocol, Result,
     protocol::{Command, Event, Response},
     transport::Transport,
 };
 use serde::de::DeserializeOwned;
 use std::{
+    marker::PhantomData,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -18,11 +19,13 @@ use tokio::{
     task::{JoinHandle, JoinSet},
 };
 
+mod auto;
+pub use auto::{AutoConnection, connect_auto};
 mod commands;
 mod outbound;
 mod runtime;
 mod state;
-#[cfg(test)]
+#[cfg(all(test, feature = "pi_1_4"))]
 mod tests;
 
 use outbound::WriteMessage;
@@ -98,13 +101,15 @@ impl Config {
         Ok(())
     }
 }
-struct BufferedEvent {
-    event: Event,
+struct BufferedEvent<P: PiProtocol> {
+    event: Event<P>,
     _budget: OwnedSemaphorePermit,
 }
 /// Clone drops are inert. Dropping a command future never withdraws a queued record.
 #[derive(Clone)]
-pub struct PiClient {
+pub struct PiClient<P: PiProtocol> {
+    info: Arc<ConnectionInfo>,
+    marker: PhantomData<P>,
     shared: Arc<Shared>,
     writer: mpsc::Sender<WriteMessage>,
     budget: Arc<Semaphore>,
@@ -112,16 +117,20 @@ pub struct PiClient {
     admission: Arc<Semaphore>,
 }
 /// Single consumer, ordered across all session events. Not a per-prompt stream.
-pub struct PiEvents {
-    rx: mpsc::Receiver<BufferedEvent>,
+pub struct PiEvents<P: PiProtocol> {
+    info: Arc<ConnectionInfo>,
+    rx: mpsc::Receiver<BufferedEvent<P>>,
     terminal: watch::Receiver<Option<Error>>,
     error_delivered: bool,
 }
-impl PiEvents {
+impl<P: PiProtocol> PiEvents<P> {
+    pub fn info(&self) -> &ConnectionInfo {
+        &self.info
+    }
     /// Drains buffered events, then waits for the supervisor's authoritative
     /// terminal reason. Channel closure can precede terminal publication.
     /// Cancelling this await does not consume the terminal error.
-    pub async fn recv(&mut self) -> Option<Result<Event>> {
+    pub async fn recv(&mut self) -> Option<Result<Event<P>>> {
         if let Some(e) = self.rx.recv().await {
             return Some(Ok(e.event));
         }
@@ -146,19 +155,31 @@ impl PiEvents {
 }
 /// Sole background-task owner. Drop closes the connection and aborts all I/O tasks.
 /// A remote transport is dropped, not remotely terminated.
-pub struct PiConnection {
-    client: PiClient,
+pub struct PiConnection<P: PiProtocol> {
+    client: PiClient<P>,
     task: Option<JoinHandle<()>>,
     terminal: watch::Receiver<Option<Error>>,
 }
-impl PiConnection {
+impl<P: PiProtocol> PiConnection<P> {
+    pub fn info(&self) -> &ConnectionInfo {
+        self.client.info()
+    }
     /// Begins reading immediately, with the event buffer installed before return.
-    pub fn connect(transport: Transport, config: Config) -> Result<(PiClient, PiEvents, Self)> {
+    pub fn connect(
+        transport: Transport,
+        config: Config,
+    ) -> Result<(PiClient<P>, PiEvents<P>, Self)> {
         config.validate()?;
+        if !P::matches_version(transport.info.version()) {
+            return Err(Error::Version);
+        }
+        let info = Arc::new(transport.info);
         let (terminal, terminal_rx) = watch::channel(None);
         let shared = Arc::new(Shared::new(config.clone(), terminal));
         let (writer, writer_rx) = mpsc::channel(config.max_writer_records);
         let client = PiClient {
+            info: info.clone(),
+            marker: PhantomData,
             shared: shared.clone(),
             writer,
             budget: Arc::new(Semaphore::new(config.max_writer_bytes)),
@@ -190,6 +211,7 @@ impl PiConnection {
             while tasks.join_next().await.is_some() {}
         });
         let events = PiEvents {
+            info,
             rx: event_rx,
             terminal: terminal_rx.clone(),
             error_delivered: false,
@@ -246,7 +268,7 @@ impl PiConnection {
         self.terminal.clone()
     }
 }
-impl Drop for PiConnection {
+impl<P: PiProtocol> Drop for PiConnection<P> {
     fn drop(&mut self) {
         self.client.shared.finish(Error::Closed);
         if let Some(t) = self.task.take() {
@@ -254,7 +276,10 @@ impl Drop for PiConnection {
         }
     }
 }
-impl PiClient {
+impl<P: PiProtocol> PiClient<P> {
+    pub fn info(&self) -> &ConnectionInfo {
+        &self.info
+    }
     /// No automatic retries. Capacity failure means not submitted. A timeout
     /// after local enqueue has an uncertain send/execution outcome.
     pub fn command(

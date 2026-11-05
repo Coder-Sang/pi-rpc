@@ -303,6 +303,7 @@ mod exit_tests {
             Poll::Ready(Ok(()))
         }
     }
+    #[cfg(feature = "pi_1_4")]
     #[test]
     fn terminal_ready_validation_has_a_byte_bound_even_for_tiny_continuous_reads() {
         let count = Arc::new(AtomicUsize::new(0));
@@ -313,7 +314,7 @@ mod exit_tests {
                 &mut Context::from_waker(std::task::Waker::noop()),
                 |value| {
                     records += 1;
-                    crate::protocol::decode_record(value).map(drop)
+                    crate::protocol::decode_record::<crate::Pi14>(value).map(drop)
                 },
             )
             .unwrap();
@@ -354,6 +355,7 @@ mod exit_tests {
             assert_eq!(reader.reader, &wire[consumed..]);
         }
     }
+    #[cfg(feature = "pi_1_4")]
     #[test]
     fn terminal_ready_validation_checks_depth_boundaries_on_two_mib_stack() {
         std::thread::Builder::new()
@@ -368,7 +370,7 @@ mod exit_tests {
                     let mut reader = JsonlReader::new(bytes.as_bytes(), 4096);
                     let checked = reader.check_ready_at_exit(
                         &mut Context::from_waker(std::task::Waker::noop()),
-                        |value| crate::protocol::decode_record(value).map(drop),
+                        |value| crate::protocol::decode_record::<crate::Pi14>(value).map(drop),
                     );
                     assert_eq!(checked.is_ok(), valid);
                     if !valid {

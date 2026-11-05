@@ -1,5 +1,8 @@
 //! Opt-in paid acceptance of live queue/tool/abort/compaction/session workflows.
-use pi_rpc::{Config, Error, PiClient, PiProcess, ProcessOptions, protocol::*};
+type PiClient = pi_rpc::PiClient<pi_rpc::Pi15>;
+type PiProcess = pi_rpc::PiProcess<pi_rpc::Pi15>;
+use pi_rpc::protocol::v1_5::{Event, KnownEvent};
+use pi_rpc::{Config, Error, ProcessOptions, protocol::*};
 use std::{
     path::{Path, PathBuf},
     time::Duration,

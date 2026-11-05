@@ -1,8 +1,8 @@
 //! Serialized writer, continuous reader and process-exit observation.
 use super::{BufferedEvent, PiClient, UiPolicy, WriteMessage};
 use crate::{
-    Error, Result, codec,
-    protocol::{Event, Record, decode_record},
+    Error, PiProtocol, Result, codec,
+    protocol::{Record, Sealed, decode_record},
 };
 use std::{sync::Arc, time::Duration};
 use tokio::{
@@ -39,11 +39,11 @@ pub(super) async fn write_loop(
     }
     Ok(())
 }
-pub(super) async fn read_loop(
+pub(super) async fn read_loop<P: PiProtocol>(
     reader: crate::transport::Reader,
     mut exit: Option<watch::Receiver<Option<Error>>>,
-    client: PiClient,
-    events: mpsc::Sender<BufferedEvent>,
+    client: PiClient<P>,
+    events: mpsc::Sender<BufferedEvent<P>>,
     budget: Arc<Semaphore>,
 ) -> Result<()> {
     let mut reader = codec::JsonlReader::new(reader, client.shared.config.max_record_bytes);
@@ -58,7 +58,7 @@ pub(super) async fn read_loop(
                     // Preserve ready protocol failures if scheduling crossed the
                     // deadline. This bounded check does not extend event delivery.
                     let checked = std::future::poll_fn(|cx| std::task::Poll::Ready(
-                        reader.check_ready_at_exit(cx, |value| decode_record(value).map(drop))
+                        reader.check_ready_at_exit(cx, |value| decode_record::<P>(value).map(drop))
                     )).await;
                     if let Err(error @ Error::Protocol(_)) = checked {
                         return Err(error);
@@ -102,14 +102,14 @@ pub(super) async fn read_loop(
                 Error::Eof
             });
         };
-        let event = match decode_record(value)? {
+        let event = match decode_record::<P>(value)? {
             Record::Response(response) => match client.shared.dispatch_response(response)? {
-                Some(response) => Event::UncorrelatedResponse(response),
+                Some(response) => <P as Sealed>::response(response),
                 None => continue,
             },
             Record::Event(e) => e,
         };
-        if let Event::Ui(u) = &event
+        if let Some(u) = <P as Sealed>::ui_request(&event)
             && u.method.is_dialog()
             && client.shared.config.ui_policy == UiPolicy::Cancel
         {
@@ -121,7 +121,7 @@ pub(super) async fn read_loop(
             .try_acquire_many_owned(size as u32)
             .map_err(|_| Error::EventOverflow)?;
         events
-            .try_send(BufferedEvent {
+            .try_send(BufferedEvent::<P> {
                 event,
                 _budget: permit,
             })
@@ -142,5 +142,5 @@ async fn wait_exit(exit: &mut Option<watch::Receiver<Option<Error>>>) -> Error {
     std::future::pending().await
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "pi_1_4"))]
 mod tests;

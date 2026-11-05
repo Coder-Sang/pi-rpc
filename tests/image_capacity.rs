@@ -1,5 +1,9 @@
+#![cfg(feature = "pi_1_4")]
+type PiConnection = pi_rpc::PiConnection<pi_rpc::Pi14>;
+const PI_VERSION: &str = "1.4.0";
+use pi_rpc::protocol::v1_4::{Event, KnownEvent};
 use pi_rpc::{
-    Config, Error, PI_VERSION, PiConnection, Transport,
+    Config, Error, Transport,
     codec::{self, JsonlReader},
     protocol::*,
 };

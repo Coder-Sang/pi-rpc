@@ -1,7 +1,23 @@
 use std::path::{Path, PathBuf};
 
-pub(super) const VERSIONS: [&str; 7] = [
-    "1.1.0", "1.1.10", "1.2.0", "1.3.0", "1.3.1", "1.3.10", "1.4.0",
+pub(super) const VERSIONS: [&str;
+    3 * cfg!(feature = "pi_1_3") as usize
+        + 3 * cfg!(feature = "pi_1_4") as usize
+        + cfg!(feature = "pi_1_5") as usize] = [
+    #[cfg(feature = "pi_1_3")]
+    "1.3.0",
+    #[cfg(feature = "pi_1_3")]
+    "1.3.1",
+    #[cfg(feature = "pi_1_3")]
+    "1.3.10",
+    #[cfg(feature = "pi_1_4")]
+    "1.4.0",
+    #[cfg(feature = "pi_1_4")]
+    "1.4.1",
+    #[cfg(feature = "pi_1_4")]
+    "1.4.10",
+    #[cfg(feature = "pi_1_5")]
+    "1.5.0",
 ];
 
 pub(super) struct Fixture {
@@ -40,11 +56,13 @@ impl Fixture {
         let executable = root
             .path()
             .join(format!("acceptance-probe{}", std::env::consts::EXE_SUFFIX));
-        // Keep Linux aliases immutable, as in the existing subprocess fixtures:
-        // fork can inherit a concurrent copy's writable fd and cause ETXTBSY.
-        #[cfg(target_os = "linux")]
+        // Reuse the immutable executable with the platform-specific fixture policy.
+        // Sidecar versions/markers remain unique to each case path.
+        #[cfg(all(unix, not(target_os = "macos")))]
         std::fs::hard_link(&self.executable, &executable).unwrap();
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "macos")]
+        std::os::unix::fs::symlink(&self.executable, &executable).unwrap();
+        #[cfg(not(unix))]
         std::fs::copy(&self.executable, &executable).unwrap();
         std::fs::write(executable.with_extension("version"), version).unwrap();
         Probe {
@@ -65,13 +83,18 @@ impl Probe {
     }
 
     #[track_caller]
-    pub(super) fn assert_outcome(&self, result: pi_rpc::Result<()>, expected: &str) {
+    pub(super) fn assert_outcome(
+        &self,
+        result: pi_rpc::Result<()>,
+        expected: &str,
+        selected: bool,
+    ) {
         let actual = std::fs::read_to_string(self.executable.with_extension("version")).unwrap();
         assert_eq!(
             std::fs::read(self.executable.with_extension("probe-started")).unwrap(),
             b"probe"
         );
-        if actual == expected {
+        if actual == expected && selected {
             assert_eq!(
                 result,
                 Err(pi_rpc::Error::ProcessExit(Some(37))),

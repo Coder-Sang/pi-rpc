@@ -76,9 +76,12 @@ rust-version = "1.88"
 publish = false
 
 [features]
-default = ["subprocess"]
+default = ["subprocess", "pi_1_4", "pi_1_5"]
 subprocess = ["pi-rpc/subprocess"]
 session_file = ["pi-rpc/session_file"]
+pi_1_3 = ["pi-rpc/pi_1_3"]
+pi_1_4 = ["pi-rpc/pi_1_4"]
+pi_1_5 = ["pi-rpc/pi_1_5"]
 
 [dependencies]
 pi-rpc = {{ path = {json.dumps(extracted.as_posix(), ensure_ascii=False)}, version = "={package['version']}", default-features = false }}

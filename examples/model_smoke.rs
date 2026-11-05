@@ -1,7 +1,10 @@
 //! Opt-in paid model acceptance. Pi owns existing provider configuration/auth.
+type PiClient = pi_rpc::PiClient<pi_rpc::Pi15>;
+type PiProcess = pi_rpc::PiProcess<pi_rpc::Pi15>;
+use pi_rpc::protocol::v1_5::{AssistantEvent, Event, KnownEvent};
 use pi_rpc::{
-    Config, Error, PiProcess, ProcessOptions,
-    protocol::{AssistantEvent, Command, Event, KnownEvent, PromptDisposition, ThinkingLevel},
+    Config, Error, ProcessOptions,
+    protocol::{Command, PromptDisposition, ThinkingLevel},
 };
 use serde_json::Value;
 use std::{path::PathBuf, time::Duration};
@@ -21,7 +24,7 @@ struct Observation {
 }
 
 async fn exercise(
-    client: &pi_rpc::PiClient,
+    client: &PiClient,
     ready: tokio::sync::oneshot::Receiver<bool>,
     provider: Option<String>,
 ) -> pi_rpc::Result<bool> {
@@ -237,8 +240,9 @@ mod tests {
             pi_rpc::PI_VERSION_REQUIREMENT,
             ">=1.1.0, <=1.2.0",
             ">=1.1.0, <=1.3.0",
+            ">=1.1.0, <=1.4.0",
             "1.0.9",
-            "1.4.1",
+            "1.5.1",
             "1.01.0",
             "1.3.0 ",
             "v1.3.0",
@@ -272,7 +276,7 @@ mod tests {
                 let result = tokio::time::timeout(Duration::from_secs(10), run(args.into_iter()))
                     .await
                     .expect("acceptance entrypoint stalled");
-                probe.assert_outcome(result, pi_rpc::PI_VERSION);
+                probe.assert_outcome(result, pi_rpc::PI_VERSION, true);
             }
         }
     }
@@ -295,7 +299,11 @@ mod tests {
                 )
                 .await
                 .expect("acceptance entrypoint stalled");
-                probe.assert_outcome(result, expected);
+                probe.assert_outcome(
+                    result,
+                    expected,
+                    <pi_rpc::Pi15 as pi_rpc::PiProtocol>::matches_version(expected),
+                );
             }
         }
     }

@@ -1,10 +1,10 @@
 # Contributing
 
-Read the [README](README.md), [connection contract](docs/connections.md) and [compatibility notes](docs/compatibility.md) before changing behavior. The current Git version is 0.2.3 development; the published version remains 0.2.2. Preserve public paths, field types, feature names and the Rust 1.88 minimum throughout 0.2.x.
+Read the [README](README.md), [connection contract](docs/connections.md) and [compatibility notes](docs/compatibility.md) before changing behavior. The current Git version is 0.3.0 development; published 0.2.2 retains its historical API. Follow the [0.3 migration contract](docs/migration-0.3.md): explicit protocol types, additive features, no provider inference, shared lifecycle and Rust 1.88 minimum.
 
 ## Development requirements
 
-Install stable Rust with rustfmt/Clippy and exact Rust **1.88.0**, Bash, Git, Python **3.11+** and a native C/assembly compiler. Windows requires Git Bash, MSVC and the Windows SDK. Stack-switching dependencies need the native compiler; installing a Rust target alone does not establish platform compatibility.
+Install current stable Rust (local 0.3 checks use 1.99.1) with rustfmt/Clippy and exact Rust **1.88.0**, Bash, Git, Python **3.11+** and a native C/assembly compiler. Windows requires Git Bash, MSVC and the Windows SDK. Stack-switching dependencies need the native compiler; installing a Rust target alone does not establish platform compatibility.
 
 Run from the repository root. Download toolchains and dependencies before offline gates. On Windows, use `python` if `python3` is unavailable. The scripts honor Cargo offline settings and effective target directories unless a generated fixture path is documented separately.
 
@@ -28,7 +28,7 @@ CI runs Linux/macOS/Windows × stable/exact 1.88.0. Local macOS results alone do
 
 ## Changes and reviews
 
-Keep changes focused. Add regressions for behavior changes, preserving feature coverage and deterministic lifecycle synchronization. Run the applicable gates; record the compiler, platform and results without claiming tests not executed. New runtime APIs belong in the 0.2.3 Unreleased section of [CHANGELOG](CHANGELOG.md); user-facing changes should explain resulting behavior rather than development history.
+Keep changes focused. Add regressions for behavior changes, preserving feature coverage and deterministic lifecycle synchronization. Run the applicable gates; record the compiler, platform and results without claiming tests not executed. New runtime APIs belong in the 0.3.0 Unreleased section of [CHANGELOG](CHANGELOG.md); user-facing changes should explain resulting behavior rather than development history.
 
 Keep README examples usable with the published dependency, and label Git-only APIs explicitly. README is included in crate Rustdoc, so link project documents with HTTPS repository URLs there. Guide-local relative links are appropriate in other Markdown files. Update Markdown and generated-HTML checks when document inventories or anchors change.
 
@@ -47,3 +47,7 @@ cargo test --locked --release --all-features --lib image_encoding_measurement --
 ```
 
 These print median timings and, for image encoding, reserved output bytes. They do not measure RSS and have no performance pass/fail threshold. They use synthetic data only.
+
+Protocol tests run the complete schema suite for each enabled profile. `verify-protocols.sh` covers all eight additive combinations and compiles positive controls before cross-version type failures. The four full configurations always include Pi14, preserving the existing transport/resource regressions; Pi13/Pi15 have independent command/event/UI/startup/close coverage. Do not weaken fixtures, deadlines or assertions to obtain passing checks.
+
+Fake-process fixtures reuse immutable executable bytes: Linux/other Unix use hard links; macOS uses symbolic links to one stable source inode; Windows retains copies and direct-child handle observations. macOS case labels live in owned directories, with independent version/ready/probe/RPC sidecars. A deterministic regression checks resolved inode identity and macOS symlink/single-hard-link invariants, avoiding the known APFS/Gatekeeper [hard-link path condition](https://github.com/rust-lang/cargo/issues/10060). Ready failures report only synthetic fixture markers and owned PIDs, never host Pi configuration or diagnostics.

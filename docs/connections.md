@@ -1,10 +1,10 @@
 # Connections, capacity and lifecycle
 
-The SDK manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/main/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for streamed content.
+The 0.3 development SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/main/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for streamed content.
 
 ## Modules and ownership
 
-- `protocol`: all 33 normal commands, success-data types, 24 session/RPC event kinds, streaming deltas, nine extension UI methods, native messages and entries.
+- `protocol`: sealed Pi13/Pi14/Pi15 profiles with independent event types, all 33 normal commands, success-data types, 24 session/RPC event kinds, streaming deltas, nine extension UI methods, native messages and entries.
 - `codec`: strict LF JSONL, CRLF decoding, fragmented/coalesced byte streams, bounded records. Unicode U+2028/U+2029 inside strings do not split records. Nonempty unterminated EOF is an error.
 - `transport`: inject any ordered `AsyncRead + AsyncWrite` pair without an SDK dependency. The remote host **declares** its Pi version. There is no RPC version handshake.
 - `client`: cloneable command handle, ID-correlated responses, one continuous reader, one serialized writer, one single-consumer ordered event stream.
@@ -18,13 +18,15 @@ Local child exit is monitored independently of stdout EOF. After observing exit 
 ## Injected transport
 
 ```rust,no_run
-use pi_rpc::{Config, PiConnection, Transport};
+# #[cfg(feature = "pi_1_5")]
+# mod example {
+use pi_rpc::{Config, Pi15, PiConnection, Transport};
 # async fn example<R, W>(reader: R, writer: W, declared_version: &str) -> pi_rpc::Result<()>
 # where R: tokio::io::AsyncRead + Unpin + Send + 'static,
 # W: tokio::io::AsyncWrite + Unpin + Send + 'static {
-// The host supplies the actual concrete Pi version, such as "1.1.0" or "1.4.0".
+// The host supplies the actual concrete Pi version, "1.5.0" for this Pi15 connection.
 let transport = Transport::new(reader, writer, declared_version)?;
-let (client, mut events, mut owner) = PiConnection::connect(transport, Config::default())?;
+let (client, mut events, mut owner) = PiConnection::<Pi15>::connect(transport, Config::default())?;
 // The event channel is already installed, and reading has started.
 let consumer = tokio::spawn(async move {
     while let Some(record) = events.recv().await {
@@ -38,13 +40,20 @@ let messages = client.get_messages().await?;
 let reason = owner.close().await;
 consumer.await.expect("event task");
 # Ok(()) }
+# }
 ```
 
-Use `cargo run --example injected --no-default-features` for a runnable in-memory version with no Pi or paid requests. A remote Sandbox integration adapts its binary stdout/stdin streams here, drains stderr separately, and owns remote termination/delivery outside this crate.
+Use `cargo run --example injected --no-default-features --features pi_1_4` for a runnable in-memory version with no Pi or paid requests. A remote Sandbox integration adapts its binary stdout/stdin streams here, drains stderr separately, and owns remote termination/delivery outside this crate.
+
+## Protocol selection and version information
+
+`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/migration-0.3.md).
+
+The global supported range is >=1.3.0, <=1.5.0. Pi13 accepts 1.3.x, Pi14 accepts 1.4.x, Pi15 currently accepts 1.5.0. Missing features produce an explicit error before I/O/RPC startup and never select a different protocol. Transport itself validates a canonical global version and records a declaration; connection admission selects the enabled profile.
 
 ## Local process and diagnostics
 
-`PiProcess::spawn` probes `--version` before RPC startup. The probe defaults to five seconds and bounds stdout and stderr separately to 4 KiB. Exact `expected_version` locks still probe. The 0.2.3 Git development API `spawn_with_version` skips that process and trusts the caller's concrete declaration while enforcing the same supported-version/expectation policy. Its `startup_timeout` is unused. Neither entrypoint sends initialization commands or waits for Pi readiness.
+`PiProcess::<P>::spawn` probes `--version` before RPC startup. The probe defaults to five seconds and bounds stdout and stderr separately to 4 KiB. Exact `expected_version` locks still probe. The 0.3 development API `spawn_with_version` skips that process and trusts the caller's concrete declaration while enforcing the same supported-version/expectation policy. Its `startup_timeout` is unused. Neither entrypoint sends initialization commands or waits for Pi readiness.
 
 Both startup paths share CLI arguments, cwd, inherited environment, stderr draining, process supervision and cleanup. The host owns executable installation and configuration. There is no PTY. `examples/local.rs` accepts an optional executable path, including the compiled test fake.
 
@@ -58,17 +67,19 @@ Every command has a typed convenience method, including `prompt_with`, `steer`, 
 
 Session events generally have **no command ID**. Only direct bash output can repeat its originating ID. There are no per-prompt event streams or `prompt_and_wait` convenience that pretends unrelated session events belong to a prompt. `agent_end` is a low-level run boundary, not `agent_settled`. `agent_settled.aborted` reports whether that run ended because it was aborted. Settlement is a session-run continuation boundary, **not evidence the queues are empty**. Optional `durationMs` on tool completion and native assistant/tool-result messages preserves Pi's monotonic execution timing. Observe `queue_update` and `get_state` separately.
 
-`Error` distinguishes Pi rejection, uncertain-outcome timeout, protocol errors, transport errors, process exit, capacity, event overflow, EOF, explicit close, close timeout and forced termination. Known malformed records fail the connection, never become `Unknown`. Unknown event types retain their complete JSON. Rejection text comes from Pi and is not automatically logged. The owner exposes `terminal_reason()` and `wait_terminal()`. Events drain accepted buffered records, then deliver the terminal error once, then return `None`.
+`Error` also distinguishes unsupported/mismatched versions, supported but disabled protocol features and no protocol enabled. It distinguishes Pi rejection, uncertain-outcome timeout, protocol errors, transport errors, process exit, capacity, event overflow, EOF, explicit close, close timeout and forced termination. Known malformed records fail the connection, never become `Unknown`. Unknown event types retain their complete JSON. Rejection text comes from Pi and is not automatically logged. The owner exposes `terminal_reason()` and `wait_terminal()`. Events drain accepted buffered records, then deliver the terminal error once, then return `None`.
 
 Event-channel closure can race ahead of the I/O supervisor's terminal publication. `PiEvents::recv` waits for the authoritative terminal watch after draining the channel, rather than returning premature `None`. This wait is cancellation-safe. Reader-task panic, transport EOF and owner drop all publish terminal reasons, so consumers do not need to call `wait_terminal` first. If the terminal authority itself disappears without publishing, the defensive fallback is one `Closed` error, then `None`.
 
 Model failures are native message outcomes: inspect `message_end.message.fields["stopReason"]` and `errorMessage`. Pi's normal agent loop turns provider `done`/`error` into message boundaries; waiting only for a nested `AssistantEvent::Error` or a connection error misses model failures. Keep consuming through retries and `agent_settled`:
 
 ```rust,no_run
-use pi_rpc::PiEvents;
-use pi_rpc::protocol::{AssistantEvent, Event, KnownEvent};
+# #[cfg(feature = "pi_1_5")]
+# mod example {
+use pi_rpc::{Pi15, PiEvents};
+use pi_rpc::protocol::v1_5::{AssistantEvent, Event, KnownEvent};
 
-async fn consume(mut events: PiEvents) -> pi_rpc::Result<()> {
+async fn consume(mut events: PiEvents<Pi15>) -> pi_rpc::Result<()> {
     while let Some(record) = events.recv().await {
         match record? {
             Event::Known(KnownEvent::MessageUpdate {
@@ -86,6 +97,7 @@ async fn consume(mut events: PiEvents) -> pi_rpc::Result<()> {
     }
     Ok(())
 }
+# }
 ```
 
 See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
@@ -96,7 +108,7 @@ Cancellation of an awaiting future **does not withdraw or retry its command**. T
 
 JSON objects and arrays have an explicit maximum nesting depth of **512 containers** (`codec::MAX_JSON_DEPTH`); the root container counts as one. Strings, including escaped quotes and brackets, do not add nesting. This supports ordinary session trees of at least 200 entries along a branch, within the record byte limit; deeply nested entry metadata also counts toward the limit. Wire depth is checked iteratively before parsing, and Serde conversions use `serde_stacker` rather than the default 128-container parser limit. Over-depth inbound records fail the connection with a `Protocol` error. Native session parsing and direct `Value` decoding use the same limit. Encoding checks depth incrementally as bytes are written, stopping at the first excess container; native construction counts the complete entry/message envelope. Cloning, serialization and cleanup at the boundary are exercised on a 2 MiB thread stack in an isolated test process. This is a bounded-depth contract, not arbitrary-depth JSON support.
 
-Default RPC limits are **32 MiB per JSON record**, **64 MiB of writer bytes**, **128 MiB of queued event wire bytes**, 128 pending commands, 128 queued writer records and 1,024 events. Explicit caller limits remain authoritative. Pi 1.2.0 normally resizes each prompt image to at most 2000×2000 and below 4.5 MiB of Base64, with model overrides and an option to disable resizing. That processing happens after RPC input is received; these transport limits cover the original input too. Four images near Pi's default processed limit occupy about 18 MiB before text and JSON overhead. The SDK does not resize images or enforce an image count. Hosts must bound original image sizes and request concurrency.
+Default RPC limits are **32 MiB per JSON record**, **64 MiB of writer bytes**, **128 MiB of queued event wire bytes**, 128 pending commands, 128 queued writer records and 1,024 events. Explicit caller limits remain authoritative. The reviewed Pi 1.5.0 image path normally resizes each prompt image to at most 2000×2000 and below 4.5 MiB of Base64, with model overrides and an option to disable resizing. That processing happens after RPC input is received; these transport limits cover the original input too. Four images near Pi's default processed limit occupy about 18 MiB before text and JSON overhead. The SDK does not resize images or enforce an image count. Hosts must bound original image sizes and request concurrency.
 
 Image-bearing message_start/message_end events retain their complete payload and are charged separately. Complete get_messages/get_entries/get_tree responses must fit the same record limit; accumulated history can exceed it and then terminates the connection with Protocol. Hosts should maintain history from events rather than repeatedly fetch unbounded image history. Native sessions default to 32 MiB per record and 64 MiB per file. These are wire budgets, not RSS limits: caller-owned images, decoded objects and command responses awaiting collection use additional memory.
 
@@ -109,15 +121,17 @@ Event byte accounting uses the original serialized UTF-8 record size, excluding 
 Default `UiPolicy::Cancel` enqueues `cancelled: true` for **every dialog**, including confirm. It never approves unattended actions. `Manual` leaves select/confirm/input/editor decisions to the consumer:
 
 ```rust,no_run
-use pi_rpc::{Config, Error, PiConnection, Transport, UiPolicy};
-use pi_rpc::protocol::{Event, UiAnswer};
+# #[cfg(feature = "pi_1_5")]
+# mod example {
+use pi_rpc::{Config, Error, Pi15, PiConnection, Transport, UiPolicy};
+use pi_rpc::protocol::{v1_5::Event, UiAnswer};
 # async fn example<R, W>(reader: R, writer: W, declared_version: &str) -> pi_rpc::Result<()>
 # where R: tokio::io::AsyncRead + Unpin + Send + 'static,
 # W: tokio::io::AsyncWrite + Unpin + Send + 'static {
 let config = Config { ui_policy: UiPolicy::Manual, ..Config::default() };
-// The host supplies the actual concrete Pi version, such as "1.1.0" or "1.4.0".
+// The host supplies the actual concrete Pi version, "1.5.0" for this Pi15 connection.
 let transport = Transport::new(reader, writer, declared_version)?;
-let (client, mut events, mut owner) = PiConnection::connect(transport, config)?;
+let (client, mut events, mut owner) = PiConnection::<Pi15>::connect(transport, config)?;
 let responder = client.clone();
 let consumer = tokio::spawn(async move {
     while let Some(record) = events.recv().await {
@@ -139,6 +153,7 @@ let state = client.get_state().await?;
 owner.close().await;
 consumer.await.expect("event task")?;
 # Ok(()) }
+# }
 ```
 
 For local subprocesses, pass the same manual configuration in `ProcessOptions.connection` before calling `PiProcess::spawn`. Set the policy when connecting; the default Cancel policy already sends automatic replies and should not be combined with manual dialog responses.

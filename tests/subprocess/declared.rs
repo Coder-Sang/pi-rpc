@@ -6,7 +6,7 @@ fn declared_options(dir: &std::path::Path, label: &str, mode: &str) -> ProcessOp
         "probe-forbidden-{label}{}",
         std::env::consts::EXE_SUFFIX
     ));
-    named_fixture(&executable);
+    let executable = named_fixture(&executable);
     ProcessOptions {
         executable,
         ..options(mode)
@@ -18,7 +18,7 @@ fn no_children(path: &std::path::Path) {
     assert!(!path.with_extension("rpc-started").exists());
 }
 
-async fn version_rejected(result: pi_rpc::Result<(pi_rpc::PiClient, PiEvents, PiProcess)>) {
+async fn version_rejected(result: pi_rpc::Result<(super::PiClient, PiEvents, PiProcess)>) {
     match result {
         Err(error) => assert_eq!(error, Error::Version),
         Ok((_client, _events, mut owner)) => {
@@ -29,7 +29,7 @@ async fn version_rejected(result: pi_rpc::Result<(pi_rpc::PiClient, PiEvents, Pi
     }
 }
 
-async fn finish(client: pi_rpc::PiClient, mut events: PiEvents, mut owner: PiProcess) {
+async fn finish(client: super::PiClient, mut events: PiEvents, mut owner: PiProcess) {
     assert_eq!(client.get_state().await.unwrap().session_id, "fake");
     assert!(client.get_messages().await.unwrap().messages.is_empty());
     assert_eq!(owner.close().await, Error::ProcessExit(Some(0)));
@@ -91,18 +91,11 @@ async fn ordinary_spawn_still_probes_with_default_and_exact_expectations() {
 async fn declared_versions_obey_default_legacy_and_exact_expectations() {
     let dir = tempfile::tempdir().unwrap();
     let mut cases = Vec::new();
-    for version in [
-        "1.1.0", "1.1.1", "1.1.10", "1.2.0", "1.2.10", "1.3.0", "1.3.1", "1.3.10", "1.4.0",
-    ] {
+    for version in ["1.4.0", "1.4.1", "1.4.10"] {
         cases.push((version, pi_rpc::PI_VERSION_REQUIREMENT));
         cases.push((version, version));
     }
-    cases.extend([
-        ("1.1.0", ">=1.1.0, <=1.2.0"),
-        ("1.2.0", ">=1.1.0, <=1.2.0"),
-        ("1.2.10", ">=1.1.0, <=1.3.0"),
-        ("1.3.0", ">=1.1.0, <=1.3.0"),
-    ]);
+    cases.push(("1.4.0", ">=1.1.0, <=1.4.0"));
     for (index, (version, expected)) in cases.into_iter().enumerate() {
         let mut options = declared_options(dir.path(), &format!("accepted-{index}"), "normal");
         let path = options.executable.clone();
@@ -126,7 +119,7 @@ async fn invalid_declared_versions_fail_before_any_child() {
         "1.4",
         "1.4.0.0",
         "1.0.4",
-        "1.4.1",
+        "1.5.1",
         "2.0.0",
         " 1.4.0",
         "1.4.0 ",
@@ -177,7 +170,7 @@ async fn invalid_or_mismatched_expectations_fail_before_any_child() {
         ">=1.1.0,<=1.4.0",
         " 1.4.0",
         "1.0.4",
-        "1.4.1",
+        "1.5.1",
         "1.4.0-rc.1",
         "1.4.0+build",
         "1.04.0",
@@ -203,7 +196,7 @@ async fn declared_version_validates_before_reporting_a_launch_failure() {
         executable: executable.clone(),
         ..Default::default()
     };
-    version_rejected(PiProcess::spawn_with_version(options(), "1.4.1").await).await;
+    version_rejected(PiProcess::spawn_with_version(options(), "1.5.1").await).await;
     let invalid_expected = ProcessOptions {
         expected_version: "*".into(),
         ..options()

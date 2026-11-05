@@ -173,3 +173,59 @@ async fn pi_1_3_argument_error_survives_fragmented_crlf_jsonl() {
     assert!(reader.next().await.unwrap().is_none());
     sender.await.unwrap();
 }
+
+fn check_message(message: &Message, flag: Option<bool>) {
+    assert_eq!(message.fields["responseModel"], "virtual");
+    assert_eq!(message.fields["usage"]["cost"].get("totalFromProvider"), flag.map(Value::Bool).as_ref());
+}
+#[test]
+fn provider_cost_origin_and_response_model_survive_all_history_paths() {
+    #[cfg(feature = "session_file")]
+    use pi_rpc::session_file::{SessionFile, SessionFileBuilder, SessionLimits};
+    let mut checks = 0;
+    for flag in [None, Some(false), Some(true)] {
+        let mut usage = json!({"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"totalTokens":120,
+            "cost":{"input":0.1,"output":0.02,"cacheRead":0,"cacheWrite":0,"total":0.123}});
+        if let Some(flag) = flag {usage["cost"]["totalFromProvider"] = json!(flag);}
+        let typed: Usage = serde_json::from_value(usage.clone()).unwrap();
+        assert_eq!(typed.cost.extra.get("totalFromProvider"),flag.map(Value::Bool).as_ref());
+        assert_eq!(typed.cost.total,0.123);checks+=1;
+        let raw = json!({"role":"assistant","content":[{"type":"text","text":"synthetic"}],
+            "api":"pi-messages","provider":"synthetic","model":"virtual","responseModel":"virtual",
+            "usage":usage,"stopReason":"stop","timestamp":1});
+        let message: Message = serde_json::from_value(raw.clone()).unwrap();
+        check_message(&message,flag);checks+=1;
+        for kind in ["message_start","message_end"] {
+            let record=decode_record(json!({"type":kind,"message":raw})).unwrap();
+            let parsed=match record {Record::Event(Event::Known(KnownEvent::MessageStart{message}|KnownEvent::MessageEnd{message}))=>message,_=>panic!("wrong message event")};
+            check_message(&parsed,flag);checks+=1;
+        }
+        let record=decode_record(json!({"type":"message_update","usage":usage,"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"synthetic"}})).unwrap();
+        match record {Record::Event(Event::Known(KnownEvent::MessageUpdate{usage,..}))=>assert_eq!(usage.cost.extra.get("totalFromProvider"),flag.map(Value::Bool).as_ref()),_=>panic!("wrong update event")};checks+=1;
+        let entry=json!({"type":"message","id":"m","parentId":null,"timestamp":"2026-11-04T00:00:00Z","message":raw});
+        for (command,data) in [("get_messages",json!({"messages":[raw]})),("get_entries",json!({"entries":[entry],"leafId":"m"})),("get_tree",json!({"tree":[{"entry":entry,"children":[],"label":null,"labelTimestamp":null}],"leafId":"m"}))] {
+            let Record::Response(response)=decode_record(json!({"type":"response","id":"synthetic","command":command,"success":true,"data":data})).unwrap() else {panic!("wrong response")};
+            let parsed=match command {
+                "get_messages"=>response.decode::<Messages>().unwrap().messages.remove(0),
+                "get_entries"=>match response.decode::<Entries>().unwrap().entries.remove(0).data {EntryData::Message{message}=>message,_=>panic!("wrong entry")},
+                _=>match response.decode::<Tree>().unwrap().tree.remove(0).entry.data {EntryData::Message{message}=>message,_=>panic!("wrong tree")},
+            };
+            check_message(&parsed,flag);checks+=1;
+        }
+        #[cfg(feature = "session_file")]
+        {
+        let mut builder=SessionFileBuilder::new("synthetic","2026-11-04T00:00:00Z","/project").unwrap();
+        builder.append_message("m",None,"2026-11-04T00:00:00Z",message).unwrap();
+        let mut file=builder.finish().unwrap();
+        file.entries.push(serde_json::from_value(json!({"type":"usage","id":"u","parentId":"m","timestamp":"2026-11-04T00:00:01Z","kind":"synthetic","provider":"synthetic","model":"virtual","usage":usage})).unwrap());
+        let bytes=file.encode(SessionLimits::default()).unwrap();
+        let parsed=SessionFile::parse(&bytes,SessionLimits::default()).unwrap();
+        assert_eq!(parsed,file);checks+=1;
+        match &parsed.entries[0].data {EntryData::Message{message}=>check_message(message,flag),_=>panic!("wrong stored message")};checks+=1;
+        match &parsed.entries[1].data {EntryData::Usage{usage,..}=>assert_eq!(usage.cost.extra.get("totalFromProvider"),flag.map(Value::Bool).as_ref()),_=>panic!("wrong stored usage")};checks+=1;
+        }
+    }
+    assert!(pi_rpc::Transport::new(tokio::io::empty(),tokio::io::sink(),"1.5.0").is_ok());
+    checks += 1;
+    assert_eq!(checks, if cfg!(feature = "session_file") { 34 } else { 25 });
+}

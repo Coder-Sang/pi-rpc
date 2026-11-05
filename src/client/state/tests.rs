@@ -1,8 +1,8 @@
+type PiClient = crate::PiClient<crate::Pi14>;
+type PiConnection = crate::PiConnection<crate::Pi14>;
+const PI_VERSION: &str = "1.4.0";
 use super::*;
-use crate::{
-    PI_VERSION, Transport,
-    client::{PiClient, PiConnection},
-};
+use crate::Transport;
 
 fn fixture(config: Config) -> (PiClient, PiConnection, tokio::io::DuplexStream) {
     let (local, peer) = tokio::io::duplex(1024);

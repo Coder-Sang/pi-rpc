@@ -1,15 +1,21 @@
 # Changelog
 
-## 0.2.3 — Unreleased
+## 0.3.0 — Unreleased
 
 ### Added
 
-- `PiProcess::spawn_with_version(options, declared_version)` starts local RPC directly from a caller-declared version, retaining supported-version admission, legacy range bounds and exact `expected_version` locks. This API is Git-only until 0.2.3 is published.
+- Sealed `PiProtocol` with Pi13/Pi14/Pi15 implementations, independent per-minor Event/KnownEvent/AssistantEvent types, typed client/events/owners, and additive `pi_1_3`, `pi_1_4`, `pi_1_5` features.
+- AutoConnection/AutoProcess dispatch, immutable ConnectionInfo with Probed/Declared sources, and explicit disabled/no-protocol errors. Auto dispatch returns a typed variant and never falls back.
+- Caller-declared `PiProcess::<P>::spawn_with_version` and `spawn_auto_with_version` skip the external version probe while retaining admission and exact expected-version checks. Ordinary spawn still probes; startup_timeout applies only to probing.
+- Immutable fake-executable aliases with independent sidecars, Linux hard links and macOS symlinks to a stable source inode, avoiding observed pre-main copy startup stalls while retaining Windows copy behavior and existing test deadlines.
+- Per-profile wire regressions, feature-combination tests, positive/compile-fail type isolation, Pi 1.5 provider-field preservation and fake-only startup/lifecycle verification.
 
 ### Changed
 
-- Retain `spawn`'s bounded version probe, including exact expectations. Both startup paths share supervision and cleanup; `startup_timeout` applies only to probing. Rust 1.88, public paths/features, Pi 1.1.0–1.4.0 and dependency versions remain unchanged.
-- Organize connection, native-session and contributor guides; clarify in-memory session encoding, Usage and memory budgets. Consolidate release instructions and verification records, add crate categories and omit GitHub-only configuration from the crate archive.
+- Support Pi **>=1.3.0, <=1.5.0**, with latest reviewed source `f9a26365568127461c47a07a37dcb42c140a3ac5`. Default protocols are Pi14 and Pi15; Pi13 is optional. Previous range expectations retain their caps and intersect this range; the old range ending in 1.2.0 is rejected.
+- This is a source-breaking minor: protocol parameters are required and unversioned event exports are removed. See the [migration guide](docs/migration-0.3.md). Rust **1.88**, edition 2024 and dependency versions remain unchanged.
+- Reuse common transport/state/codec/native-v3 implementations, preserving UI admission, bounded exit drain, close deadlines, float/stack protection and terminal order. Provider metadata remains opaque; no cost/error inference is added.
+- Organize connection, native-session and contributor guides; document session encoding, Usage and memory budgets. Add crate categories and omit GitHub-only configuration from the archive. These changes and the declared-version API were previously developed as unpublished 0.2.3; no 0.2.3 release exists.
 
 ## 0.2.2 — 2026-10-27
 

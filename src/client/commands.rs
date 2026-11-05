@@ -1,9 +1,10 @@
 //! Typed convenience methods over the core command submission path.
 use super::PiClient;
+use crate::PiProtocol;
 use crate::{Result, protocol::*};
 use serde_json::Value;
 
-impl PiClient {
+impl<P: PiProtocol> PiClient<P> {
     pub async fn prompt(&self, message: impl Into<String>) -> Result<PromptDisposition> {
         Ok(self
             .typed::<Disposition<PromptDisposition>>(Command::Prompt {

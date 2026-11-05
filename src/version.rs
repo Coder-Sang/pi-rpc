@@ -21,7 +21,36 @@ fn parse(value: &str) -> Option<[u64; 3]> {
 }
 
 pub(crate) fn is_supported(value: &str) -> bool {
-    parse(value).is_some_and(|version| ([1, 1, 0]..=[1, 4, 0]).contains(&version))
+    parse(value).is_some_and(|version| ([1, 3, 0]..=[1, 5, 0]).contains(&version))
+}
+
+pub(crate) fn minor(value: &str) -> Option<u64> {
+    is_supported(value).then(|| parse(value).unwrap()[1])
+}
+
+pub(crate) fn enabled(value: &str) -> crate::Result<()> {
+    let minor = minor(value).ok_or(crate::Error::Version)?;
+    if !cfg!(any(
+        feature = "pi_1_3",
+        feature = "pi_1_4",
+        feature = "pi_1_5"
+    )) {
+        return Err(crate::Error::NoProtocolEnabled);
+    }
+    let (enabled, feature) = match minor {
+        3 => (cfg!(feature = "pi_1_3"), "pi_1_3"),
+        4 => (cfg!(feature = "pi_1_4"), "pi_1_4"),
+        5 => (cfg!(feature = "pi_1_5"), "pi_1_5"),
+        _ => unreachable!("supported minor"),
+    };
+    if enabled {
+        Ok(())
+    } else {
+        Err(crate::Error::VersionNotEnabled {
+            version: value.into(),
+            feature,
+        })
+    }
 }
 
 #[cfg(feature = "subprocess")]
@@ -36,10 +65,10 @@ impl<'a> Expectation<'a> {
     pub(crate) fn new(value: &'a str) -> crate::Result<Self> {
         if value == crate::PI_VERSION_REQUIREMENT {
             Ok(Self::Supported)
-        } else if value == ">=1.1.0, <=1.2.0" {
-            Ok(Self::Through([1, 2, 0]))
         } else if value == ">=1.1.0, <=1.3.0" {
             Ok(Self::Through([1, 3, 0]))
+        } else if value == ">=1.1.0, <=1.4.0" {
+            Ok(Self::Through([1, 4, 0]))
         } else if is_supported(value) {
             Ok(Self::Exact(value))
         } else {
@@ -64,22 +93,19 @@ mod tests {
     #[test]
     fn inclusive_range_uses_numeric_components() {
         for value in [
-            "1.1.0",
-            "1.1.1",
-            "1.1.10",
-            "1.1.18446744073709551615",
-            "1.2.0",
-            "1.2.1",
-            "1.2.10",
             "1.3.0",
             "1.3.1",
             "1.3.10",
             "1.3.18446744073709551615",
             "1.4.0",
+            "1.4.1",
+            "1.4.10",
+            "1.4.18446744073709551615",
+            "1.5.0",
         ] {
             assert!(is_supported(value), "{value}");
         }
-        for value in ["0.99.2", "1.0.999", "1.4.1", "1.10.0", "2.0.0"] {
+        for value in ["0.99.2", "1.1.0", "1.2.999", "1.5.1", "1.10.0", "2.0.0"] {
             assert!(!is_supported(value), "{value}");
         }
     }
@@ -89,29 +115,30 @@ mod tests {
         for value in [
             "",
             "1",
-            "1.1",
-            "1.1.0.0",
-            "01.1.0",
-            "1.01.0",
-            "1.1.00",
-            "+1.1.0",
-            "1.1.+0",
-            "1.1.-1",
-            "v1.1.0",
-            " 1.1.0",
-            "1.1.0\n",
-            "1.1.0\0",
-            "1.1.0-rc.1",
-            "1.2.0+build",
-            "1.1.18446744073709551616",
-            "１.1.0",
+            "1.3",
+            "1.3.0.0",
+            "01.3.0",
+            "1.03.0",
+            "1.3.00",
+            "+1.3.0",
+            "1.3.+0",
+            "1.3.-1",
+            "v1.3.0",
+            " 1.3.0",
+            "1.3.0\n",
+            "1.3.0\0",
+            "1.3.0-rc.1",
+            "1.5.0+build",
+            "1.3.18446744073709551616",
+            "１.3.0",
             crate::PI_VERSION_REQUIREMENT,
             ">=1.1.0, <=1.2.0",
             ">=1.1.0, <=1.3.0",
+            ">=1.1.0, <=1.4.0",
         ] {
             assert!(!is_supported(value), "{value:?}");
         }
-        assert!(!is_supported(&format!("1.1.{}", "9".repeat(100_000))));
+        assert!(!is_supported(&format!("1.3.{}", "9".repeat(100_000))));
     }
 
     #[cfg(feature = "subprocess")]
@@ -119,15 +146,14 @@ mod tests {
     fn default_range_and_exact_locks_admit_supported_releases() {
         let range = Expectation::new(crate::PI_VERSION_REQUIREMENT).unwrap();
         for version in [
-            "1.1.0", "1.1.1", "1.1.10", "1.2.0", "1.2.1", "1.2.10", "1.3.0", "1.3.1", "1.3.10",
-            "1.4.0",
+            "1.3.0", "1.3.1", "1.3.10", "1.4.0", "1.4.1", "1.4.10", "1.5.0",
         ] {
             assert!(range.matches(version));
             let exact = Expectation::new(version).unwrap();
             assert!(exact.matches(version));
-            assert!(!exact.matches("1.1.9"));
+            assert!(!exact.matches("1.3.9"));
         }
-        for version in ["1.0.4", "1.4.1", "1.4.0-rc.1", "1.4.0+build"] {
+        for version in ["1.2.10", "1.5.1", "1.5.0-rc.1", "1.5.0+build"] {
             assert!(!range.matches(version));
             assert!(Expectation::new(version).is_err());
         }
@@ -136,49 +162,47 @@ mod tests {
     #[cfg(feature = "subprocess")]
     #[test]
     fn exact_lock_patch_prefix_collisions_are_rejected() {
-        let shorter = "1.3.1";
-        let longer = "1.3.10";
-        // Negative controls: these vectors expose both incorrect directions
-        // of prefix matching while remaining supported concrete releases.
-        assert!(longer.starts_with(shorter));
-        assert!(!shorter.starts_with(longer));
-        for (expected, actual) in [(shorter, longer), (longer, shorter)] {
-            assert!(is_supported(expected));
-            assert!(is_supported(actual));
-            let exact = Expectation::new(expected).unwrap();
-            assert!(exact.matches(expected), "expected={expected}");
-            assert!(
-                !exact.matches(actual),
-                "expected={expected} actual={actual}"
-            );
+        for (shorter, longer) in [("1.3.1", "1.3.10"), ("1.4.1", "1.4.10")] {
+            assert!(longer.starts_with(shorter));
+            assert!(!shorter.starts_with(longer));
+            for (expected, actual) in [(shorter, longer), (longer, shorter)] {
+                assert!(is_supported(expected));
+                assert!(is_supported(actual));
+                let exact = Expectation::new(expected).unwrap();
+                assert!(exact.matches(expected));
+                assert!(
+                    !exact.matches(actual),
+                    "expected={expected} actual={actual}"
+                );
+            }
         }
     }
 
     #[cfg(feature = "subprocess")]
     #[test]
     fn legacy_ranges_keep_their_original_upper_bounds() {
-        let through_1_2 = Expectation::new(">=1.1.0, <=1.2.0").unwrap();
+        assert!(Expectation::new(">=1.1.0, <=1.2.0").is_err());
         let through_1_3 = Expectation::new(">=1.1.0, <=1.3.0").unwrap();
-        for (actual, admitted_1_2, admitted_1_3) in [
+        let through_1_4 = Expectation::new(">=1.1.0, <=1.4.0").unwrap();
+        for (actual, admitted_1_3, admitted_1_4) in [
             ("1.0.999", false, false),
-            ("1.1.0", true, true),
-            ("1.1.10", true, true),
-            ("1.2.0", true, true),
-            ("1.2.1", false, true),
-            ("1.2.10", false, true),
-            ("1.3.0", false, true),
-            ("1.3.1", false, false),
-            ("1.3.10", false, false),
-            ("1.4.0", false, false),
+            ("1.1.0", false, false),
+            ("1.2.10", false, false),
+            ("1.3.0", true, true),
+            ("1.3.1", false, true),
+            ("1.3.10", false, true),
+            ("1.4.0", false, true),
             ("1.4.1", false, false),
+            ("1.4.10", false, false),
+            ("1.5.0", false, false),
             ("1.10.0", false, false),
             ("1.3.0-rc.1", false, false),
             ("1.3.0+build", false, false),
             (" 1.3.0", false, false),
             ("1.3.0\n", false, false),
         ] {
-            assert_eq!(through_1_2.matches(actual), admitted_1_2, "{actual}");
             assert_eq!(through_1_3.matches(actual), admitted_1_3, "{actual}");
+            assert_eq!(through_1_4.matches(actual), admitted_1_4, "{actual}");
         }
     }
 
@@ -187,12 +211,12 @@ mod tests {
     fn other_constraint_expressions_are_rejected() {
         for expression in [
             "*",
-            "^1.1.0",
-            ">=1.1.0",
-            ">=1.1.0,<=1.2.0",
+            "^1.3.0",
+            ">=1.3.0",
             ">=1.1.0,<=1.3.0",
             ">=1.1.0,<=1.4.0",
-            ">=1.2.0, <=1.4.0",
+            ">=1.3.0,<=1.5.0",
+            ">=1.2.0, <=1.5.0",
             "",
         ] {
             assert!(Expectation::new(expression).is_err(), "{expression}");

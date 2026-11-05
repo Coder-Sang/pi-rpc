@@ -12,7 +12,7 @@ Describe the problem and the behavior you need, using synthetic examples without
 
 ### Proposed behavior
 
-Describe the API or documentation change, relevant Pi versions, enabled features and expected lifecycle/capacity behavior. Note any effect on Rust 1.88 or existing public APIs.
+Describe the API or documentation change, relevant Pi versions, enabled features and expected lifecycle/capacity behavior. Note any effect on Rust 1.88 or the documented protocol API and feature contracts.
 
 ### Alternatives
 
