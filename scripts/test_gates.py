@@ -186,7 +186,7 @@ source "$0"
                 'printf \'%s\\0\' protocol-matrix "$@" >> "$PI_RPC_GATE_LOG"\n'
                 'printf \'\\n\' >> "$PI_RPC_GATE_LOG"\n'
                 'printf \'%s\\0\' selected-shell "$PI_RPC_TEST_BASH" >> "$PI_RPC_GATE_LOG"\n'
-                'printf \'\\n\' >> "$PI_RPC_GATE_LOG"\n', encoding="utf-8")
+                'printf \'\\n\' >> "$PI_RPC_GATE_LOG"\n', encoding="utf-8", newline="\n")
             log = root / "commands"
             environment = os.environ.copy()
             environment["PI_RPC_GATE_LOG"] = log.as_posix()
@@ -218,6 +218,77 @@ source "$0"
 
 
 class ShellSelection(unittest.TestCase):
+    @staticmethod
+    def windows_text_writer(writer):
+        def write(path, data, encoding=None, errors=None, newline=None):
+            return writer(path, data, encoding=encoding, errors=errors,
+                          newline="\r\n" if newline is None else newline)
+        return write
+
+    def assert_lf_shell_scripts(self, command, name):
+        entrypoint = Path(command[-1])
+        self.assertEqual(entrypoint.name, name)
+        self.assertNotEqual(entrypoint.parent.resolve(), (ROOT / "scripts").resolve())
+        scripts = sorted(entrypoint.parent.glob("*.sh"))
+        self.assertEqual({script.name for script in scripts}, {name, "verify-protocols.sh"})
+        for script in scripts:
+            data = script.read_bytes()
+            self.assertIn(b"\n", data)
+            self.assertNotIn(b"\r", data, f"CRLF in temporary Shell script: {script.name}")
+            self.assertTrue(data.endswith(b"\n"))
+        return [script.name for script in scripts]
+
+    def test_temporary_shell_scripts_keep_lf_under_windows_text_translation(self):
+        write_text = Path.write_text
+        run = subprocess.run
+        gates = FeatureGates()
+        for name, clippy in [("verify.sh", True), ("verify-msrv.sh", False)]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as work:
+                observed = []
+
+                def checked_launch(command, *arguments, **options):
+                    observed.extend(self.assert_lf_shell_scripts(command, name))
+                    return run(command, *arguments, **options)
+
+                with patch.object(Path, "write_text", self.windows_text_writer(write_text)):
+                    control = Path(work) / "platform-default.txt"
+                    control.write_text("first\nsecond\n", encoding="utf-8")
+                    self.assertEqual(control.read_bytes(), b"first\r\nsecond\r\n",
+                                     "Windows text translation control was inactive")
+                    with patch("subprocess.run", checked_launch):
+                        result, calls = gates.run_entrypoint(name)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                gates.assert_entrypoint(calls, clippy)
+                self.assertEqual(set(observed), {name, "verify-protocols.sh"})
+
+    def test_crlf_corruption_is_rejected_before_shell_execution(self):
+        gates = FeatureGates()
+        for name, clippy in [("verify.sh", True), ("verify-msrv.sh", False)]:
+            with self.subTest(name=name):
+                result, calls = gates.run_entrypoint(name)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                gates.assert_entrypoint(calls, clippy)
+                corrupted = []
+
+                def corrupt_and_check(command, *arguments, **options):
+                    entrypoint = Path(command[-1])
+                    self.assertNotEqual(entrypoint.parent.resolve(), (ROOT / "scripts").resolve())
+                    stub = entrypoint.parent / "verify-protocols.sh"
+                    data = stub.read_bytes()
+                    self.assertNotIn(b"\r", data)
+                    stub.write_bytes(data.replace(b"\n", b"\r\n"))
+                    self.assertIn(b"\r\n", stub.read_bytes())
+                    corrupted.append(stub.name)
+                    # Reject bytes before launch even if an interpreter is
+                    # configured to tolerate CRLF or would exit successfully.
+                    self.assert_lf_shell_scripts(command, name)
+                    self.fail("CRLF fixture was accepted")
+
+                with patch("subprocess.run", corrupt_and_check), \
+                     self.assertRaisesRegex(AssertionError, "CRLF in temporary Shell script"):
+                    gates.run_entrypoint(name)
+                self.assertEqual(corrupted, ["verify-protocols.sh"])
+
     def test_selector_rejects_missing_relative_and_unusable_paths(self):
         with tempfile.TemporaryDirectory() as work:
             for value in (None, "", "bash", "relative/bash.exe", str(Path(work) / "missing"), work):

@@ -8,6 +8,8 @@ The 0.3 series is unpublished development. Each candidate requires local gates a
 
 Verification entrypoints now pass their absolute native Bash path through the verification-only PI_RPC_TEST_BASH selector, avoiding Git Bash/WSL name collisions. Shell-selection, Windows path-conversion and later Pi13-row failure controls are included on both toolchains; MSRV still needs no Clippy or rustfmt component. The Windows observer probe checks cfg selection, and the WSL fixture checks executable selection; neither establishes native Windows runtime acceptance.
 
+Temporary Shell fixtures explicitly preserve LF under Windows text-write translation. Byte-level controls verify that default writes become CRLF while the actual fixtures stay LF; deliberately corrupted scripts fail before execution. These controls run with both entrypoint observers on stable and exact 1.88.0 and remain separate from native Windows CI results.
+
 The historical documentation baseline `cbb7f6ea3ccb8e329d339b7534c55324d1e8a170` passed [six jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40729102276), with matching artifacts. This historical 0.2.3 development evidence includes Windows/exact 1.88.0 but does not validate the new generic API or Pi 1.5.0. Earlier declared-startup baseline `b86883d05809d2e23575f654be700d72fb95c2d9` passed [its six jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/40656324472). No 0.2.3 was published.
 
 Follow [CONTRIBUTING](../CONTRIBUTING.md) and [release gates](publishing.md#final-verification-before-upload) for new results; a changed candidate requires its own evidence.
