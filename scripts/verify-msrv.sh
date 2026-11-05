@@ -12,6 +12,7 @@ case "$version" in
   "rustc 1.88.0 "*) ;;
   *) echo "Expected exactly rustc 1.88.0, got: $version" >&2; exit 1 ;;
 esac
+"$python_command" scripts/test_gates.py FeatureGates.test_windows_observer_follows_enabled_protocols
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;

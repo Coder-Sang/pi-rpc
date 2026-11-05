@@ -1,7 +1,9 @@
 //! Read-only RPC acceptance against a caller-supplied, isolated Pi executable.
-use pi_rpc::{
-    AutoProcess, Error, PI_VERSION, PiClient, PiEvents, PiProcess, PiProtocol, ProcessOptions,
-};
+#[cfg(any(test, feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
+use pi_rpc::Error;
+#[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
+use pi_rpc::{AutoProcess, PiClient, PiEvents, PiProcess, PiProtocol};
+use pi_rpc::{PI_VERSION, ProcessOptions};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> pi_rpc::Result<()> {
@@ -60,6 +62,7 @@ async fn run(mut args: impl Iterator<Item = std::ffi::OsString>) -> pi_rpc::Resu
         _ => Err(pi_rpc::Error::Version),
     }
 }
+#[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
 async fn accept<P: PiProtocol>(
     client: PiClient<P>,
     mut events: PiEvents<P>,

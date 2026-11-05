@@ -285,12 +285,15 @@ mod tests {
 #[cfg(test)]
 mod exit_tests {
     use super::*;
+    #[cfg(feature = "pi_1_4")]
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
 
+    #[cfg(feature = "pi_1_4")]
     struct AlwaysReady(Arc<AtomicUsize>);
+    #[cfg(feature = "pi_1_4")]
     impl AsyncRead for AlwaysReady {
         fn poll_read(
             self: Pin<&mut Self>,

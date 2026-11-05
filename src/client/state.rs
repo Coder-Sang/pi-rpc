@@ -163,11 +163,11 @@ impl Shared {
             .clone()
             .unwrap_or(Error::Closed)
     }
-    #[cfg(test)]
+    #[cfg(all(test, feature = "pi_1_4"))]
     pub(super) fn pending_count(&self) -> usize {
         self.state.lock().unwrap().pending.len()
     }
-    #[cfg(test)]
+    #[cfg(all(test, feature = "pi_1_4"))]
     pub(super) fn assert_unlocked(&self) {
         drop(
             self.state

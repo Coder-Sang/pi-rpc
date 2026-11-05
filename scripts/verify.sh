@@ -6,9 +6,8 @@ python_command=python3
 if ! command -v "$python_command" >/dev/null 2>&1; then
   python_command=python
 fi
-# cargo fmt does not resolve dependencies and does not accept --locked.
-cargo fmt --check
-rustfmt --edition 2024 --check tests/fixtures/fake_pi.rs tests/fixtures/acceptance_probe.rs
+"$python_command" scripts/check-format.py
+"$python_command" scripts/test_gates.py
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
@@ -39,4 +38,4 @@ fi
 cargo run --locked --example local -- "$fake"
 cargo run --locked --example local --all-features -- "$fake"
 
-bash scripts/verify-protocols.sh
+bash scripts/verify-protocols.sh --clippy

@@ -2,6 +2,11 @@
 
 ## 0.3.0 — Unreleased
 
+### Fixed
+
+- Align test/example helper feature conditions and check all 32 protocol/subprocess/session_file combinations with all targets, including strict stable Clippy without Pi14. Preserve profile-free codec/native-file coverage.
+- Check formatting of macro include! sources and standalone fixtures explicitly, with negative controls that catch files Cargo formatting does not discover. Verify feature-matrix selection and fail-fast behavior without running Pi.
+
 ### Added
 
 - Sealed `PiProtocol` with Pi13/Pi14/Pi15 implementations, independent per-minor Event/KnownEvent/AssistantEvent types, typed client/events/owners, and additive `pi_1_3`, `pi_1_4`, `pi_1_5` features.

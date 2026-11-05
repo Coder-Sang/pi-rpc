@@ -30,6 +30,7 @@ REQUIRED_FILES = {
     "docs/migration-0.3.md", "src/protocol/profile.rs", "src/protocol/event_types.rs",
     "src/client/auto.rs", "src/subprocess/auto.rs", "scripts/check-protocol-types.py",
     "scripts/verify-protocols.sh", "tests/versioned.rs", "tests/versioned/process.rs",
+    "scripts/check-format.py", "scripts/test_gates.py",
     "tests/support/fake_process.rs", "tests/support/protocol_fixtures.rs",
 }
 PROTOCOL_FEATURES = {

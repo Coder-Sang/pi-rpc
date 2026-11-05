@@ -6,7 +6,10 @@ use pi_rpc::{PiClient, PiEvents, PiProcess, PiProtocol};
 use std::time::Duration;
 #[path = "../support/fake_process.rs"]
 mod fake_process;
-#[cfg(windows)]
+#[cfg(all(
+    windows,
+    any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5")
+))]
 #[path = "../support/windows_process.rs"]
 mod windows_process;
 

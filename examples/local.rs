@@ -1,4 +1,6 @@
-use pi_rpc::{AutoProcess, PiClient, PiEvents, PiProcess, PiProtocol, ProcessOptions};
+use pi_rpc::ProcessOptions;
+#[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
+use pi_rpc::{AutoProcess, PiClient, PiEvents, PiProcess, PiProtocol};
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> pi_rpc::Result<()> {
     let process = pi_rpc::subprocess::spawn_auto(ProcessOptions {
@@ -32,6 +34,7 @@ async fn main() -> pi_rpc::Result<()> {
         _ => Err(pi_rpc::Error::Version),
     }
 }
+#[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
 async fn run<P: PiProtocol>(
     client: PiClient<P>,
     mut events: PiEvents<P>,

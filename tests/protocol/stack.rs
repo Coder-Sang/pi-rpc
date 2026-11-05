@@ -30,7 +30,18 @@ fn boundary_parse_convert_clone_serialize_and_drop_on_two_mib_stack() {
         return;
     }
     let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", STACK_TEST, "--nocapture"]).env(CHILD, "1").output().unwrap();
-    assert!(output.status.success(), "stack child failed:\n{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-    assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"), "stack filter executed no test");
+        .args(["--exact", STACK_TEST, "--nocapture"])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "stack child failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+        "stack filter executed no test"
+    );
 }
