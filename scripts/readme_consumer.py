@@ -9,17 +9,21 @@ from validation_checks import require
 
 
 def toml_dependencies(dependencies):
+    def scalar(item):
+        # TOML forbids raw DEL; keep non-BMP scalars out of JSON surrogate pairs.
+        return json.dumps(item, ensure_ascii=False).replace("\x7f", "\\u007f")
+
     def value(item):
         if isinstance(item, dict):
-            return "{ " + ", ".join(json.dumps(key, ensure_ascii=False) + " = " + value(entry)
+            return "{ " + ", ".join(scalar(key) + " = " + value(entry)
                                      for key, entry in item.items()) + " }"
         if isinstance(item, list):
             return "[" + ", ".join(value(entry) for entry in item) + "]"
         require(isinstance(item, (str, bool)), "unsupported README dependency value")
-        return json.dumps(item, ensure_ascii=False)
+        return scalar(item)
 
     return "[dependencies]\n" + "".join(
-        json.dumps(name, ensure_ascii=False) + " = " + value(specification) + "\n"
+        scalar(name) + " = " + value(specification) + "\n"
         for name, specification in dependencies.items())
 
 

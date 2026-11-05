@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Escape DEL in generated TOML keys and values while preserving non-BMP Unicode, including redirected SDK and other dependency paths. Add renderer and complete README-manifest round-trip regressions.
 - Check matching and mismatching README version strings without promoting them to dependency tables. An in-memory override control proves that the regression rejects a silently replaced string constraint.
 - Build README caller-test variants from parsed TOML dependencies, accepting path, version-string, version-table and equivalent formatting. Preserve dependency options and the existing cfg/body/feature/version negative controls for every spelling.
 - Keep caller feature gates out of the copyable README example. Gate its Rustdoc inclusion in the library, compile an ordinary caller with no local features, and reject restored gates, unchecked example bodies and mismatched dependency features/versions. Packaged consumption checks the archived README separately.

@@ -52,12 +52,30 @@ class ReadmeConsumerChecks(unittest.TestCase):
     def test_dependency_renderer_round_trips_toml_values(self):
         dependencies = {
             "vendor.sdk": {"version": "1", "default-features": False, "optional": True,
-                           "features": ["quotes\"", "backslash\\", "line\nfeed", "中文"]},
+                           "features": ["quotes\"", "backslash\\", "line\nfeed", "中文", "\x7f", "literal\\u007f",
+                                        "\U00010000", "\U0001f680", "\U0010ffff"]},
+            "key\x7f\U0001f680": {"nested\x7f\U00010000": "value\x7f\U0010ffff"},
             "tokio": "1",
         }
-        self.assertEqual(tomllib.loads(toml_dependencies(dependencies)), {"dependencies": dependencies})
+        rendered = toml_dependencies(dependencies)
+        self.assertNotIn("\x7f", rendered)
+        self.assertEqual(tomllib.loads(rendered), {"dependencies": dependencies})
         with self.assertRaisesRegex(CheckError, "unsupported README dependency value"):
             toml_dependencies({"pi-rpc": {"version": 3}})
+
+    def test_readme_manifest_escapes_del_and_non_bmp_paths(self):
+        readme = ('```toml\n[dependencies]\npi-rpc = "0.3.0"\n'
+                  'helper = { path = "vendor\\u007f\\U0001F680" }\n```\n'
+                  '```rust,no_run\nasync fn inspect_session() {}\n```\n')
+        package_root = ROOT / "SDK \x7f\U0001f680"
+        sources = readme_consumer_sources(readme, package_root, "0.3.0")
+        manifest = tomllib.loads(sources["Cargo.toml"])
+        self.assertNotIn("features", manifest)
+        self.assertNotIn("\x7f", sources["Cargo.toml"])
+        self.assertEqual(manifest["dependencies"], {
+            "pi-rpc": {"version": "0.3.0", "path": package_root.resolve().as_posix()},
+            "helper": {"path": "vendor\x7f\U0001f680"},
+        })
 
 
 class DocumentChecks(unittest.TestCase):
