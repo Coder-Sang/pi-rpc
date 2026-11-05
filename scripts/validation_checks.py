@@ -31,6 +31,7 @@ REQUIRED_FILES = {
     "src/client/auto.rs", "src/subprocess/auto.rs", "scripts/check-protocol-types.py",
     "scripts/verify-protocols.sh", "tests/versioned.rs", "tests/versioned/process.rs",
     "scripts/check-format.py", "scripts/test_gates.py",
+    "scripts/readme_consumer.py", "scripts/test_readme.py",
     "tests/support/fake_process.rs", "tests/support/protocol_fixtures.rs",
 }
 PROTOCOL_FEATURES = {

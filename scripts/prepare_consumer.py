@@ -9,6 +9,7 @@ import tarfile
 import tomllib
 
 sys.dont_write_bytecode = True
+from readme_consumer import readme_consumer_sources
 from validation_checks import CheckError, check_package_contents, read_archive, require
 
 
@@ -60,6 +61,7 @@ def prepare_consumer(source_root, destination, archive=None):
     destination = destination.resolve(strict=True)
     require(destination.is_dir() and not any(destination.iterdir()), "consumer destination must be empty")
     extracted = destination / "package" / prefix
+    readme_sources = readme_consumer_sources(files["README.md"].decode("utf-8"), extracted, package["version"])
     for name, data in files.items():
         path = extracted / name
         require(path.resolve().is_relative_to(extracted.resolve()), f"unsafe extraction path: {name}")
@@ -101,6 +103,12 @@ required-features = ["session_file"]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(files[source])
     require(not (consumer / "Cargo.lock").exists(), "consumer must start without the SDK lockfile")
+    for name, content in readme_sources.items():
+        path = destination / "readme-consumer" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8", newline="\n")
+    require(not (destination / "readme-consumer/Cargo.lock").exists(),
+            "README consumer must start without the SDK lockfile")
     print(f"PASS verified archive={archive}: {counts[0]} files, commit={commit}; fresh consumer pi-rpc {package['version']}",
           file=sys.stderr, flush=True)
     return target / "independent-consumer"

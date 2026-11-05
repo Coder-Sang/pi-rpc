@@ -47,6 +47,8 @@ For an explicitly local uncommitted development check, use a byte-identical temp
 
 Consumers validate clean VCS identity, metadata, notices, links and every archived source byte, then extract that exact snapshot into a fresh directory and resolve their own lockfiles. They compile/run public-path tests and in-memory examples under all four feature configurations; both session configurations run the native-session example. No Pi process is executed.
 
+A separate README caller uses the archived dependency/example blocks without a local feature table. It resolves its own lockfile and compiles an unconditional reference to the documented function. It does not run that function or Pi. Keep this check alongside the forwarded-feature consumer so library-local feature names cannot hide broken caller examples.
+
 ## Inspect evidence and upload
 
 The [candidate procedure](verification.md#candidate-evidence) records actual commit, compiler and archive identity outside packaged source. Confirm all six Linux/macOS/Windows × stable/1.88.0 jobs succeeded for that same commit and inspect their corresponding `release-evidence-*` artifacts. Preserve the selected upload platform's evidence before CI artifact expiry; archive digests may differ by Cargo/platform.

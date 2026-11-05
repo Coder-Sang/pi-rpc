@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 sys.dont_write_bytecode = True
+from readme_consumer import check_readme_rustdoc
 from validation_checks import CheckError, check_rustdoc, read_root
 from prepare_consumer import cargo_package_location
 
@@ -22,7 +23,9 @@ def main():
             _, target = cargo_package_location(root)
             doc_root = target / "doc"
         pages, links = check_rustdoc(doc_root, files)
-        print(f"PASS generated rustdoc: {pages} reachable crate pages, {links} local/repository links")
+        example = check_readme_rustdoc(doc_root)
+        print(f"PASS generated rustdoc: {pages} reachable crate pages, {links} local/repository links; "
+              f"README example={'included' if example else 'linked, unavailable in this configuration'}")
     except (CheckError, OSError, UnicodeError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"FAIL: {error}\n")
 

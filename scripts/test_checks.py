@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
+from readme_consumer import check_readme_rustdoc
 from validation_checks import CheckError, PACKAGE_METADATA, PROTOCOL_FEATURES, REQUIRED_FILES, check_protocol_features, check_documents, check_package, check_rustdoc, read_archive, release_evidence, unwanted_package_file
 from prepare_consumer import prepare_consumer
 
@@ -101,6 +102,25 @@ class DocumentChecks(unittest.TestCase):
 
 
 class RustdocChecks(unittest.TestCase):
+    def test_readme_example_tracks_available_reexports(self):
+        for process, pi15 in [(False, False), (True, False), (False, True), (True, True)]:
+            with self.subTest(process=process, pi15=pi15):
+                exports = ('<a id="reexport.PiProcess"></a>' if process else '') + (
+                    '<a id="reexport.Pi15"></a>' if pi15 else '')
+                example = '<pre><code>async fn inspect_session() {}</code></pre>'
+                self.index.write_text(exports + (example if process and pi15 else ''), encoding="utf-8")
+                self.assertEqual(check_readme_rustdoc(self.root), process and pi15)
+                self.index.write_text(exports + ('' if process and pi15 else example), encoding="utf-8")
+                with self.assertRaisesRegex(CheckError, "available Pi15/process APIs"):
+                    check_readme_rustdoc(self.root)
+
+    def test_readme_example_rejects_caller_feature_gate(self):
+        self.index.write_text('<a id="reexport.PiProcess"></a><a id="reexport.Pi15"></a>'
+                              '<pre><code>#[cfg(all(feature = &quot;subprocess&quot;, feature = &quot;pi_1_5&quot;))]\n'
+                              'async fn inspect_session() {}</code></pre>', encoding="utf-8")
+        with self.assertRaisesRegex(CheckError, "caller feature gates"):
+            check_readme_rustdoc(self.root)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR"))
         self.addCleanup(self.temp.cleanup)
@@ -248,7 +268,9 @@ class PackageChecks(unittest.TestCase):
         self.files.update({"Cargo.toml": manifest, "Cargo.toml.orig": manifest,
                            ".gitignore": (ROOT / ".gitignore").read_bytes(),
                            "LICENSE": (ROOT / "LICENSE").read_bytes(),
-                           "README.md": b"[license](LICENSE)\n[docs](docs/compatibility.md#scope)\n",
+                           "README.md": b'[license](LICENSE)\n[docs](docs/compatibility.md#scope)\n'
+                                        b'```toml\n[dependencies]\npi-rpc = "0.2.0"\ntokio = "1"\n```\n'
+                                        b'```rust,no_run\nasync fn inspect_session() {}\n```\n',
                            "docs/compatibility.md": b"# Scope\n",
                            ".cargo_vcs_info.json": json.dumps({"git": {"sha1": "expected"}}).encode()})
         notice = (ROOT / "THIRD_PARTY_NOTICES.md").read_bytes().partition(b"```text\n")[2].partition(b"\n```")[0]
@@ -535,6 +557,15 @@ class PackageChecks(unittest.TestCase):
                 self.assertEqual(generated["package"]["rust-version"], "1.88")
                 self.assertEqual(Path(dependency["path"]), (destination / "package/pi-rpc-0.2.0").resolve())
                 self.assertFalse((destination / "consumer/Cargo.lock").exists())
+                readme = destination / "readme-consumer"
+                manifest = tomllib.loads((readme / "Cargo.toml").read_text(encoding="utf-8"))
+                self.assertNotIn("features", manifest)
+                self.assertEqual(manifest["dependencies"]["pi-rpc"]["path"], dependency["path"])
+                self.assertEqual(manifest["dependencies"]["pi-rpc"]["version"], "0.2.0")
+                self.assertNotIn("default-features", manifest["dependencies"]["pi-rpc"])
+                self.assertIn("fn main() { let _ = inspect_session; }",
+                              (readme / "src/main.rs").read_text(encoding="utf-8"))
+                self.assertFalse((readme / "Cargo.lock").exists())
 
     def test_consumer_explicit_archive_ignores_old_extracted_directory(self):
         root = self.consumer_source_root()
@@ -548,6 +579,17 @@ class PackageChecks(unittest.TestCase):
         self.prepare_fixture_consumer(root, target, destination, self.archive)
         self.assertEqual((destination / "package/pi-rpc-0.2.0/src/lib.rs").read_bytes(), self.files["src/lib.rs"])
         self.assertEqual(stale.read_bytes(), b"stale source")
+
+    def test_consumer_rejects_missing_readme_example_before_extraction(self):
+        self.files["README.md"] = self.files["README.md"].replace(
+            b'```rust,no_run\nasync fn inspect_session() {}\n```\n', b'')
+        root = self.consumer_source_root()
+        self.write_archive()
+        destination = Path(self.temp.name) / "consumer"
+        destination.mkdir()
+        with self.assertRaisesRegex(CheckError, "one rust,no_run example"):
+            self.prepare_fixture_consumer(root, Path(self.temp.name), destination, self.archive)
+        self.assertEqual(list(destination.iterdir()), [])
 
     def test_consumer_rejects_stale_commit_dirty_package_and_wrong_version(self):
         root = self.consumer_source_root()

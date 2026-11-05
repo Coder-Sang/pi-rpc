@@ -37,3 +37,9 @@ for configuration in default all none session_only; do
     cargo run --locked --manifest-path "$manifest" ${flags[@]+"${flags[@]}"} --example native_session
   fi
 done
+# Check the archived README as an ordinary caller, with no local feature table.
+# The generated main only references inspect_session; never execute its Pi call.
+manifest="$work_native/readme-consumer/Cargo.toml"
+echo "Packaged README consumer: no local features (compile only)"
+cargo generate-lockfile --manifest-path "$manifest"
+cargo check --locked --manifest-path "$manifest"

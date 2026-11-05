@@ -1,5 +1,12 @@
 //! Async, bounded Pi 1.3.0–1.5.0 RPC with statically versioned events.
-#![doc = include_str!("../README.md")]
+//!
+//! See the [README](https://github.com/Coder-Sang/pi-rpc/blob/main/README.md)
+//! for the default-feature local-process example. It is included below when
+//! `subprocess` and `pi_1_5` are enabled; other builds document their enabled APIs.
+#![cfg_attr(
+    all(feature = "subprocess", feature = "pi_1_5"),
+    doc = include_str!("../README.md")
+)]
 #![forbid(unsafe_code)]
 pub mod client;
 pub mod codec;

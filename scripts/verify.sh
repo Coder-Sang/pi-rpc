@@ -17,6 +17,7 @@ if ! command -v "$python_command" >/dev/null 2>&1; then
 fi
 "$python_command" scripts/check-format.py
 "$python_command" scripts/test_gates.py
+"$python_command" scripts/test_readme.py
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
@@ -28,6 +29,11 @@ for configuration in default all none session_only; do
   cargo test --locked ${flags[@]+"${flags[@]}"}
   cargo clippy --locked ${flags[@]+"${flags[@]}"} --all-targets -- -D warnings
   RUSTDOCFLAGS='-D warnings' cargo doc --locked ${flags[@]+"${flags[@]}"} --no-deps
+  "$python_command" scripts/check-rustdoc.py
+done
+for features in subprocess,pi_1_4 pi_1_5; do
+  cargo test --locked --no-default-features --features "$features" --doc
+  RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-default-features --features "$features" --no-deps
   "$python_command" scripts/check-rustdoc.py
 done
 cargo run --locked --example injected --no-default-features --features pi_1_4

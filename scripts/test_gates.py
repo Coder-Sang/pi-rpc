@@ -166,14 +166,17 @@ source "$0" "$@"
                     else:
                         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def run_entrypoint(self, name):
+    def run_entrypoint(self, name, fail_readme=False):
         wrapper = r'''
 record() {
   printf '%s\0' "$@" >> "$PI_RPC_GATE_LOG"
   printf '\n' >> "$PI_RPC_GATE_LOG"
 }
 cargo() { record cargo "$@"; }
-python3() { record python3 "$@"; }
+python3() {
+  record python3 "$@"
+  if [ "${1-}" = scripts/test_readme.py ] && [ "$PI_RPC_FAIL_README" = 1 ]; then return 23; fi
+}
 rustc() { record rustc "$@"; printf 'rustc 1.88.0 (command observer)\n'; }
 source "$0"
 '''
@@ -190,12 +193,19 @@ source "$0"
             log = root / "commands"
             environment = os.environ.copy()
             environment["PI_RPC_GATE_LOG"] = log.as_posix()
+            environment["PI_RPC_FAIL_README"] = "1" if fail_readme else "0"
             result = subprocess.run([verification_bash(environment), "-c", wrapper, script.as_posix()],
                                     env=environment, capture_output=True, encoding="utf-8", errors="replace")
             calls = [line.decode().split("\0")[:-1] for line in log.read_bytes().splitlines()] if log.exists() else []
         return result, calls
 
     def assert_entrypoint(self, calls, clippy):
+        self.assertIn(["python3", "scripts/test_readme.py"], calls)
+        cargo = ["cargo", *([] if clippy else ["+1.88.0"])]
+        for features in ["subprocess,pi_1_4", "pi_1_5"]:
+            flags = ["--locked", "--no-default-features", "--features", features]
+            self.assertIn([*cargo, "test", *flags, "--doc"], calls)
+            self.assertIn([*cargo, "doc", *flags, "--no-deps"], calls)
         self.assertIn(["protocol-matrix", *(["--clippy"] if clippy else [])], calls)
         selected = [call[1] for call in calls if call[0] == "selected-shell"]
         self.assertEqual(len(selected), 1)
@@ -207,6 +217,7 @@ source "$0"
             self.assertIn(["python3", "scripts/test_gates.py",
                            "FeatureGates.test_windows_observer_follows_enabled_protocols",
                            "FeatureGates.test_later_pi13_failures_stop_after_successful_prefix",
+                           "FeatureGates.test_readme_failure_stops_both_entrypoints",
                            "ShellSelection"], calls)
 
     def test_stable_and_msrv_entrypoints_keep_the_required_checks(self):
@@ -215,6 +226,17 @@ source "$0"
                 result, calls = self.run_entrypoint(name)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assert_entrypoint(calls, clippy)
+
+    def test_readme_failure_stops_both_entrypoints(self):
+        for name, clippy in [("verify.sh", True), ("verify-msrv.sh", False)]:
+            with self.subTest(name=name):
+                positive, complete = self.run_entrypoint(name)
+                self.assertEqual(positive.returncode, 0, positive.stdout + positive.stderr)
+                self.assert_entrypoint(complete, clippy)
+                stop = complete.index(["python3", "scripts/test_readme.py"])
+                result, calls = self.run_entrypoint(name, fail_readme=True)
+                self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
+                self.assertEqual(calls, complete[:stop + 1], "verification continued after the README failure")
 
 
 class ShellSelection(unittest.TestCase):

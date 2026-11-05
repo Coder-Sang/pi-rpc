@@ -23,7 +23,9 @@ case "$version" in
 esac
 "$python_command" scripts/test_gates.py \
   FeatureGates.test_windows_observer_follows_enabled_protocols \
-  FeatureGates.test_later_pi13_failures_stop_after_successful_prefix ShellSelection
+  FeatureGates.test_later_pi13_failures_stop_after_successful_prefix \
+  FeatureGates.test_readme_failure_stops_both_entrypoints ShellSelection
+"$python_command" scripts/test_readme.py
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
@@ -34,6 +36,11 @@ for configuration in default all none session_only; do
   cargo +1.88.0 check --locked ${flags[@]+"${flags[@]}"} --all-targets
   cargo +1.88.0 test --locked ${flags[@]+"${flags[@]}"}
   RUSTDOCFLAGS='-D warnings' cargo +1.88.0 doc --locked ${flags[@]+"${flags[@]}"} --no-deps
+  "$python_command" scripts/check-rustdoc.py
+done
+for features in subprocess,pi_1_4 pi_1_5; do
+  cargo +1.88.0 test --locked --no-default-features --features "$features" --doc
+  RUSTDOCFLAGS='-D warnings' cargo +1.88.0 doc --locked --no-default-features --features "$features" --no-deps
   "$python_command" scripts/check-rustdoc.py
 done
 

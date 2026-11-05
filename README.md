@@ -35,10 +35,9 @@ Protocol features are additive. All connections must also satisfy the global 1.3
 
 ## Typed local process
 
-The following examples require the **Git 0.3 API**. Select the protocol explicitly; consume events before submitting commands:
+The following examples require the **Git 0.3 API** and use the dependency's default features. Your application does not need a local `[features]` table. Select the protocol explicitly; consume events before submitting commands:
 
 ```rust,no_run
-#[cfg(all(feature = "subprocess", feature = "pi_1_5"))]
 async fn inspect_session() -> pi_rpc::Result<()> {
     use pi_rpc::{Pi15, PiProcess, ProcessOptions};
     use pi_rpc::protocol::v1_5::{Event, KnownEvent};
