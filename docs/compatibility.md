@@ -26,7 +26,7 @@ RPC types/mode, JSON event transformation, RPC/command/UI/JSON docs, native mess
 - Session-manager fixes persistence rollback and Windows comparisons without changing native-v3 shapes. Incremental tool-argument parsing, auth/summary handling, image encoding choices and extension exec improvements remain Pi-owned behavior.
 - The MIT LICENSE is unchanged (SHA-256 `0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48`). No dependencies or Rust minimum need to change.
 
-Permanent per-profile regressions cover the previously executed 34-check synthetic provider-field probe, fragmented streams and existing schema negatives. Source review and synthetic tests do not establish real Pi 1.5.0, model/provider execution, live Windows Pi behavior or the unpushed 0.3 CI result. The optional manual CI recipe now pins verified 1.5.0 assets and remains disabled on ordinary pushes.
+Permanent per-profile regressions cover the previously executed 34-check synthetic provider-field probe, fragmented streams and existing schema negatives. Source review and local synthetic tests do not establish real Pi 1.5.0, model/provider execution, live Windows Pi behavior or native SDK CI acceptance. Each committed candidate requires its own [CI evidence](verification.md#candidate-evidence). The optional manual CI recipe now pins verified 1.5.0 assets and remains disabled on ordinary pushes.
 
 ## Pi 1.4.0 source review (2026-10-27)
 
