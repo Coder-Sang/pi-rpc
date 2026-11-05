@@ -9,6 +9,7 @@ import sys
 import tempfile
 import tomllib
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 from prepare_consumer import cargo_package_location
@@ -167,15 +168,43 @@ class ReadmeConsumer(unittest.TestCase):
             with self.subTest(form=name):
                 self.record_form(name)
                 self.assert_compiles(readme)
+                _, dependencies = dependency_example(readme)
                 for version, success in [(self.version, True), ("0.2.2", False)]:
                     with self.subTest(version=version):
-                        result = self.check(self.options(readme, {"version": version}))
+                        configured = (dependency_variant(readme, version)
+                                      if isinstance(dependencies["pi-rpc"], str)
+                                      else self.options(readme, {"version": version}))
+                        result = self.check(configured)
                         if success:
                             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                         else:
                             self.assertNotEqual(result.returncode, 0, "documented dependency version was overridden")
                             self.assertIn("failed to select a version", result.stderr)
                             self.assertIn("0.2.2", result.stderr)
+
+    def test_version_string_override_is_detected(self):
+        original = readme_consumer_sources
+
+        def overwrite_string_version(readme, package_root, version):
+            _, dependencies = dependency_example(readme)
+            if isinstance(dependencies["pi-rpc"], str):
+                readme = dependency_variant(readme, version)
+            return original(readme, package_root, version)
+
+        regression = type(self)("test_documented_version_is_honored")
+        regression.forms = lambda: [("version_string", dependency_variant(self.readme, self.version))]
+        regression.record_form = lambda name: None
+        result = unittest.TestResult()
+        with patch(__name__ + ".readme_consumer_sources", overwrite_string_version):
+            regression.run(result)
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.failures), 1, "the version-string regression did not detect the override")
+        failed, traceback = result.failures[0]
+        self.assertIn("form='version_string'", str(failed))
+        self.assertIn("version='0.2.2'", str(failed))
+        self.assertIn("documented dependency version was overridden", traceback)
+        print("README string-version override control: detected", flush=True)
 
 
 if __name__ == "__main__":
