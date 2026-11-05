@@ -52,7 +52,7 @@ fn attach_usage(
 
 Then pass that message to `append_message`. The SDK preserves supplied usage and checks its structure; it does not tokenize content, derive fees, verify usage totals against content, or generate a session-wide total. User messages do not require usage. Independent `EntryData::Usage` records are also supported for operation usage, with `kind`, provider, model and usage fields.
 
-Image content uses native blocks such as `{"type":"image","data":"BASE64_DATA","mimeType":"image/png"}`. The data stays inline in the JSON; the SDK does not resize or load images from a path. Base64 and the surrounding message/envelope count toward byte limits. See [RPC image budgets](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md#bounds-and-backpressure) for transport limits, which are configured separately.
+Image content uses native blocks such as `{"type":"image","data":"BASE64_DATA","mimeType":"image/png"}`. The data stays inline in the JSON; the SDK does not resize or load images from a path. Base64 and the surrounding message/envelope count toward byte limits. See [RPC image budgets](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/connections.md#bounds-and-backpressure) for transport limits, which are configured separately.
 
 ## Limits and memory
 
@@ -78,8 +78,8 @@ Validation checks the v3 header, nonempty IDs/timestamps/cwd, unique entry IDs, 
 
 The supported entries are message, thinking/model changes, usage, compaction, branch summaries, custom/custom-message entries, context edits, labels and session information. Unknown persisted entry types and legacy v1/v2 files are rejected. Extension JSON and custom message roles remain open. Required-but-nullable fields such as `parentId` and context-edit `replacement` distinguish absence from explicit null.
 
-`branch` returns raw root-to-leaf entries. It does not rebuild Pi's compacted model context. Keep active context and native history separate; see [the event guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md#active-context-and-native-history).
+`branch` returns raw root-to-leaf entries. It does not rebuild Pi's compacted model context. Keep active context and native history separate; see [the event guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/events.md#active-context-and-native-history).
 
 ## Informational measurements
 
-The Release examples `session_builder_bench` and `session_validation_bench` report median construction/validation times. They do not impose machine-specific unit-test thresholds or measure process RSS. Run them with `--no-default-features --features session_file`; see [CONTRIBUTING](https://github.com/Coder-Sang/pi-rpc/blob/main/CONTRIBUTING.md) for development requirements.
+The Release examples `session_builder_bench` and `session_validation_bench` report median construction/validation times. They do not impose machine-specific unit-test thresholds or measure process RSS. Run them with `--no-default-features --features session_file`; see [CONTRIBUTING](https://github.com/Coder-Sang/pi-rpc/blob/main/CONTRIBUTING.md) for current development requirements.

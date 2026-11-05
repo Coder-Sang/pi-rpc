@@ -1,6 +1,6 @@
 # Release provenance and package review
 
-The **0.3.0 development** source supports **Pi 1.3.0–1.5.0 / Rust 1.88** with project-authored version profiles, typed clients and auto dispatch. Fixed source archives were compared; see the [1.5 review](compatibility.md#pi-150-source-review-2026-11-04) and retained historical comparisons. All five reviewed releases, 1.1.0 through 1.5.0, have identical MIT license bytes. Only 1.3.0–1.5.0 is admitted by 0.3. Published 0.2.2 retains its original source/API/range. Source review, [candidate verification](verification.md#candidate-evidence) and [real acceptance](verification.md#real-pi-acceptance) are separate evidence.
+The **0.3.0** source supports **Pi 1.3.0–1.5.0 / Rust 1.88** with project-authored version profiles, typed clients and auto dispatch. Fixed source archives were compared; see the [1.5 review](compatibility.md#pi-150-source-review-2026-11-04) and retained historical comparisons. All five reviewed releases, 1.1.0 through 1.5.0, have identical MIT license bytes. Only 1.3.0–1.5.0 is admitted by 0.3. Published 0.2.2 retains its original source/API/range. Source review, [candidate verification](verification.md#candidate-evidence) and [real acceptance](verification.md#real-pi-acceptance) are separate evidence.
 
 ## Material inventory
 

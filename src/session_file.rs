@@ -1,6 +1,6 @@
 //! Pi-native v3 JSONL sessions only. No history RPC, vendor conversion, prompt
 //! injection, filesystem discovery, delivery, or model-context replay is provided.
-//! See the [native-session guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/native-sessions.md)
+//! See the [native-session guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/native-sessions.md)
 //! for JSONL, Usage, limits and memory behavior.
 #![doc = include_str!("../docs/native-sessions.md")]
 use crate::{

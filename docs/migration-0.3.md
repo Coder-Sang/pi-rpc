@@ -1,6 +1,6 @@
 # Migrating from 0.2 to 0.3
 
-0.3.0 is an unpublished development series. Published 0.2.2 and its tags, checksums and acceptance records retain their original contract. This migration raises no Rust requirement: the minimum remains 1.88.
+0.3.0 introduces the versioned protocol API below. Published 0.2.2 and its tags, checksums and acceptance records retain their original contract. This migration raises no Rust requirement: the minimum remains 1.88.
 
 ## Select a protocol type
 
@@ -48,4 +48,4 @@ The global range is **>=1.3.0, <=1.5.0**. Pi13 matches 1.3.x, Pi14 matches 1.4.x
 
 The SDK retains one continuous reader, one serialized writer, the existing command correlation/state machine, bounded exit draining, close deadlines, stack/depth protection, float round trips and admission budgets. Events drain before one terminal error and then None. `terminate()` returns the OS process-exit result; connection/event termination remains `Terminated`.
 
-Native v3 session files remain independent of protocol profiles. Pi 1.5 `Usage.cost.totalFromProvider` stays in `Cost.extra`; `responseModel` stays in `Message.fields`. These values are forwarded unchanged, without calculating or inferring provider cost semantics. See [events](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md), [connections](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/connections.md) and [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/compatibility.md).
+Native v3 session files remain independent of protocol profiles. Pi 1.5 `Usage.cost.totalFromProvider` stays in `Cost.extra`; `responseModel` stays in `Message.fields`. These values are forwarded unchanged, without calculating or inferring provider cost semantics. See [events](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/events.md), [connections](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/connections.md) and [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/compatibility.md).

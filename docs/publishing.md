@@ -1,10 +1,10 @@
 # Public release checklist
 
-This is the reusable maintainer procedure. Current Git source is **0.3.0 development**, while **0.2.2** remains published. Publication observations, uploaded commits, checksums, tags and historical acceptance live in [verification](verification.md); source and license scope live in [provenance](provenance.md). A completed historical checklist does not authorize or validate another upload.
+This reusable maintainer procedure accompanies the **0.3.0** release source. Publication observations are recorded only after registry confirmation, separately from the immutable source being uploaded. See [verification](verification.md) for candidate evidence and historical acceptance, and [provenance](provenance.md) for source and license scope. A completed historical checklist does not authorize or validate another upload.
 
 ## Version and release policy
 
-- Published 0.2.x retains its historical contract. Development 0.3 introduces explicit protocol parameters, nominal per-version events and new default protocol features; see [migration](migration-0.3.md). Rust **1.88** remains the minimum. Further source-breaking changes, including exhaustive-enum additions, require another minor series and migration notes.
+- Published 0.2.x retains its historical contract. Version 0.3 introduces explicit protocol parameters, nominal per-version events and new default protocol features; see [migration](migration-0.3.md). Rust **1.88** remains the minimum. Further source-breaking changes, including exhaustive-enum additions, require another minor series and migration notes.
 - Current Pi admission covers canonical **1.3.0–1.5.0** releases, subject to the compiled protocol features. Old fixed ranges ending in 1.3.0/1.4.0 retain their caps and intersect the current range; the old 1.2.0 range is rejected. Concrete expectations stay exact. See [compatibility](compatibility.md) for reviewed sources and version-specific behavior. Published 0.1.0 retains Pi 1.1.0/Rust 1.85.
 - Obtain release authorization before upload or tag creation. A dry-run neither reserves a version nor proves registry/docs.rs acceptance. Published archives cannot be overwritten.
 - Finalize package-facing documents before packaging the release commit. Tag the actual uploaded commit after confirmation. Later bookkeeping must not replace its tag target.

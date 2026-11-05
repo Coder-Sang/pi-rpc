@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.3.0 — Unreleased
+## 0.3.0 — 2026-11-05
+
+Versioned protocol types for **Pi 1.3.0–1.5.0**, retaining **Rust 1.88**. This minor release changes the public API and default protocol features; follow the [migration guide](docs/migration-0.3.md) when upgrading from 0.2.
 
 ### Fixed
 
@@ -75,4 +77,4 @@ Initial technical preview, pinned to Pi **1.1.0**. See the [stability and releas
 
 No public API, feature or production behavior was changed by the publication-preparation work. Real Pi and paid-model acceptance remain opt-in; normal validation uses in-memory transports and the test fake.
 
-[Unreleased changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.2...main) · [0.2.2 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.1...v0.2.2) · [0.2.1 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.0...v0.2.1) · [0.2.0 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.1.0...v0.2.0)
+[0.3.0 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.2...v0.3.0) · [0.2.2 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.1...v0.2.2) · [0.2.1 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.2.0...v0.2.1) · [0.2.0 changes](https://github.com/Coder-Sang/pi-rpc/compare/v0.1.0...v0.2.0)

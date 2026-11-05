@@ -1,6 +1,6 @@
 # Connections, capacity and lifecycle
 
-The 0.3 development SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/main/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for streamed content.
+The 0.3 SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/events.md) for streamed content.
 
 ## Modules and ownership
 
@@ -47,13 +47,13 @@ Use `cargo run --example injected --no-default-features --features pi_1_4` for a
 
 ## Protocol selection and version information
 
-`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/migration-0.3.md).
+`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/migration-0.3.md).
 
 The global supported range is >=1.3.0, <=1.5.0. Pi13 accepts 1.3.x, Pi14 accepts 1.4.x, Pi15 currently accepts 1.5.0. Missing features produce an explicit error before I/O/RPC startup and never select a different protocol. Transport itself validates a canonical global version and records a declaration; connection admission selects the enabled profile.
 
 ## Local process and diagnostics
 
-`PiProcess::<P>::spawn` probes `--version` before RPC startup. The probe defaults to five seconds and bounds stdout and stderr separately to 4 KiB. Exact `expected_version` locks still probe. The 0.3 development API `spawn_with_version` skips that process and trusts the caller's concrete declaration while enforcing the same supported-version/expectation policy. Its `startup_timeout` is unused. Neither entrypoint sends initialization commands or waits for Pi readiness.
+`PiProcess::<P>::spawn` probes `--version` before RPC startup. The probe defaults to five seconds and bounds stdout and stderr separately to 4 KiB. Exact `expected_version` locks still probe. The 0.3 API `spawn_with_version` skips that process and trusts the caller's concrete declaration while enforcing the same supported-version/expectation policy. Its `startup_timeout` is unused. Neither entrypoint sends initialization commands or waits for Pi readiness.
 
 Both startup paths share CLI arguments, cwd, inherited environment, stderr draining, process supervision and cleanup. The host owns executable installation and configuration. There is no PTY. `examples/local.rs` accepts an optional executable path, including the compiled test fake.
 
@@ -100,7 +100,7 @@ async fn consume(mut events: PiEvents<Pi15>) -> pi_rpc::Result<()> {
 # }
 ```
 
-See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/main/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
+See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
 
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 

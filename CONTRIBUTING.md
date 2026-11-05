@@ -1,6 +1,6 @@
 # Contributing
 
-Read the [README](README.md), [connection contract](docs/connections.md) and [compatibility notes](docs/compatibility.md) before changing behavior. The current Git version is 0.3.0 development; published 0.2.2 retains its historical API. Follow the [0.3 migration contract](docs/migration-0.3.md): explicit protocol types, additive features, no provider inference, shared lifecycle and Rust 1.88 minimum.
+Read the [README](README.md), [connection contract](docs/connections.md) and [compatibility notes](docs/compatibility.md) before changing behavior. The current release series is 0.3; published 0.2.2 retains its historical API. Follow the [0.3 migration contract](docs/migration-0.3.md): explicit protocol types, additive features, no provider inference, shared lifecycle and Rust 1.88 minimum. Use the main-branch contributor guide for current development requirements; tagged guides describe their release snapshot.
 
 ## Development requirements
 
@@ -28,7 +28,7 @@ CI runs Linux/macOS/Windows × stable/exact 1.88.0. Local macOS results alone do
 
 ## Changes and reviews
 
-Keep changes focused. Add regressions for behavior changes, preserving feature coverage and deterministic lifecycle synchronization. Run the applicable gates; record the compiler, platform and results without claiming tests not executed. New runtime APIs belong in the 0.3.0 Unreleased section of [CHANGELOG](CHANGELOG.md); user-facing changes should explain resulting behavior rather than development history.
+Keep changes focused. Add regressions for behavior changes, preserving feature coverage and deterministic lifecycle synchronization. Run the applicable gates; record the compiler, platform and results without claiming tests not executed. Record changes in [CHANGELOG](CHANGELOG.md) under the version being prepared; user-facing changes should explain resulting behavior rather than development history.
 
 Keep README examples usable with the published dependency, and label Git-only APIs explicitly. README is included in crate Rustdoc when subprocess and Pi15 are enabled; other configurations link to it. Gate that inclusion in the library, without putting library-local feature conditions in copyable caller code. Link project documents with HTTPS repository URLs there. Guide-local relative links are appropriate in other Markdown files. Update Markdown and generated-HTML checks when document inventories or anchors change.
 

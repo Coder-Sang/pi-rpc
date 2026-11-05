@@ -1,8 +1,8 @@
 # Source coverage and compatibility
 
-**pi-rpc 0.3.0 (development)** supports **Pi >=1.3.0, <=1.5.0**, with Rust **1.88**. The latest reviewed source is [Pi 1.5.0](https://github.com/earendil-works/pi/releases/tag/v1.5.0), commit [`f9a26365568127461c47a07a37dcb42c140a3ac5`](https://github.com/earendil-works/pi/tree/f9a26365568127461c47a07a37dcb42c140a3ac5). Published 0.2.2 retains Pi 1.1.0–1.4.0 and its previous API; published 0.2.1/0.2.0 and 0.1.0 retain their historical contracts. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
+**pi-rpc 0.3.0** supports **Pi >=1.3.0, <=1.5.0**, with Rust **1.88**. The latest reviewed source is [Pi 1.5.0](https://github.com/earendil-works/pi/releases/tag/v1.5.0), commit [`f9a26365568127461c47a07a37dcb42c140a3ac5`](https://github.com/earendil-works/pi/tree/f9a26365568127461c47a07a37dcb42c140a3ac5). Published 0.2.2 retains Pi 1.1.0–1.4.0 and its previous API; published 0.2.1/0.2.0 and 0.1.0 retain their historical contracts. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
 
-## Versioned protocols and startup (0.3 development)
+## Versioned protocols and startup (0.3)
 
 Pi13, Pi14 and Pi15 implement sealed PiProtocol with distinct nominal Event/KnownEvent/AssistantEvent types. PiClient/PiEvents/PiConnection/PiProcess require a protocol parameter. Defaults enable subprocess, pi_1_4 and pi_1_5; pi_1_3 is optional. Codec and native-v3 files remain usable without a protocol feature. See [migration](migration-0.3.md).
 
