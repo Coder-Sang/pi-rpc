@@ -2,6 +2,15 @@
 # Exact minimum compiler, independent of the default toolchain. Honors CARGO_NET_OFFLINE.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+verification_bash="$BASH"
+if command -v cygpath >/dev/null 2>&1; then
+  verification_bash=$(cygpath -am "$verification_bash")
+  case "$verification_bash" in
+    *.[eE][xX][eE]) ;;
+    *) verification_bash="${verification_bash}.exe" ;;
+  esac
+fi
+export PI_RPC_TEST_BASH="$verification_bash"
 export RUSTUP_TOOLCHAIN=1.88.0
 python_command=python3
 if ! command -v "$python_command" >/dev/null 2>&1; then
@@ -12,7 +21,9 @@ case "$version" in
   "rustc 1.88.0 "*) ;;
   *) echo "Expected exactly rustc 1.88.0, got: $version" >&2; exit 1 ;;
 esac
-"$python_command" scripts/test_gates.py FeatureGates.test_windows_observer_follows_enabled_protocols
+"$python_command" scripts/test_gates.py \
+  FeatureGates.test_windows_observer_follows_enabled_protocols \
+  FeatureGates.test_later_pi13_failures_stop_after_successful_prefix ShellSelection
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
@@ -26,4 +37,4 @@ for configuration in default all none session_only; do
   "$python_command" scripts/check-rustdoc.py
 done
 
-bash scripts/verify-protocols.sh
+"$PI_RPC_TEST_BASH" scripts/verify-protocols.sh

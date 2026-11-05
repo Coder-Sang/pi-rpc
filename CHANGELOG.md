@@ -6,6 +6,7 @@
 
 - Align test/example helper feature conditions and check all 32 protocol/subprocess/session_file combinations with all targets, including strict stable Clippy without Pi14. Preserve profile-free codec/native-file coverage.
 - Check formatting of macro include! sources and standalone fixtures explicitly, with negative controls that catch files Cargo formatting does not discover. Verify feature-matrix selection and fail-fast behavior without running Pi.
+- Reuse the verification entrypoint's absolute Bash executable for Python gates and nested matrices, including Windows native paths. Add Git Bash/WSL coexistence controls and later Pi13 failure injection after successful preceding combinations.
 
 ### Added
 

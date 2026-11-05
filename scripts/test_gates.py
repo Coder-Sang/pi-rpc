@@ -9,14 +9,26 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
 FEATURES = ("pi_1_3", "pi_1_4", "pi_1_5", "subprocess", "session_file")
 
 
+def verification_bash(environment=None):
+    environment = os.environ if environment is None else environment
+    value = environment.get("PI_RPC_TEST_BASH")
+    if not value:
+        raise ValueError("PI_RPC_TEST_BASH is required; use the verification entrypoint")
+    path = Path(value)
+    if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+        raise ValueError("PI_RPC_TEST_BASH must name an existing absolute Bash executable")
+    return str(path)
+
+
 class FeatureGates(unittest.TestCase):
-    def run_matrix(self, *arguments, fail_kind=""):
+    def run_matrix(self, *arguments, fail_kind="", fail_features=None):
         # Source the actual script with command observers. No Rust build, Pi or
         # network request is needed to verify the selected commands and failures.
         wrapper = r'''
@@ -26,7 +38,15 @@ record() {
 }
 cargo() {
   record cargo "$@"
-  if [ "${1-}" = "$PI_RPC_FAIL_KIND" ]; then return 23; fi
+  local observed_features= previous= argument
+  for argument in "$@"; do
+    if [ "$previous" = --features ]; then observed_features="$argument"; break; fi
+    previous="$argument"
+  done
+  if [ "${1-}" = "$PI_RPC_FAIL_KIND" ] &&
+     { [ "$PI_RPC_FAIL_FEATURES" = '*' ] || [ "$observed_features" = "$PI_RPC_FAIL_FEATURES" ]; }; then
+    return 23
+  fi
 }
 python3() { record python3 "$@"; }
 source "$0" "$@"
@@ -34,9 +54,11 @@ source "$0" "$@"
         with tempfile.TemporaryDirectory() as work:
             log = Path(work) / "commands"
             environment = os.environ.copy()
-            environment.update(PI_RPC_GATE_LOG=log.as_posix(), PI_RPC_FAIL_KIND=fail_kind)
+            environment.update(PI_RPC_GATE_LOG=log.as_posix(), PI_RPC_FAIL_KIND=fail_kind,
+                               PI_RPC_FAIL_FEATURES="*" if fail_features is None else fail_features)
             result = subprocess.run(
-                ["bash", "-c", wrapper, (ROOT / "scripts/verify-protocols.sh").as_posix(), *arguments],
+                [verification_bash(environment), "-c", wrapper,
+                 (ROOT / "scripts/verify-protocols.sh").as_posix(), *arguments],
                 env=environment, capture_output=True, encoding="utf-8", errors="replace",
             )
             calls = [line.decode().split("\0")[:-1] for line in log.read_bytes().splitlines()] if log.exists() else []
@@ -89,6 +111,24 @@ source "$0" "$@"
                 self.assertEqual(calls[-1][:2], ["cargo", kind])
                 self.assertFalse(any(call[0] == "python3" for call in calls))
 
+    def test_later_pi13_failures_stop_after_successful_prefix(self):
+        for clippy in (False, True):
+            arguments = ("--clippy",) if clippy else ()
+            positive, complete = self.run_matrix(*arguments)
+            self.assertEqual(positive.returncode, 0, positive.stderr)
+            self.assert_matrix(complete, clippy=clippy)
+            for kind in ("check", "test", "clippy") if clippy else ("check", "test"):
+                with self.subTest(clippy=clippy, kind=kind):
+                    stop = next(index for index, call in enumerate(complete)
+                                if call[:2] == ["cargo", kind] and "--features" in call
+                                and call[call.index("--features") + 1] == "pi_1_3")
+                    self.assertGreater(stop, 0)
+                    self.assertTrue(all("--features" not in call for call in complete[:2 + clippy]))
+                    result, calls = self.run_matrix(*arguments, fail_kind=kind, fail_features="pi_1_3")
+                    self.assertEqual(result.returncode, 23, result.stderr)
+                    self.assertEqual(calls, complete[:stop + 1], "commands continued or preceding successes changed")
+                    self.assertFalse(any(call[0] == "python3" for call in calls))
+
     def test_unknown_or_duplicate_options_fail_before_commands(self):
         for arguments in [("--unknown",), ("--clippy", "--clippy"), ("extra", "arguments")]:
             with self.subTest(arguments=arguments):
@@ -126,7 +166,7 @@ source "$0" "$@"
                     else:
                         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_stable_and_msrv_entrypoints_keep_the_required_checks(self):
+    def run_entrypoint(self, name):
         wrapper = r'''
 record() {
   printf '%s\0' "$@" >> "$PI_RPC_GATE_LOG"
@@ -134,30 +174,115 @@ record() {
 }
 cargo() { record cargo "$@"; }
 python3() { record python3 "$@"; }
-bash() { record bash "$@"; }
 rustc() { record rustc "$@"; printf 'rustc 1.88.0 (command observer)\n'; }
 source "$0"
 '''
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            script = root / "scripts" / name
+            script.parent.mkdir()
+            script.write_bytes((ROOT / "scripts" / name).read_bytes())
+            (script.parent / "verify-protocols.sh").write_text(
+                'printf \'%s\\0\' protocol-matrix "$@" >> "$PI_RPC_GATE_LOG"\n'
+                'printf \'\\n\' >> "$PI_RPC_GATE_LOG"\n'
+                'printf \'%s\\0\' selected-shell "$PI_RPC_TEST_BASH" >> "$PI_RPC_GATE_LOG"\n'
+                'printf \'\\n\' >> "$PI_RPC_GATE_LOG"\n', encoding="utf-8")
+            log = root / "commands"
+            environment = os.environ.copy()
+            environment["PI_RPC_GATE_LOG"] = log.as_posix()
+            result = subprocess.run([verification_bash(environment), "-c", wrapper, script.as_posix()],
+                                    env=environment, capture_output=True, encoding="utf-8", errors="replace")
+            calls = [line.decode().split("\0")[:-1] for line in log.read_bytes().splitlines()] if log.exists() else []
+        return result, calls
+
+    def assert_entrypoint(self, calls, clippy):
+        self.assertIn(["protocol-matrix", *(["--clippy"] if clippy else [])], calls)
+        selected = [call[1] for call in calls if call[0] == "selected-shell"]
+        self.assertEqual(len(selected), 1)
+        verification_bash({"PI_RPC_TEST_BASH": selected[0]})
+        if clippy:
+            self.assertIn(["python3", "scripts/check-format.py"], calls)
+            self.assertIn(["python3", "scripts/test_gates.py"], calls)
+        else:
+            self.assertIn(["python3", "scripts/test_gates.py",
+                           "FeatureGates.test_windows_observer_follows_enabled_protocols",
+                           "FeatureGates.test_later_pi13_failures_stop_after_successful_prefix",
+                           "ShellSelection"], calls)
+
+    def test_stable_and_msrv_entrypoints_keep_the_required_checks(self):
         for name, clippy in [("verify.sh", True), ("verify-msrv.sh", False)]:
-            with self.subTest(name=name), tempfile.TemporaryDirectory() as work:
-                root = Path(work)
-                script = root / "scripts" / name
-                script.parent.mkdir()
-                script.write_bytes((ROOT / "scripts" / name).read_bytes())
-                log = root / "commands"
-                environment = os.environ.copy()
-                environment["PI_RPC_GATE_LOG"] = log.as_posix()
-                result = subprocess.run(["bash", "-c", wrapper, script.as_posix()], env=environment,
-                                        capture_output=True, encoding="utf-8", errors="replace")
+            with self.subTest(name=name):
+                result, calls = self.run_entrypoint(name)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                calls = [line.decode().split("\0")[:-1] for line in log.read_bytes().splitlines()]
-                self.assertIn(["bash", "scripts/verify-protocols.sh", *(["--clippy"] if clippy else [])], calls)
-                if clippy:
-                    self.assertIn(["python3", "scripts/check-format.py"], calls)
-                    self.assertIn(["python3", "scripts/test_gates.py"], calls)
-                else:
-                    self.assertIn(["python3", "scripts/test_gates.py",
-                                   "FeatureGates.test_windows_observer_follows_enabled_protocols"], calls)
+                self.assert_entrypoint(calls, clippy)
+
+
+class ShellSelection(unittest.TestCase):
+    def test_selector_rejects_missing_relative_and_unusable_paths(self):
+        with tempfile.TemporaryDirectory() as work:
+            for value in (None, "", "bash", "relative/bash.exe", str(Path(work) / "missing"), work):
+                with self.subTest(value=value):
+                    environment = os.environ.copy()
+                    environment.pop("PI_RPC_TEST_BASH", None)
+                    if value is not None:
+                        environment["PI_RPC_TEST_BASH"] = value
+                    with patch.dict(os.environ, environment, clear=True), patch("subprocess.run") as launch:
+                        with self.assertRaisesRegex(ValueError, "PI_RPC_TEST_BASH"):
+                            FeatureGates().run_matrix("--clippy")
+                        launch.assert_not_called()
+
+    def test_entrypoint_shell_wins_over_wsl_on_path(self):
+        selected = verification_bash()
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            shadow = root / "WSL installation"
+            shadow.mkdir()
+            source = root / "wrong_bash.rs"
+            source.write_text('fn main() { let marker = std::env::var_os("PI_RPC_WRONG_BASH_MARKER").unwrap(); '
+                              'std::fs::write(marker, b"wrong-bash").unwrap(); std::process::exit(97); }\n',
+                              encoding="utf-8")
+            executable = shadow / ("bash.exe" if os.name == "nt" else "bash")
+            built = subprocess.run(["rustc", "--edition", "2024", str(source), "-o", str(executable)],
+                                   capture_output=True, encoding="utf-8", errors="replace")
+            self.assertEqual(built.returncode, 0, built.stderr)
+            marker = root / "wrong-shell-used"
+            environment = {"PI_RPC_TEST_BASH": selected, "PI_RPC_WRONG_BASH_MARKER": str(marker),
+                           "PATH": str(shadow) + os.pathsep + os.environ["PATH"]}
+            with patch.dict(os.environ, environment):
+                gates = FeatureGates()
+                result, calls = gates.run_matrix("--clippy")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                gates.assert_matrix(calls, clippy=True)
+                for name, clippy in [("verify.sh", True), ("verify-msrv.sh", False)]:
+                    result, calls = gates.run_entrypoint(name)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    gates.assert_entrypoint(calls, clippy)
+            self.assertFalse(marker.exists(), "a PATH-selected WSL Bash was executed")
+
+    def test_entrypoints_export_native_current_shell(self):
+        selected = verification_bash()
+        wrapper = r'''
+cygpath() { printf '%s\n' "$PI_RPC_CYGPATH_RESULT"; }
+python3() { printf '%s' "$PI_RPC_TEST_BASH" > "$PI_RPC_GATE_LOG"; return 23; }
+rustc() { printf 'rustc 1.88.0 (command observer)\n'; }
+source "$0"
+'''
+        for name in ("verify.sh", "verify-msrv.sh"):
+            for suffix in ("", ".exe", ".EXE"):
+                with self.subTest(name=name, suffix=suffix), tempfile.TemporaryDirectory() as work:
+                    root = Path(work)
+                    script = root / "scripts" / name
+                    script.parent.mkdir()
+                    script.write_bytes((ROOT / "scripts" / name).read_bytes())
+                    native = "C:/Program Files/Git/usr/bin/bash" + suffix
+                    log = root / "exported-shell"
+                    environment = os.environ.copy()
+                    environment.update(PI_RPC_TEST_BASH="wrong-inherited-shell", PI_RPC_GATE_LOG=log.as_posix(),
+                                       PI_RPC_CYGPATH_RESULT=native)
+                    result = subprocess.run([selected, "-c", wrapper, script.as_posix()], env=environment,
+                                            capture_output=True, encoding="utf-8", errors="replace")
+                    self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
+                    self.assertEqual(log.read_text(), native if suffix else native + ".exe")
 
 
 class FormatGates(unittest.TestCase):

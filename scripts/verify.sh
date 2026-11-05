@@ -2,6 +2,15 @@
 # No real Pi/model requests. Local example uses the compiled test fake.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+verification_bash="$BASH"
+if command -v cygpath >/dev/null 2>&1; then
+  verification_bash=$(cygpath -am "$verification_bash")
+  case "$verification_bash" in
+    *.[eE][xX][eE]) ;;
+    *) verification_bash="${verification_bash}.exe" ;;
+  esac
+fi
+export PI_RPC_TEST_BASH="$verification_bash"
 python_command=python3
 if ! command -v "$python_command" >/dev/null 2>&1; then
   python_command=python
@@ -38,4 +47,4 @@ fi
 cargo run --locked --example local -- "$fake"
 cargo run --locked --example local --all-features -- "$fake"
 
-bash scripts/verify-protocols.sh --clippy
+"$PI_RPC_TEST_BASH" scripts/verify-protocols.sh --clippy
