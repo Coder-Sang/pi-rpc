@@ -38,6 +38,8 @@ pub struct ProcessOptions {
     /// original upper bound, intersected with the current supported range.
     /// Both startup methods enforce this expectation;
     /// other expressions are rejected before any child is started.
+    /// For Pi-Bolt output this constrains the underlying Pi version, not the
+    /// independent Bolt version. A decorated output is not a valid expectation.
     pub expected_version: String,
     /// Deadline for the `--version` probe in [`PiProcess::spawn`].
     /// Ignored by [`PiProcess::spawn_with_version`]; not an RPC readiness deadline.
@@ -126,9 +128,8 @@ async fn verify(options: &ProcessOptions) -> Result<String> {
         if !status.success() {
             return Err(Error::ProcessExit(status.code()));
         }
-        let actual = std::str::from_utf8(&out)
-            .map_err(|_| Error::Version)?
-            .trim();
+        let output = std::str::from_utf8(&out).map_err(|_| Error::Version)?;
+        let actual = crate::version::probe_version(output).ok_or(Error::Version)?;
         if !expectation.matches(actual) {
             return Err(Error::Version);
         }
@@ -154,6 +155,8 @@ impl<P: PiProtocol> PiProcess<P> {
     }
     /// Runs only `--version` to verify the supported range and optional exact
     /// version expectation before launching `--mode rpc`.
+    /// Accepts canonical Pi output or the complete official Pi-Bolt decoration;
+    /// admission and connection metadata use the underlying Pi version.
     /// A concrete [`ProcessOptions::expected_version`] still performs the probe.
     /// Use [`Self::spawn_with_version`] to supply a trusted version without probing.
     pub async fn spawn(options: ProcessOptions) -> Result<(PiClient<P>, PiEvents<P>, Self)> {

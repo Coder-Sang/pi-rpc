@@ -4,7 +4,7 @@ Read the [README](README.md), [connection contract](docs/connections.md) and [co
 
 ## Development requirements
 
-Install current stable Rust (local 0.3 checks use 1.99.1) with rustfmt/Clippy and exact Rust **1.88.0**, Bash, Git, Python **3.11+** and a native C/assembly compiler. Windows requires Git Bash, MSVC and the Windows SDK. Stack-switching dependencies need the native compiler; installing a Rust target alone does not establish platform compatibility.
+Install current stable Rust with rustfmt/Clippy and exact Rust **1.88.0**, Bash, Git, Python **3.11+** and a native C/assembly compiler. Windows requires Git Bash, MSVC and the Windows SDK. Stack-switching dependencies need the native compiler; installing a Rust target alone does not establish platform compatibility.
 
 Run from the repository root. Download toolchains and dependencies before offline gates. On Windows, use `python` if `python3` is unavailable. The scripts honor Cargo offline settings and effective target directories unless a generated fixture path is documented separately.
 

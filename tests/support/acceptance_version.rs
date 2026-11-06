@@ -90,6 +90,19 @@ impl Probe {
         selected: bool,
     ) {
         let actual = std::fs::read_to_string(self.executable.with_extension("version")).unwrap();
+        self.assert_pi_outcome(result, &actual, expected, selected);
+    }
+
+    // Tests supply the known underlying Pi version; do not repeat the SDK's
+    // probe-output parser in an acceptance oracle.
+    #[track_caller]
+    pub(super) fn assert_pi_outcome(
+        &self,
+        result: pi_rpc::Result<()>,
+        actual: &str,
+        expected: &str,
+        selected: bool,
+    ) {
         assert_eq!(
             std::fs::read(self.executable.with_extension("probe-started")).unwrap(),
             b"probe"

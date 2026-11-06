@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-11-07
+
+### Fixed
+
+- Recognize complete official Pi-Bolt version-probe output in typed and automatic subprocess startup. Apply existing ranges, legacy caps, exact locks and protocol-feature checks to the underlying Pi version; retain canonical-only declarations, probe bounds and cleanup behavior. Public APIs, features, dependencies, Rust 1.88 and the Pi 1.3.0–1.5.0 range are unchanged. No fork-specific message tracking is added.
+- Add strict output parsing, deterministic fake-process startup and acceptance-entrypoint regressions, including official platform/build labels, output limits, disabled protocols and exact-lock prefix collisions. Version 0.3.0 retains its original probe rules.
+
 ## 0.3.0 — 2026-11-05
 
 Versioned protocol types for **Pi 1.3.0–1.5.0**, retaining **Rust 1.88**. This minor release changes the public API and default protocol features; follow the [migration guide](docs/migration-0.3.md) when upgrading from 0.2.

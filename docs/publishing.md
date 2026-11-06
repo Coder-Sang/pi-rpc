@@ -1,6 +1,6 @@
 # Public release checklist
 
-This reusable maintainer procedure accompanies the **0.3.0** release source. Publication observations are recorded only after registry confirmation, separately from the immutable source being uploaded. See [verification](verification.md) for candidate evidence and historical acceptance, and [provenance](provenance.md) for source and license scope. A completed historical checklist does not authorize or validate another upload.
+This reusable maintainer procedure accompanies the **0.3.1** release source. Publication observations are recorded only after registry confirmation, separately from the immutable source being uploaded. See [verification](verification.md) for candidate evidence and historical acceptance, and [provenance](provenance.md) for source and license scope. A completed historical checklist does not authorize or validate another upload.
 
 ## Version and release policy
 
@@ -41,7 +41,7 @@ git diff --check
 
 Use offline mode only after dependencies/toolchains are cached. Fresh consumers and the publishing rehearsal may need network access for registry resolution. These gates use only in-memory transports, compile-fail controls and the compiled fake; they make no Pi or model requests.
 
-`cargo package --locked` refreshes the standard archive; a publishing rehearsal may use a temporary subdirectory instead. Archive selection resolves the package version and effective target directory through Cargo metadata, honoring `CARGO_TARGET_DIR` and `.cargo/config.toml`. For per-command `--target-dir`, pass `--archive /absolute/path/to/pi-rpc-0.3.0.crate` explicitly to the checker/consumer rather than relying on a stale default archive.
+`cargo package --locked` refreshes the standard archive; a publishing rehearsal may use a temporary subdirectory instead. Archive selection resolves the package version and effective target directory through Cargo metadata, honoring `CARGO_TARGET_DIR` and `.cargo/config.toml`. For per-command `--target-dir`, pass `--archive /absolute/path/to/pi-rpc-0.3.1.crate` explicitly to the checker/consumer rather than relying on a stale default archive.
 
 For an explicitly local uncommitted development check, use a byte-identical temporary clean snapshot and label its identity separately from main; this does not waive clean archive checks or authorize a release.
 

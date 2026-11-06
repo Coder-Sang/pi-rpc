@@ -32,6 +32,7 @@ fn protocol_range_and_latest_reviewed_release_remain_public() {
         "",
         "1.3.0-rc.1",
         "1.5.0+build",
+        "1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)",
         pi_rpc::PI_VERSION_REQUIREMENT,
         ">=1.1.0, <=1.2.0",
         ">=1.1.0, <=1.3.0",

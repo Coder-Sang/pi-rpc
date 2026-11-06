@@ -1,6 +1,6 @@
 # Release provenance and package review
 
-The **0.3.0** source supports **Pi 1.3.0–1.5.0 / Rust 1.88** with project-authored version profiles, typed clients and auto dispatch. Fixed source archives were compared; see the [1.5 review](compatibility.md#pi-150-source-review-2026-11-04) and retained historical comparisons. All five reviewed releases, 1.1.0 through 1.5.0, have identical MIT license bytes. Only 1.3.0–1.5.0 is admitted by 0.3. Published 0.2.2 retains its original source/API/range. Source review, [candidate verification](verification.md#candidate-evidence) and [real acceptance](verification.md#real-pi-acceptance) are separate evidence.
+The **0.3.1** source supports **Pi 1.3.0–1.5.0 / Rust 1.88** with project-authored version profiles, typed clients and auto dispatch. Fixed source archives were compared; see the [1.5 review](compatibility.md#pi-150-source-review-2026-11-04) and retained historical comparisons. All five reviewed releases, 1.1.0 through 1.5.0, have identical MIT license bytes. Only 1.3.0–1.5.0 is admitted by 0.3. Published 0.2.2 retains its original source/API/range. Source review, [candidate verification](verification.md#candidate-evidence) and [real acceptance](verification.md#real-pi-acceptance) are separate evidence.
 
 ## Material inventory
 
@@ -14,6 +14,8 @@ The **0.3.0** source supports **Pi 1.3.0–1.5.0 / Rust 1.88** with project-auth
 | Cargo dependencies | Separately resolved third-party crates, not vendored source; license declarations reviewed below |
 
 The tracked-file inventory and introduction commits were inspected. No Pi source archive, executable, generated session, user auth/settings copy or vendor source directory is included. The TypeScript harnesses are not executed by ordinary builds/tests. The latest reviewed Pi protocol reference is Pi **1.5.0**, fixed to commit **f9a26365568127461c47a07a37dcb42c140a3ac5**, rather than a moving branch. The SHA-256 of that commit's full MIT `LICENSE` is **0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48**; its copyright and permission text are retained verbatim.
+
+Official Pi-Bolt output recognition in 0.3.1 is independently implemented Rust parsing of the fixed formatter described in [compatibility](compatibility.md#pi-bolt-probe-output-031). The reference is Pi-Bolt 1.1.1 commit `0c8faeb30b28671c9aac9ed8bdc62b3dda2dd462`, built on Pi 1.5.0. No Bolt implementation, executable or additional dependency is included. This change retains the project license and notices and adds no fork-specific message tracking. Historical [0.3.0 publication evidence](verification.md#030-release-2026-11-05) remains separate from each new candidate and its later publication observations.
 
 ## Dependency metadata
 

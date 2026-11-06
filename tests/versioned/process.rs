@@ -1,4 +1,6 @@
 use super::*;
+#[path = "bolt.rs"]
+mod bolt;
 use pi_rpc::{AutoProcess, ProcessOptions, VersionSource};
 #[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
 use pi_rpc::{PiClient, PiEvents, PiProcess, PiProtocol};

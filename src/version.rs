@@ -20,6 +20,35 @@ fn parse(value: &str) -> Option<[u64; 3]> {
     parts.next().is_none().then_some(version)
 }
 
+// Only probe output admits the official Pi-Bolt decoration. Declarations and
+// expectations continue to require canonical Pi releases.
+#[cfg(feature = "subprocess")]
+pub(crate) fn probe_version(output: &str) -> Option<&str> {
+    let output = output.trim();
+    if parse(output).is_some() {
+        return Some(output);
+    }
+    let (pi, build) = output.split_once(" (Pi-Bolt ")?;
+    parse(pi)?;
+    let (bolt, build) = build.strip_suffix(')')?.split_once(", ")?;
+    parse(bolt)?;
+    let (target, jit) = build.split_once(", JIT ")?;
+    if !matches!(jit, "on" | "off") {
+        return None;
+    }
+    let mut parts = target.split('-');
+    let valid_part = |part: &str| {
+        !part.is_empty()
+            && part
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+    };
+    if !valid_part(parts.next()?) || !valid_part(parts.next()?) || !parts.all(valid_part) {
+        return None;
+    }
+    Some(pi)
+}
+
 pub(crate) fn is_supported(value: &str) -> bool {
     parse(value).is_some_and(|version| ([1, 3, 0]..=[1, 5, 0]).contains(&version))
 }
@@ -89,6 +118,117 @@ impl<'a> Expectation<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "subprocess")]
+    #[test]
+    fn probe_version_accepts_complete_official_output_and_returns_pi() {
+        for version in ["1.3.0", "1.3.10", "1.4.0", "1.4.10", "1.5.0", "2.0.0"] {
+            assert_eq!(probe_version(version), Some(version));
+            assert_eq!(probe_version(&format!(" \t{version}\r\n ")), Some(version));
+            for target in [
+                "linux-x64",
+                "linux-x64-baseline",
+                "linux-x64-jit",
+                "linux-arm64",
+                "linux-arm64-jit",
+                "darwin-arm64",
+                "darwin-arm64-jit",
+                "win32-x64",
+                "win32-x64-jit",
+                "future9-target2-extra3",
+            ] {
+                for jit in ["on", "off"] {
+                    // Bolt releases have an independent version space.
+                    for bolt in ["0.0.0", "1.1.1", "9.10.11", "1.1.18446744073709551615"] {
+                        let output =
+                            format!(" \t{version} (Pi-Bolt {bolt}, {target}, JIT {jit})\r\n ");
+                        assert_eq!(probe_version(&output), Some(version), "{output:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "subprocess")]
+    #[test]
+    fn probe_version_rejects_noncanonical_pi_and_bolt_versions() {
+        for version in [
+            "",
+            "1",
+            "1.5",
+            "1.5.0.0",
+            "01.5.0",
+            "1.05.0",
+            "1.5.00",
+            "+1.5.0",
+            "v1.5.0",
+            "1.5.0-rc.1",
+            "1.5.0+build",
+            "1.5.18446744073709551616",
+            "１.5.0",
+            "1.5.0\0",
+            crate::PI_VERSION_REQUIREMENT,
+        ] {
+            assert_eq!(probe_version(version), None, "{version:?}");
+            for output in [
+                format!("{version} (Pi-Bolt 1.1.1, linux-x64, JIT off)"),
+                format!("1.5.0 (Pi-Bolt {version}, linux-x64, JIT off)"),
+            ] {
+                assert_eq!(probe_version(&output), None, "{output:?}");
+            }
+        }
+        let huge = format!("1.5.{}", "9".repeat(100_000));
+        assert_eq!(probe_version(&huge), None);
+        assert_eq!(
+            probe_version(&format!("1.5.0 (Pi-Bolt {huge}, linux-x64, JIT off)")),
+            None
+        );
+    }
+
+    #[cfg(feature = "subprocess")]
+    #[test]
+    fn probe_version_rejects_incomplete_suffixes_and_extra_output() {
+        for suffix in [
+            "(Pi-Bolt 1.1.1)",
+            "(pi-bolt 1.1.1, linux-x64, JIT off)",
+            "(Other 1.1.1, linux-x64, JIT off)",
+            "(Pi-Bolt 1.1.1,linux-x64, JIT off)",
+            "(Pi-Bolt 1.1.1, linux-x64,JIT off)",
+            "(Pi-Bolt 1.1.1, linux-x64, jit off)",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT OFF)",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT true)",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT )",
+            "(Pi-Bolt 1.1.1, linux, JIT off)",
+            "(Pi-Bolt 1.1.1, -x64, JIT off)",
+            "(Pi-Bolt 1.1.1, linux-, JIT off)",
+            "(Pi-Bolt 1.1.1, linux--x64, JIT off)",
+            "(Pi-Bolt 1.1.1, Linux-x64, JIT off)",
+            "(Pi-Bolt 1.1.1, linux_x64, JIT off)",
+            "(Pi-Bolt 1.1.1, linux-x64!, JIT off)",
+            "(Pi-Bolt 1.1.1, linux-x６４, JIT off)",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT off",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT off))",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT off) trailing",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT off)\n1.5.0",
+            "(Pi-Bolt 1.1.1,\nlinux-x64, JIT off)",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT \toff)",
+            "(Pi-Bolt 1.1.1, linux-x64, JIT off)\0",
+            "unrecognized",
+            "1.5.0",
+        ] {
+            let output = format!("1.5.0 {suffix}");
+            assert_eq!(probe_version(&output), None, "{output:?}");
+        }
+        for output in [
+            "notice\n1.5.0",
+            "1.5.0\nnotice",
+            "1.5.0\n1.5.0",
+            "1.5.0  (Pi-Bolt 1.1.1, linux-x64, JIT off)",
+            "1.5.0(Pi-Bolt 1.1.1, linux-x64, JIT off)",
+        ] {
+            assert_eq!(probe_version(output), None, "{output:?}");
+        }
+    }
 
     #[test]
     fn inclusive_range_uses_numeric_components() {

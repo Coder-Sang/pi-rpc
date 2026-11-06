@@ -2,9 +2,9 @@
 
 ## Current status summary
 
-**pi-rpc 0.3.0** supports **Pi >=1.3.0, <=1.5.0 / Rust 1.88** with versioned protocol types. Published 0.2.2 retains its historical API and compatibility range. Latest reviewed source is Pi 1.5.0 commit `f9a26365568127461c47a07a37dcb42c140a3ac5`. Admission, source review, synthetic verification and live execution are distinct evidence.
+**pi-rpc 0.3.1** supports **Pi >=1.3.0, <=1.5.0 / Rust 1.88** with versioned protocol types. Published 0.2.2 retains its historical API and compatibility range. Latest reviewed source is Pi 1.5.0 commit `f9a26365568127461c47a07a37dcb42c140a3ac5`. Admission, source review, synthetic verification and live execution are distinct evidence.
 
-Each release candidate requires local gates and six successful native CI jobs for the same commit before claiming cross-platform acceptance; the actual commit, run, logs and archive identities remain outside packaged source. Registry/docs.rs publication is checked after upload, separately from real-Pi/model acceptance. Local gates use Rust 1.99.1 and exact 1.88.0, all four main configurations, all 32 protocol/subprocess/session_file combinations, type-isolation positive/negative controls, pressure/boundary tests and fresh packaged consumers. Stable applies strict Clippy to every combination and explicitly checks formatting of all Rust sources, including macro include! files and standalone fixtures; temporary-crate negative controls cover the Cargo formatting blind spot. Preserve actual results, first failures and before/after hashes outside the archive. Strict candidate packaging uses the clean commit being verified. Earlier local uncommitted checks used byte-identical temporary clean snapshots; those snapshot identities must never be presented as main or as candidates verified by hosted CI.
+Each release candidate requires local gates and six successful native CI jobs for the same commit before claiming cross-platform acceptance; the actual commit, run, logs and archive identities remain outside packaged source. Registry/docs.rs publication is checked after upload, separately from real-Pi/model acceptance. Local gates use installed stable Rust (recording the actual compiler in evidence) and exact 1.88.0, all four main configurations, all 32 protocol/subprocess/session_file combinations, type-isolation positive/negative controls, pressure/boundary tests and fresh packaged consumers. Stable applies strict Clippy to every combination and explicitly checks formatting of all Rust sources, including macro include! files and standalone fixtures; temporary-crate negative controls cover the Cargo formatting blind spot. Preserve actual results, first failures and before/after hashes outside the archive. Strict candidate packaging uses the clean commit being verified. Earlier local uncommitted checks used byte-identical temporary clean snapshots; those snapshot identities must never be presented as main or as candidates verified by hosted CI.
 
 Verification entrypoints now pass their absolute native Bash path through the verification-only PI_RPC_TEST_BASH selector, avoiding Git Bash/WSL name collisions. Shell-selection, Windows path-conversion and later Pi13-row failure controls are included on both toolchains; MSRV still needs no Clippy or rustfmt component. The Windows observer probe checks cfg selection, and the WSL fixture checks executable selection; neither establishes native Windows runtime acceptance.
 
@@ -21,6 +21,18 @@ The optional `protocol_bench` Release example measures fixed synthetic event par
 ## Hosted CI
 
 The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the main/protocol feature matrices and type-isolation checks, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, is explicitly pinned to Pi 1.5.0 and is skipped on ordinary pushes.
+
+## 0.3.1 candidate scope
+
+Version 0.3.1 adds strict official Pi-Bolt probe-output recognition while retaining the 0.3 public API, features, dependencies, Pi range and Rust minimum. Synthetic tests cover the complete format, underlying-version admission, legacy caps, exact locks, canonical-only declarations, byte limits and typed/automatic startup. The fixed formatter review is documented in [compatibility](compatibility.md#pi-bolt-probe-output-031). Source-format recognition and fake-process tests do not establish real Pi/Bolt or model acceptance.
+
+Development checks used byte-identical temporary snapshots; their identities and local results do not validate the final release commit. The actual clean candidate must pass all local gates and all six native jobs, with corresponding source/archive evidence recorded outside the crate. Publication, registry-consumer, docs.rs and immutable-tag observations are recorded only after confirmation, separately from the source being uploaded.
+
+## 0.3.0 release (2026-11-05)
+
+The historical [pi-rpc 0.3.0](https://crates.io/crates/pi-rpc/0.3.0) release introduced Pi 1.3.0–1.5.0 versioned protocols with Rust 1.88. Its [v0.3.0 tag and release](https://github.com/Coder-Sang/pi-rpc/releases/tag/v0.3.0) identify actual uploaded commit `e8532fd225eb47977982c0026c61e48cbbda7bf3`. Registry archive SHA-256 is `d8d3c1e26ed77aae67ab41cd01b50a4ecddcca4ef5681ac0e6bb4508897d9576`.
+
+The [six release-source jobs](https://github.com/Coder-Sang/pi-rpc/actions/runs/41990554189) passed with corresponding artifacts, alongside full local gates, packaged consumption and exact Rust 1.88.0 registry consumers. [docs.rs 0.3.0](https://docs.rs/pi-rpc/0.3.0/pi_rpc/) exposes all protocol and optional APIs. These confirmed observations remain specific to 0.3.0 and do not establish Pi-Bolt output recognition or validate the 0.3.1 candidate. No real Pi or paid model was invoked for that release.
 
 ## 0.2.2 completed baseline (2026-10-27)
 

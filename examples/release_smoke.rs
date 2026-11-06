@@ -123,6 +123,7 @@ mod tests {
             "1.3.0 ",
             "v1.3.0",
             "1.3.0-beta",
+            "1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)",
         ] {
             let result = run([executable.clone(), version.into()].into_iter()).await;
             assert_eq!(result, Err(Error::Version), "{version}");
@@ -157,6 +158,26 @@ mod tests {
                 .await
                 .expect("acceptance entrypoint stalled");
                 probe.assert_outcome(result, expected, true);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn bolt_probe_uses_the_pi_default_and_exact_pi_lock() {
+        let fixture = Fixture::new();
+        for actual_pi in VERSIONS {
+            for explicit in [None, Some(actual_pi), Some(PI_VERSION)] {
+                let output = format!("{actual_pi} (Pi-Bolt 1.1.1, win32-x64, JIT on)\r\n");
+                let probe = fixture.probe(&output);
+                let mut args = vec![probe.executable().as_os_str().to_owned()];
+                if let Some(version) = explicit {
+                    args.push(version.into());
+                }
+                let result =
+                    tokio::time::timeout(std::time::Duration::from_secs(10), run(args.into_iter()))
+                        .await
+                        .expect("acceptance entrypoint stalled");
+                probe.assert_pi_outcome(result, actual_pi, explicit.unwrap_or(PI_VERSION), true);
             }
         }
     }

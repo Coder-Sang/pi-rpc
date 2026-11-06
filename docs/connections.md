@@ -1,6 +1,6 @@
 # Connections, capacity and lifecycle
 
-The 0.3 SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/events.md) for streamed content.
+The 0.3 SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/events.md) for streamed content.
 
 ## Modules and ownership
 
@@ -47,7 +47,7 @@ Use `cargo run --example injected --no-default-features --features pi_1_4` for a
 
 ## Protocol selection and version information
 
-`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/migration-0.3.md).
+`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/migration-0.3.md).
 
 The global supported range is >=1.3.0, <=1.5.0. Pi13 accepts 1.3.x, Pi14 accepts 1.4.x, Pi15 currently accepts 1.5.0. Missing features produce an explicit error before I/O/RPC startup and never select a different protocol. Transport itself validates a canonical global version and records a declaration; connection admission selects the enabled profile.
 
@@ -58,6 +58,20 @@ The global supported range is >=1.3.0, <=1.5.0. Pi13 accepts 1.3.x, Pi14 accepts
 Both startup paths share CLI arguments, cwd, inherited environment, stderr draining, process supervision and cleanup. The host owns executable installation and configuration. There is no PTY. `examples/local.rs` accepts an optional executable path, including the compiled test fake.
 
 Stderr is drained to a bounded ring, 64 KiB by default; zero disables retention. `process.diagnostics().snapshot()` is explicit access and can expose sensitive Pi diagnostics. The library does not log diagnostics, prompts, history or credentials automatically. Pi itself may persist settings after configuration commands or refresh authentication. The opt-in examples have their own documented scratch-file behavior.
+
+## Pi-Bolt version output
+
+**Since 0.3.1; version 0.3.0 retains its original probe rules.** `PiProcess::<P>::spawn` and `subprocess::spawn_auto` recognize the complete official output, for example:
+
+```text
+1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)
+```
+
+The underlying Pi version is `1.5.0`; Bolt's separate version is `1.1.1`. Both versions must have three canonical ASCII u64 components, without leading zeros, prerelease or build metadata. The suffix uses the exact ` (Pi-Bolt VERSION, TARGET, JIT on)` or `off` spelling. TARGET consists of at least two nonempty lowercase ASCII alphanumeric segments separated by single hyphens. Surrounding whitespace is trimmed, including LF/CRLF; extra lines, unknown suffixes and trailing text are rejected. Platform/build labels and JIT status do not select a protocol or have to match the host running the probe.
+
+The existing Pi range, legacy caps, exact expectations and enabled protocol features still apply to the underlying Pi release. For the example above, use `expected_version: "1.5.0".into()` for an exact lock and Pi15 for static selection. `info().version()` returns `1.5.0` and `info().source()` is `Probed`. No Bolt build metadata is exposed. The five-second default probe deadline and separate 4 KiB stdout/stderr bounds are unchanged.
+
+The caller-declared `spawn_with_version`, `spawn_auto_with_version` and `Transport::new` APIs still require a canonical underlying Pi version such as `1.5.0`; they reject decorated output. A decorated string is also invalid as `expected_version`. Declaration-based startup skips probing and trusts the caller. This change recognizes the official output format and adds no message-ID/tracking extension. See [source review and scope](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/compatibility.md#pi-bolt-probe-output-031).
 
 ## Commands, acceptance and errors
 
@@ -100,7 +114,7 @@ async fn consume(mut events: PiEvents<Pi15>) -> pi_rpc::Result<()> {
 # }
 ```
 
-See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.0/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
+See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
 
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 
