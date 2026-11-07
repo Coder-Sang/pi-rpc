@@ -315,28 +315,101 @@ async fn fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order() {
     }).await;
 }
 
+async fn check_echo(command: &'static str, requested: &str, echoed: Option<&str>, accepted: bool) {
+    let (client, mut events, mut owner, peer) = connection(Config::default());
+    let echo = echoed.map(String::from);
+    let expected_request = requested.to_owned();
+    let peer = tokio::spawn(async move {
+        let (read, mut write) = tokio::io::split(peer);
+        let mut reader = pi_rpc::codec::JsonlReader::new(read, 4096);
+        let (request, _) = reader.next().await.unwrap().unwrap();
+        assert_eq!(request["type"], command);
+        assert_eq!(request["message_id"], expected_request);
+        let mut data = json!({"disposition":"queued"});
+        if let Some(id) = echo {
+            data["message_id"] = json!(id);
+        }
+        let response = json!({"type":"response","id":request["id"],"command":command,"success":true,"data":data});
+        write
+            .write_all(&pi_rpc::codec::encode(&response, 4096).unwrap())
+            .await
+            .unwrap();
+        let (request, _) = reader.next().await.unwrap().unwrap();
+        assert_eq!(request["type"], "abort", "identified input was retried");
+        let response =
+            json!({"type":"response","id":request["id"],"command":"abort","success":true});
+        write
+            .write_all(&pi_rpc::codec::encode(&response, 4096).unwrap())
+            .await
+            .unwrap();
+        assert!(reader.next().await.unwrap().is_none());
+    });
+    let result = match command {
+        "prompt" => client
+            .prompt_with_message_id("input", None, None, id(requested))
+            .await
+            .map(|value| value.message_id),
+        "steer" => client
+            .steer_with_message_id("input", None, id(requested))
+            .await
+            .map(|value| value.message_id),
+        "follow_up" => client
+            .follow_up_with_message_id("input", None, id(requested))
+            .await
+            .map(|value| value.message_id),
+        _ => panic!("unexpected command"),
+    };
+    if accepted {
+        assert_eq!(result.unwrap().as_str(), requested);
+    } else {
+        assert!(
+            matches!(result, Err(Error::Protocol(_))),
+            "accepted echo {echoed:?} for {requested:?}"
+        );
+    }
+    // Well-formed missing/mismatched echoes affect this call, not connection
+    // liveness. Reading the next command also proves no automatic resubmission.
+    client.abort().await.unwrap();
+    assert_eq!(owner.close().await, Error::Closed);
+    peer.await.unwrap();
+    assert_eq!(events.recv().await, Some(Err(Error::Closed)));
+    assert_eq!(events.recv().await, None);
+}
+
 #[tokio::test]
 async fn missing_or_mismatched_echo_has_uncertain_outcome_and_is_not_retried() {
-    bounded(async {
-        for echo in [None,Some("other")] {
-            let (client,mut events,mut owner,peer)=connection(Config::default());
-            let peer=tokio::spawn(async move {
-                let (read,mut write)=tokio::io::split(peer); let mut reader=pi_rpc::codec::JsonlReader::new(read,4096);
-                let (request,_)=reader.next().await.unwrap().unwrap();
-                let mut data=json!({"disposition":"queued"}); if let Some(id)=echo{data["message_id"]=json!(id);}
-                let response=json!({"type":"response","id":request["id"],"command":"steer","success":true,"data":data});
-                write.write_all(&pi_rpc::codec::encode(&response,4096).unwrap()).await.unwrap();
-                let (request,_)=reader.next().await.unwrap().unwrap(); assert_eq!(request["type"],"abort","input was retried");
-                let response=json!({"type":"response","id":request["id"],"command":"abort","success":true});
-                write.write_all(&pi_rpc::codec::encode(&response,4096).unwrap()).await.unwrap();
-                assert!(reader.next().await.unwrap().is_none());
-            });
-            assert!(matches!(client.steer_with_message_id("input",None,id("expected")).await,Err(Error::Protocol(_))));
-            client.abort().await.unwrap();
-            assert_eq!(owner.close().await,Error::Closed);peer.await.unwrap();
-            assert_eq!(events.recv().await,Some(Err(Error::Closed)));assert_eq!(events.recv().await,None);
+    for command in ["prompt", "steer", "follow_up"] {
+        for echo in [None, Some("other")] {
+            bounded(check_echo(command, "expected", echo, false)).await;
         }
-    }).await;
+    }
+}
+
+#[tokio::test]
+async fn identified_echoes_require_exact_bytes_without_retry() {
+    for command in ["prompt", "steer", "follow_up"] {
+        for (requested, echoed, accepted) in [
+            ("input-1", "input-1", true),
+            ("input-10", "input-10", true),
+            (" input-1 \t\r\n", " input-1 \t\r\n", true),
+            (" \t", " \t", true),
+            ("🦀", "🦀", true),
+            ("input-1", "input-10", false),
+            ("input-10", "input-1", false),
+            ("input-1", "input-1 ", false),
+            ("input-1 ", "input-1", false),
+            ("input-1", " input-1", false),
+            (" input-1", "input-1", false),
+            (" \t", " ", false),
+            (" ", " \t", false),
+            ("input-A", "input-a", false),
+            ("input-a", "input-A", false),
+            ("\u{e9}", "e\u{301}", false),
+            ("e\u{301}", "\u{e9}", false),
+        ] {
+            bounded(check_echo(command, requested, Some(echoed), accepted)).await;
+        }
+    }
 }
 
 #[tokio::test]

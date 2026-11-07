@@ -26,6 +26,14 @@ def main():
          "fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order"),
         ("fixed-batch-id", "src/protocol/bolt_message_id_v1.rs", "batch_id: w.batch_id,", 'batch_id: w.batch_id.map(|_| "opaque-batch".into()),',
          "fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order"),
+        ("echo-starts-with-request", "src/client/bolt_message_id.rs", "!= Some(expected.as_str())", ".is_none_or(|id| !id.starts_with(expected.as_str()))",
+         "identified_echoes_require_exact_bytes_without_retry"),
+        ("request-starts-with-echo", "src/client/bolt_message_id.rs", "!= Some(expected.as_str())", ".is_none_or(|id| !expected.as_str().starts_with(id))",
+         "identified_echoes_require_exact_bytes_without_retry"),
+        ("trimmed-echo", "src/client/bolt_message_id.rs", "!= Some(expected.as_str())", ".map(str::trim) != Some(expected.as_str().trim())",
+         "identified_echoes_require_exact_bytes_without_retry"),
+        ("case-insensitive-echo", "src/client/bolt_message_id.rs", "!= Some(expected.as_str())", ".is_none_or(|id| !id.eq_ignore_ascii_case(expected.as_str()))",
+         "identified_echoes_require_exact_bytes_without_retry"),
     ]
     # Copy only source-controlled/nonignored caller files, never credentials,
     # build products or the repository's .git. Do not mutate the working source.
