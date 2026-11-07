@@ -14,12 +14,18 @@ def main():
     target = Path(environment.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
     environment["CARGO_TARGET_DIR"] = str(target / "bolt-negative-controls")
     cases = [
-        ("src/client.rs", "message_id: message_id.as_deref().map(String::as_str),", "message_id: None,",
+        ("omitted-input-id", "src/client.rs", "message_id: message_id.as_deref().map(String::as_str),", "message_id: None,",
          "identified_inputs_use_separate_rpc_ids_and_preserve_existing_payloads"),
-        ("src/client/bolt_message_id.rs", "!= Some(expected.as_str())", "!= response.data.as_ref().and_then(|data| data.get(\"message_id\")).and_then(|id| id.as_str())",
+        ("unchecked-echo", "src/client/bolt_message_id.rs", "!= Some(expected.as_str())", "!= response.data.as_ref().and_then(|data| data.get(\"message_id\")).and_then(|id| id.as_str())",
          "missing_or_mismatched_echo_has_uncertain_outcome_and_is_not_retried"),
-        ("src/protocol/bolt_message_id_v1.rs", "json::decode(value).map(Event::QueueUpdate)", "<Pi15 as Sealed>::known(value).map(Event::Pi)",
+        ("skipped-tracking", "src/protocol/bolt_message_id_v1.rs", "json::decode(value).map(Event::QueueUpdate)", "<Pi15 as Sealed>::known(value).map(Event::Pi)",
          "malformed_tracking_is_never_downgraded_to_unknown_or_untracked"),
+        ("fixed-instance-id", "src/protocol/bolt_message_id_v1.rs", "instance_id: w.instance_id,", 'instance_id: "instance-A".into(),',
+         "fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order"),
+        ("fixed-sequence", "src/protocol/bolt_message_id_v1.rs", "sequence: w.sequence,", "sequence: 7,",
+         "fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order"),
+        ("fixed-batch-id", "src/protocol/bolt_message_id_v1.rs", "batch_id: w.batch_id,", 'batch_id: w.batch_id.map(|_| "opaque-batch".into()),',
+         "fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order"),
     ]
     # Copy only source-controlled/nonignored caller files, never credentials,
     # build products or the repository's .git. Do not mutate the working source.
@@ -38,7 +44,7 @@ def main():
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
 
-        def check(test, rejected):
+        def check(label, test, rejected):
             result = subprocess.run(
                 ["cargo", "test", "--offline", "--locked", "--no-default-features", "--features", "bolt_message_id",
                  "--test", "bolt_message_id", test, "--", "--exact"],
@@ -46,18 +52,18 @@ def main():
             )
             expected = f"test {test} ... {'FAILED' if rejected else 'ok'}"
             if result.returncode != (101 if rejected else 0) or expected not in result.stdout:
-                raise SystemExit(f"FAIL negative-control validity: {test}, rejected={rejected}\n{result.stdout}\n{result.stderr}")
-            print(f"PASS {test}: {'broken implementation rejected' if rejected else 'positive control'}", flush=True)
+                raise SystemExit(f"FAIL negative-control validity: {label}, {test}, rejected={rejected}\n{result.stdout}\n{result.stderr}")
+            print(f"PASS {label} ({test}): {'broken implementation rejected' if rejected else 'positive control'}", flush=True)
 
-        for file, original, replacement, test in cases:
+        for label, file, original, replacement, test in cases:
             source = work / file
             text = source.read_text(encoding="utf-8")
             if text.count(original) != 1:
                 raise SystemExit(f"FAIL ambiguous mutation target: {file}")
-            check(test, False)
+            check(label, test, False)
             try:
                 source.write_text(text.replace(original, replacement), encoding="utf-8", newline="\n")
-                check(test, True)
+                check(label, test, True)
             finally:
                 source.write_text(text, encoding="utf-8", newline="\n")
 

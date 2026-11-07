@@ -1,7 +1,8 @@
 //! Synthetic fork-extension tests. No installed Pi/Bolt or provider is used.
 #![cfg(feature = "bolt_message_id")]
 use pi_rpc::protocol::bolt_message_id_v1::{
-    Event, MessageId, QueueChange, QueueUpdate, TrackingVersion,
+    ClearedInputs, Event, InputSource, MessageId, QueueChange, QueueTrackingV1, QueueUpdate,
+    TrackingVersion,
 };
 use pi_rpc::protocol::{
     self, PromptDisposition, QueuedInputDisposition, Record, StreamingBehavior,
@@ -218,16 +219,73 @@ async fn identified_inputs_use_separate_rpc_ids_and_preserve_existing_payloads()
 
 #[tokio::test]
 async fn fragmented_crlf_tracking_precedes_acceptance_and_keeps_wire_order() {
+    // Build the golden values directly from the wire contract. Never decode
+    // or serialize the fixture to derive an expected value with the same bug.
+    fn expected(
+        instance: &str,
+        sequence: u64,
+        batch: Option<&str>,
+        change: QueueChange,
+        steering: &[(&str, Option<&str>)],
+        follow_up: &[(&str, Option<&str>)],
+    ) -> Event {
+        Event::QueueUpdate(QueueUpdate {
+            steering: steering.iter().map(|(text, _)| (*text).into()).collect(),
+            follow_up: follow_up.iter().map(|(text, _)| (*text).into()).collect(),
+            tracking: Some(QueueTrackingV1 {
+                version: TrackingVersion::V1,
+                instance_id: instance.into(),
+                sequence,
+                batch_id: batch.map(String::from),
+                change,
+                steering_message_ids: steering.iter().map(|(_, value)| value.map(id)).collect(),
+                follow_up_message_ids: follow_up.iter().map(|(_, value)| value.map(id)).collect(),
+            }),
+        })
+    }
     bounded(async {
         let (client, mut events, mut owner, peer) = connection(Config::default());
-        let mut before = vec![queue("prompt_start","prompt",json!([null,"P"])), queue("enqueue","steer",json!(["A",null])),queue("consume","steer",json!(["A",null])), queue("consume","followUp",json!(["B","C"])),queue("clear","",json!({"steering":[],"followUp":["D"]}))];
-        for (index, wire) in before.iter_mut().enumerate() { wire["tracking"]["sequence"] = json!(index+1); }
+        let mut before = vec![queue("prompt_start","prompt",json!([null,"P"])), queue("enqueue","steer",json!(["A",null,"B"])),queue("consume","steer",json!(["A",null,"B"])), queue("consume","followUp",json!(["C","D"])),queue("clear","",json!({"steering":[],"followUp":["E"]}))];
+        for (index, wire) in before.iter_mut().enumerate() { wire["tracking"]["sequence"] = json!(41+index); }
+        before[0]["tracking"]["batchId"] = json!("initial-handoff");
+        before[1]["steering"] = json!(["same text","same text","same text"]);
+        before[1]["tracking"]["steeringMessageIds"] = json!(["A",null,"B"]);
+        for wire in &mut before[1..3] {
+            wire["followUp"] = json!(["later-1","later-2","cancelled"]);
+            wire["tracking"]["followUpMessageIds"] = json!(["C","D","E"]);
+        }
+        before[2]["tracking"]["batchId"] = json!("steering-drain");
+        before[3]["tracking"]["batchId"] = json!("follow-up-drain");
+        before[3]["followUp"] = json!(["cancelled"]);
+        before[3]["tracking"]["followUpMessageIds"] = json!(["E"]);
         // Session instance replacement resets sequence; the client must preserve it.
         let mut restarted = queue("enqueue","followUp",json!(["new"]));
         restarted["tracking"]["instanceId"] = json!("instance-B");
         restarted["tracking"]["sequence"] = json!(0);
+        restarted["followUp"] = json!(["new input"]);
+        restarted["tracking"]["followUpMessageIds"] = json!(["new"]);
         before.push(restarted);
-        let expected: Vec<_> = before.iter().cloned().map(|v| Event::QueueUpdate(decoded(v).unwrap())).collect();
+        let expected = [
+            expected("instance-A",41,Some("initial-handoff"),QueueChange::PromptStart {
+                source:InputSource::Prompt,message_ids:vec![None,Some(id("P"))],
+            },&[],&[]),
+            expected("instance-A",42,None,QueueChange::Enqueue {
+                source:InputSource::Steer,message_ids:vec![Some(id("A")),None,Some(id("B"))],
+            },&[("same text",Some("A")),("same text",None),("same text",Some("B"))],
+              &[("later-1",Some("C")),("later-2",Some("D")),("cancelled",Some("E"))]),
+            expected("instance-A",43,Some("steering-drain"),QueueChange::Consume {
+                source:InputSource::Steer,message_ids:vec![Some(id("A")),None,Some(id("B"))],
+            },&[],&[("later-1",Some("C")),("later-2",Some("D")),("cancelled",Some("E"))]),
+            expected("instance-A",44,Some("follow-up-drain"),QueueChange::Consume {
+                source:InputSource::FollowUp,message_ids:vec![Some(id("C")),Some(id("D"))],
+            },&[],&[("cancelled",Some("E"))]),
+            expected("instance-A",45,None,QueueChange::Clear {
+                message_ids:ClearedInputs {steering:vec![],follow_up:vec![Some(id("E"))]},
+            },&[],&[]),
+            expected("instance-B",0,None,QueueChange::Enqueue {
+                source:InputSource::FollowUp,message_ids:vec![Some(id("new"))],
+            },&[],&[("new input",Some("new"))]),
+        ];
         let (seen_tx,seen_rx) = tokio::sync::oneshot::channel();
         let (release_tx,release_rx) = tokio::sync::oneshot::channel();
         let peer = tokio::spawn(async move {
