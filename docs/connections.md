@@ -184,3 +184,7 @@ Once orderly close starts, automatic dialog replies are skipped atomically with 
 - `PiProcess::terminate`: explicitly signal forced local termination and await reaping. Not an abort RPC.
 
 The host application owns conversation/SSE correlation, input versus resume versus new-session policy, remote delivery and business stopping policy. To stop: exclude new submissions at the host, **await `clear_queue`, then await `abort`**, optionally terminate. This sequence is **not atomic**. In-flight inputs, extensions and Pi can enqueue between calls. Track returned texts and subsequent queue updates, and enforce admission before stopping. The pinned docs and implementation disagree about queued continuation after abort. Race tests intentionally show a nonempty queue after settlement. Do not promise automatic drain.
+
+## Explicit fork message ID profile
+
+The unpublished `0.3.2-bolt.1` branch provides optional `bolt_message_id` and `BoltMessageIdV1` for the reviewed Coder-Sang/Pi-Bolt fork, based on Pi 1.5.0. Select it explicitly with typed Transport or subprocess startup; auto dispatch remains official Pi15. Version decoration is not capability detection. Identified inputs use existing admission, escaped-record budgets, command IDs, writer and cleanup. Declared startup uses the base version `"1.5.0"`; expectations and probe rules are unchanged. See the [extension guide](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md) for API, handoff semantics and echo failures.

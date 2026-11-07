@@ -22,7 +22,7 @@ def main():
     try:
         archive = args.archive if args.archive is not None else package_archive(args.source_root)
         files, documents, links = check_package(archive, args.source_root, args.expected_commit)
-        print(f"PASS archive={archive.resolve()}: {files} files, Apache-2.0/publish=[crates-io], {documents} Markdown documents, {links} archive-local links/anchors")
+        print(f"PASS archive={archive.resolve()}: {files} files, Apache-2.0/publish=false, {documents} Markdown documents, {links} archive-local links/anchors")
     except (CheckError, OSError, UnicodeError, tarfile.TarError, KeyError, ValueError,
             subprocess.CalledProcessError) as error:
         parser.exit(1, f"FAIL: {error}\n")

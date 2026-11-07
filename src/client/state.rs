@@ -163,7 +163,7 @@ impl Shared {
             .clone()
             .unwrap_or(Error::Closed)
     }
-    #[cfg(all(test, feature = "pi_1_4"))]
+    #[cfg(all(test, any(feature = "pi_1_4", feature = "bolt_message_id")))]
     pub(super) fn pending_count(&self) -> usize {
         self.state.lock().unwrap().pending.len()
     }

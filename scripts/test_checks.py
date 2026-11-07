@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import re
 import hashlib
 import runpy
 from contextlib import redirect_stderr, redirect_stdout
@@ -93,7 +94,7 @@ class DocumentChecks(unittest.TestCase):
         self.assertEqual(check_documents(files), (1, 1))
 
     def test_release_tag_and_commit_guide_links(self):
-        for reference in ["v0.2.0", "0.2.0", "1f06a808bacb63bd9318c48628cbf53213bcd783"]:
+        for reference in ["v0.2.0", "0.2.0", "1f06a808bacb63bd9318c48628cbf53213bcd783", "feature/pi-bolt-message-id"]:
             base = f"https://github.com/Coder-Sang/pi-rpc/blob/{reference}/"
             files = {"README.md": f"[guide]({base}docs/guide.md#scope)".encode(),
                      "docs/guide.md": b"# Scope\n"}
@@ -105,7 +106,7 @@ class DocumentChecks(unittest.TestCase):
                     check_documents(files | {"README.md": f"[bad]({base}{path})".encode()})
 
     def test_unsupported_repository_refs_are_not_external_links(self):
-        for reference in ["develop", "v01.2.0", "v0.2.0-rc.1", "1f06a80", "a" * 39, "a" * 41, "%6dain"]:
+        for reference in ["develop", "feature/pi-bolt-message-id-extra", "feature/pi-bolt", "v01.2.0", "v0.2.0-rc.1", "1f06a80", "a" * 39, "a" * 41, "%6dain"]:
             with self.subTest(reference=reference), self.assertRaises(CheckError):
                 check_documents({"README.md": f"[bad](https://github.com/Coder-Sang/pi-rpc/blob/{reference}/README.md)".encode()})
 
@@ -238,7 +239,7 @@ class RustdocChecks(unittest.TestCase):
                 check_rustdoc(self.root, self.files)
 
     def test_release_tag_and_commit_html_links(self):
-        for reference in ["v0.2.0", "0.2.0", "1f06a808bacb63bd9318c48628cbf53213bcd783"]:
+        for reference in ["v0.2.0", "0.2.0", "1f06a808bacb63bd9318c48628cbf53213bcd783", "feature/pi-bolt-message-id"]:
             base = f"https://github.com/Coder-Sang/pi-rpc/blob/{reference}/"
             self.index.write_text(f'<a href="{base}docs/guide.md#scope">guide</a>', encoding="utf-8")
             with self.subTest(reference=reference):
@@ -248,7 +249,7 @@ class RustdocChecks(unittest.TestCase):
                 self.index.write_text(f'<a href="{base}{path}">bad</a>', encoding="utf-8")
                 with self.subTest(reference=reference, path=path), self.assertRaises(CheckError):
                     check_rustdoc(self.root, self.files)
-        for reference in ["develop", "v01.2.0", "v0.2.0-rc.1", "1f06a80", "a" * 39, "a" * 41, "%6dain"]:
+        for reference in ["develop", "feature/pi-bolt-message-id-extra", "feature/pi-bolt", "v01.2.0", "v0.2.0-rc.1", "1f06a80", "a" * 39, "a" * 41, "%6dain"]:
             self.index.write_text(f'<a href="https://github.com/Coder-Sang/pi-rpc/blob/{reference}/README.md">bad</a>', encoding="utf-8")
             with self.subTest(reference=reference), self.assertRaises(CheckError):
                 check_rustdoc(self.root, self.files)
@@ -288,7 +289,7 @@ class RustdocChecks(unittest.TestCase):
 class PackageChecks(unittest.TestCase):
     def test_repository_metadata_matches_the_0_3_release_policy(self):
         package = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]
-        self.assertEqual(package["version"], "0.3.1")
+        self.assertEqual(package["version"], "0.3.2-bolt.1")
         self.assertEqual(package["rust-version"], "1.88")
         check_protocol_features(tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8")), "Cargo.toml")
         for name, value in PACKAGE_METADATA.items():
@@ -300,6 +301,8 @@ class PackageChecks(unittest.TestCase):
         mutations = [{}, PROTOCOL_FEATURES | {"default": ["subprocess", "pi_1_5"]},
                      PROTOCOL_FEATURES | {"default": ["subprocess", "pi_1_3", "pi_1_4", "pi_1_5"]},
                      PROTOCOL_FEATURES | {"pi_1_4": ["pi_1_5"]},
+                     PROTOCOL_FEATURES | {"bolt_message_id": []},
+                     PROTOCOL_FEATURES | {"default": ["subprocess", "pi_1_4", "pi_1_5", "bolt_message_id"]},
                      {key: value for key, value in PROTOCOL_FEATURES.items() if key != "pi_1_3"}]
         for features in mutations:
             with self.subTest(features=features), self.assertRaisesRegex(CheckError, "protocol features"):
@@ -310,7 +313,7 @@ class PackageChecks(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.archive = Path(self.temp.name) / "fixture.crate"
         self.files = {name: b"" for name in REQUIRED_FILES}
-        manifest = (b'[package]\nname="pi-rpc"\nversion="0.2.0"\nlicense="Apache-2.0"\npublish=["crates-io"]\n'
+        manifest = (b'[package]\nname="pi-rpc"\nversion="0.2.0"\nlicense="Apache-2.0"\npublish=false\n'
                     b'description="Bounded asynchronous Tokio JSONL client for Pi 1.1.0 through 1.2.0"\n'
                     b'edition="2024"\nrust-version="1.88"\nreadme="README.md"\n'
                     b'repository="https://github.com/Coder-Sang/pi-rpc"\n'
@@ -319,7 +322,7 @@ class PackageChecks(unittest.TestCase):
                     b'exclude=["/.github/"]\n'
                     b'[package.metadata.docs.rs]\nall-features=true\n'
                     b'[features]\ndefault=["subprocess","pi_1_4","pi_1_5"]\n'
-                    b'subprocess=["tokio/process"]\nsession_file=[]\npi_1_3=[]\npi_1_4=[]\npi_1_5=[]\n')
+                    b'subprocess=["tokio/process"]\nsession_file=[]\npi_1_3=[]\npi_1_4=[]\npi_1_5=[]\nbolt_message_id=["pi_1_5"]\n')
         self.files.update({"Cargo.toml": manifest, "Cargo.toml.orig": manifest,
                            ".gitignore": (ROOT / ".gitignore").read_bytes(),
                            "LICENSE": (ROOT / "LICENSE").read_bytes(),
@@ -328,8 +331,8 @@ class PackageChecks(unittest.TestCase):
                                         b'```rust,no_run\nasync fn inspect_session() {}\n```\n',
                            "docs/compatibility.md": b"# Scope\n",
                            ".cargo_vcs_info.json": json.dumps({"git": {"sha1": "expected"}}).encode()})
-        notice = (ROOT / "THIRD_PARTY_NOTICES.md").read_bytes().partition(b"```text\n")[2].partition(b"\n```")[0]
-        self.files["THIRD_PARTY_NOTICES.md"] = b"```text\n" + notice + b"\n```\n"
+        notices = re.findall(rb"```text\n(.*?)\n```", (ROOT / "THIRD_PARTY_NOTICES.md").read_bytes(), re.S)
+        self.files["THIRD_PARTY_NOTICES.md"] = b"\n".join(b"```text\n" + notice + b"\n```\n" for notice in notices)
 
     def write_archive(self, extras=()):
         with tarfile.open(self.archive, "w:gz") as archive:
@@ -342,7 +345,7 @@ class PackageChecks(unittest.TestCase):
 
     def test_complete_package(self):
         self.write_archive()
-        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (12, 2))
+        self.assertEqual(check_package(self.archive, expected_commit="expected")[1:], (13, 2))
 
     def test_repository_only_github_files_rejected_in_archive(self):
         for name in [".github/workflows/verify.yml", ".github/ISSUE_TEMPLATE/bug_report.md"]:
@@ -468,8 +471,9 @@ class PackageChecks(unittest.TestCase):
     def test_changed_license_and_metadata(self):
         for name, replacement in [("LICENSE", b"changed"),
                                   ("THIRD_PARTY_NOTICES.md", self.files["THIRD_PARTY_NOTICES.md"].replace(b'Mario Zechner', b'Changed attribution')),
+                                  ("THIRD_PARTY_NOTICES.md", self.files["THIRD_PARTY_NOTICES.md"].replace(b'OpenSec', b'Changed attribution')),
                                   ("Cargo.toml", self.files["Cargo.toml"].replace(b'Apache-2.0', b'MIT')),
-                                  ("Cargo.toml.orig", self.files["Cargo.toml.orig"].replace(b'publish=["crates-io"]', b'publish=true'))]:
+                                  ("Cargo.toml.orig", self.files["Cargo.toml.orig"].replace(b'publish=false', b'publish=true'))]:
             with self.subTest(name=name):
                 saved = self.files[name]
                 self.files[name] = replacement
@@ -485,15 +489,15 @@ class PackageChecks(unittest.TestCase):
             with self.assertRaises(CheckError):
                 check_package(self.archive, expected_commit="expected")
 
-    def test_publish_restriction_requires_only_crates_io_in_both_manifests(self):
+    def test_special_branch_rejects_publishable_or_missing_policy_in_both_manifests(self):
         for name in ["Cargo.toml", "Cargo.toml.orig"]:
             saved = self.files[name]
-            for replacement in [b'', b'publish=false\n', b'publish=true\n', b'publish=[]\n',
+            for replacement in [b'', b'publish=["crates-io"]\n', b'publish=true\n', b'publish=[]\n',
                                 b'publish="crates-io"\n', b'publish=[false]\n',
                                 b'publish=["private"]\n', b'publish=["crates-io","private"]\n',
                                 b'publish=["crates-io","crates-io"]\n']:
                 with self.subTest(name=name, replacement=replacement):
-                    self.files[name] = saved.replace(b'publish=["crates-io"]\n', replacement)
+                    self.files[name] = saved.replace(b'publish=false\n', replacement)
                     self.write_archive()
                     with self.assertRaisesRegex(CheckError, "publish"):
                         check_package(self.archive)

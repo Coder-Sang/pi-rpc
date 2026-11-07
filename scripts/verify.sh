@@ -18,6 +18,7 @@ fi
 "$python_command" scripts/check-format.py
 "$python_command" scripts/test_gates.py
 "$python_command" scripts/test_readme.py
+"$python_command" scripts/test_bolt.py
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;
@@ -38,6 +39,7 @@ for features in subprocess,pi_1_4 pi_1_5; do
 done
 cargo run --locked --example injected --no-default-features --features pi_1_4
 cargo run --locked --example injected --all-features
+cargo run --locked --example bolt_message_id --no-default-features --features bolt_message_id
 cargo run --locked --example native_session --no-default-features --features session_file
 cargo run --locked --example native_session --all-features
 mkdir -p target/verification

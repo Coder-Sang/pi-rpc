@@ -1,5 +1,7 @@
 # Source coverage and compatibility
 
+Current checkout: unpublished **0.3.2-bolt.1**, `publish=false`, with the opt-in [message ID extension](bolt-message-id.md). The official Pi13/Pi14/Pi15 contract and Rust 1.88 minimum are preserved. The historical official source/release reviews below retain their scope.
+
 **pi-rpc 0.3.1** supports **Pi >=1.3.0, <=1.5.0**, with Rust **1.88**. The latest reviewed source is [Pi 1.5.0](https://github.com/earendil-works/pi/releases/tag/v1.5.0), commit [`f9a26365568127461c47a07a37dcb42c140a3ac5`](https://github.com/earendil-works/pi/tree/f9a26365568127461c47a07a37dcb42c140a3ac5). Published 0.2.2 retains Pi 1.1.0–1.4.0 and its previous API; published 0.2.1/0.2.0 and 0.1.0 retain their historical contracts. No upstream executable or source is vendored. Project code remains [Apache-2.0](../LICENSE), with [retained Pi MIT notices](../THIRD_PARTY_NOTICES.md).
 
 ## Versioned protocols and startup (0.3)

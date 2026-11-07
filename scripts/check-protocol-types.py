@@ -25,7 +25,7 @@ edition = "2024"
 rust-version = "1.88"
 publish = false
 [dependencies]
-pi-rpc = {{ path = {json.dumps(root.as_posix(), ensure_ascii=False)}, default-features = false, features = ["subprocess", "pi_1_3", "pi_1_4", "pi_1_5"] }}
+pi-rpc = {{ path = {json.dumps(root.as_posix(), ensure_ascii=False)}, default-features = false, features = ["subprocess", "pi_1_3", "pi_1_4", "pi_1_5", "bolt_message_id"] }}
 '''
         (work / "Cargo.toml").write_text(manifest, encoding="utf-8")
         source = work / "src/main.rs"
@@ -55,14 +55,23 @@ pi-rpc = {{ path = {json.dumps(root.as_posix(), ensure_ascii=False)}, default-fe
                 for first, second in [(earlier, later), (later, earlier)]:
                     check(f"fn same(value: {name(first)}) -> {name(first)} {{ value }}", f"{kind} Pi1{first} positive")
                     check(f"fn cross(value: {name(first)}) -> {name(second)} {{ value }}", f"{kind} Pi1{first}->Pi1{second}", rejected=True)
+        for kind in ["Event", "PiClient", "PiEvents", "PiConnection", "PiProcess"]:
+            official = "pi_rpc::protocol::v1_5::Event" if kind == "Event" else f"pi_rpc::{kind}<pi_rpc::Pi15>"
+            extension = "pi_rpc::protocol::bolt_message_id_v1::Event" if kind == "Event" else f"pi_rpc::{kind}<pi_rpc::BoltMessageIdV1>"
+            for first, second in [(official, extension), (extension, official)]:
+                check(f"fn same(value: {first}) -> {first} {{ value }}", f"{kind} extension positive")
+                check(f"fn cross(value: {first}) -> {second} {{ value }}", f"{kind} official/extension crossing", rejected=True)
+        for profile, reject in [("BoltMessageIdV1", False), ("Pi13", True), ("Pi14", True), ("Pi15", True)]:
+            check(f"fn submit(client: &pi_rpc::PiClient<pi_rpc::{profile}>) {{ let _ = client.prompt_with_message_id(\"input\", None, None, pi_rpc::protocol::bolt_message_id_v1::MessageId::new(\"A\").unwrap()); }}",
+                  f"{profile} message-id API", rejected=reject, expected_code="E0599")
         check("fn public<P: pi_rpc::PiProtocol>() -> Option<P::Event> { None }", "public generic bound")
-        for hook in ["known", "ui", "unknown", "response", "ui_request"]:
+        for hook in ["known", "ui", "unknown", "response", "ui_request", "validate_response"]:
             check(f"fn hidden<P: pi_rpc::PiProtocol>() {{ let _ = P::{hook}; }}",
                   f"private {hook} hook", rejected=True, expected_code="E0624")
         check("#[derive(Debug, Clone, Copy, PartialEq, Eq)] struct Unaudited;"
               "impl pi_rpc::PiProtocol for Unaudited { type Event = pi_rpc::protocol::v1_4::Event; const MINOR: u64 = 4; }",
               "unaudited implementation", rejected=True, expected_code="E0277")
-    print("PASS protocol isolation: 43 positive controls, 42 E0308 and six privacy/sealing failures", flush=True)
+    print("PASS protocol isolation: 54 positive controls, 52 E0308, three E0599 and seven privacy/sealing failures", flush=True)
 
 
 if __name__ == "__main__":

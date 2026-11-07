@@ -98,6 +98,15 @@ ready_event!(v1_3);
 ready_event!(v1_4);
 #[cfg(feature = "pi_1_5")]
 ready_event!(v1_5);
+#[cfg(feature = "bolt_message_id")]
+impl ReadyEvent for pi_rpc::protocol::bolt_message_id_v1::Event {
+    fn pid(self) -> u32 {
+        let Self::Pi(event) = self else {
+            panic!("expected fake ready event")
+        };
+        event.pid()
+    }
+}
 
 #[cfg(any(feature = "pi_1_3", feature = "pi_1_4", feature = "pi_1_5"))]
 async fn ready<P: PiProtocol>(events: &mut PiEvents<P>, executable: &std::path::Path) -> u32
@@ -530,6 +539,15 @@ process_cases!(pi13, Pi13, "1.3.0", "1.3.10", "1.4.0", ">=1.1.0, <=1.3.0");
 process_cases!(pi14, Pi14, "1.4.0", "1.4.10", "1.5.0", ">=1.1.0, <=1.4.0");
 #[cfg(feature = "pi_1_5")]
 process_cases!(pi15, Pi15, "1.5.0", "1.5.0", "1.4.0", ">=1.3.0, <=1.5.0");
+#[cfg(feature = "bolt_message_id")]
+process_cases!(
+    identified_bolt,
+    BoltMessageIdV1,
+    "1.5.0",
+    "1.5.0",
+    "1.4.0",
+    ">=1.3.0, <=1.5.0"
+);
 
 #[cfg(any(feature = "pi_1_3", feature = "pi_1_4"))]
 #[tokio::test]

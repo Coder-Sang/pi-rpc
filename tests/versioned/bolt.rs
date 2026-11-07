@@ -290,6 +290,15 @@ typed_bolt_cases!(pi13, Pi13, "1.3.0", "1.3.10", "1.4.0", ">=1.1.0, <=1.3.0");
 typed_bolt_cases!(pi14, Pi14, "1.4.0", "1.4.10", "1.5.0", ">=1.1.0, <=1.4.0");
 #[cfg(feature = "pi_1_5")]
 typed_bolt_cases!(pi15, Pi15, "1.5.0", "1.5.0", "1.4.0", ">=1.3.0, <=1.5.0");
+#[cfg(feature = "bolt_message_id")]
+typed_bolt_cases!(
+    identified_bolt,
+    BoltMessageIdV1,
+    "1.5.0",
+    "1.5.0",
+    "1.4.0",
+    ">=1.3.0, <=1.5.0"
+);
 
 #[cfg(any(feature = "pi_1_3", feature = "pi_1_4"))]
 async fn prefix_collisions<P: PiProtocol>(short: &str, long: &str)

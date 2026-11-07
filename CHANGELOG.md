@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2-bolt.1 — Unreleased special branch
+
+- Add the opt-in `bolt_message_id` feature and dedicated `BoltMessageIdV1` protocol for Coder-Sang/Pi-Bolt bolt-v1.1.1 at `7193587994d2fee4b62a213c1f14d82acb832d5c`, based on Pi 1.5.0. Add validated nonempty IDs, identified input methods with exact acceptance echoes and typed queue tracking v1.
+- Reuse existing command admission, byte budgets, lifecycle and Pi15 events. Keep official profiles, auto dispatch, default features, dependencies, global/legacy version limits and Rust 1.88 unchanged. Capability is explicitly selected, never inferred from version output.
+- Set version `0.3.2-bolt.1` and `publish=false`; this build is not a registry release. Expand verification to 64 feature selections, add type-isolation, fragmented tracking, negative schemas, echo/capacity/cleanup regressions and an in-memory independent-consumer example. No live Pi/Bolt/model acceptance is claimed.
+
 ## 0.3.1 — 2026-11-07
 
 ### Fixed

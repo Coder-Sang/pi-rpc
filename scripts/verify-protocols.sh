@@ -13,10 +13,10 @@ python_command=python3
 if ! command -v "$python_command" >/dev/null 2>&1; then
   python_command=python
 fi
-feature_names=(pi_1_3 pi_1_4 pi_1_5 subprocess session_file)
-for ((mask = 0; mask < 32; mask++)); do
+feature_names=(pi_1_3 pi_1_4 pi_1_5 subprocess session_file bolt_message_id)
+for ((mask = 0; mask < 64; mask++)); do
   features=
-  for ((offset = 0; offset < 5; offset++)); do
+  for ((offset = 0; offset < 6; offset++)); do
     if (( mask & (1 << offset) )); then
       features="${features:+$features,}${feature_names[offset]}"
     fi
@@ -30,11 +30,11 @@ for ((mask = 0; mask < 32; mask++)); do
   if "$strict_clippy"; then
     cargo clippy "${flags[@]}" --all-targets -- -D warnings
   fi
-  if (( (mask & 7) == 0 )); then
+  if (( (mask & 39) == 0 )); then
     # Codec/native-file utilities must work without any protocol profile.
     cargo test "${flags[@]}"
   else
-    cargo test "${flags[@]}" --test protocol --test public_paths --test versioned
+    cargo test "${flags[@]}" --test protocol --test public_paths --test versioned --test bolt_message_id
   fi
 done
 "$python_command" scripts/check-protocol-types.py

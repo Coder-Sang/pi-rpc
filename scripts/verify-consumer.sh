@@ -37,6 +37,8 @@ for configuration in default all none session_only; do
     cargo run --locked --manifest-path "$manifest" ${flags[@]+"${flags[@]}"} --example native_session
   fi
 done
+cargo test --locked --manifest-path "$manifest" --no-default-features --features bolt_message_id --test public_paths
+cargo run --locked --manifest-path "$manifest" --no-default-features --features bolt_message_id --example bolt_message_id
 # Check the archived README as an ordinary caller, with no local feature table.
 # The generated main only references inspect_session; never execute its Pi call.
 manifest="$work_native/readme-consumer/Cargo.toml"

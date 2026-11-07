@@ -26,6 +26,7 @@ esac
   FeatureGates.test_later_pi13_failures_stop_after_successful_prefix \
   FeatureGates.test_readme_failure_stops_both_entrypoints ShellSelection
 "$python_command" scripts/test_readme.py
+"$python_command" scripts/test_bolt.py
 for configuration in default all none session_only; do
   case "$configuration" in
     default) flags=() ;;

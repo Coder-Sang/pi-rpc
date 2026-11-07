@@ -1,5 +1,7 @@
 # Release provenance and package review
 
+Current checkout: unpublished **0.3.2-bolt.1**, `publish=false`, with the opt-in [message ID extension](bolt-message-id.md). The official Pi13/Pi14/Pi15 contract and Rust 1.88 minimum are preserved. The fork-specific review is pinned to `7193587994d2fee4b62a213c1f14d82acb832d5c`; its MIT license includes the additional 2026 OpenSec copyright, retained and checked separately in THIRD_PARTY_NOTICES.md. The historical official source/release reviews below retain their scope.
+
 The **0.3.1** source supports **Pi 1.3.0–1.5.0 / Rust 1.88** with project-authored version profiles, typed clients and auto dispatch. Fixed source archives were compared; see the [1.5 review](compatibility.md#pi-150-source-review-2026-11-04) and retained historical comparisons. All five reviewed releases, 1.1.0 through 1.5.0, have identical MIT license bytes. Only 1.3.0–1.5.0 is admitted by 0.3. Published 0.2.2 retains its original source/API/range. Source review, [candidate verification](verification.md#candidate-evidence) and [real acceptance](verification.md#real-pi-acceptance) are separate evidence.
 
 ## Material inventory

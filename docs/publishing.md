@@ -1,5 +1,13 @@
 # Public release checklist
 
+## Unpublished message ID branch
+
+This checkout is **0.3.2-bolt.1** on `feature/pi-bolt-message-id`, with **`publish=false`** in both source and normalized Cargo metadata. It must not be uploaded or tagged. Package validation explicitly rejects missing or publishable policy. Use a byte-identical temporary clean snapshot for strict local packaging and dual-toolchain independent-consumer checks; snapshot commits are verification identities, not branch commits or releases. `cargo publish` and its dry-run are intentionally unavailable on this branch; do not remove the guard to run them. Candidate logs and hashes stay under ignored `target/verification`, outside the archive.
+
+The remaining procedure documents ordinary official releases such as published 0.3.1; it does not authorize applying those upload commands to this special build. See the [extension guide](bolt-message-id.md).
+
+## Official-release procedure
+
 This reusable maintainer procedure accompanies the **0.3.1** release source. Publication observations are recorded only after registry confirmation, separately from the immutable source being uploaded. See [verification](verification.md) for candidate evidence and historical acceptance, and [provenance](provenance.md) for source and license scope. A completed historical checklist does not authorize or validate another upload.
 
 ## Version and release policy

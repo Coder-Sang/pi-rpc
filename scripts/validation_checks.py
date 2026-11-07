@@ -17,6 +17,7 @@ from urllib.parse import unquote, urlsplit
 
 APACHE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 PI_MIT_SHA256 = "0457f5bcec3b3b211605dfb5d1a49042fd638f3686a410fe099c24a25af13c48"
+BOLT_MIT_SHA256 = "7a4418ba5a61aa7a535377aae09334ddd4dd8fc7675ae3522e889cd97c16fd54"
 REQUIRED_FILES = {
     "Cargo.toml", "Cargo.toml.orig", "Cargo.lock", "LICENSE", "README.md", ".gitignore",
     "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/provenance.md", "scripts/verify-consumer.sh",
@@ -33,14 +34,16 @@ REQUIRED_FILES = {
     "scripts/check-format.py", "scripts/test_gates.py",
     "scripts/readme_consumer.py", "scripts/test_readme.py",
     "tests/support/fake_process.rs", "tests/support/protocol_fixtures.rs",
+    "src/protocol/bolt_message_id_v1.rs", "src/client/bolt_message_id.rs",
+    "tests/bolt_message_id.rs", "examples/bolt_message_id.rs", "scripts/test_bolt.py", "docs/bolt-message-id.md",
 }
 PROTOCOL_FEATURES = {
     "default": ["subprocess", "pi_1_4", "pi_1_5"],
     "subprocess": ["tokio/process"], "session_file": [],
-    "pi_1_3": [], "pi_1_4": [], "pi_1_5": [],
+    "pi_1_3": [], "pi_1_4": [], "pi_1_5": [], "bolt_message_id": ["pi_1_5"],
 }
 PACKAGE_METADATA = {
-    "name": "pi-rpc", "license": "Apache-2.0", "publish": ["crates-io"],
+    "name": "pi-rpc", "license": "Apache-2.0", "publish": False,
     "edition": "2024", "rust-version": "1.88", "readme": "README.md",
     "repository": "https://github.com/Coder-Sang/pi-rpc",
     "keywords": ["pi", "rpc", "jsonl", "tokio", "async"],
@@ -156,9 +159,14 @@ def repository_document_path(parsed):
     if parsed.netloc == "github.com" and parsed.path.startswith(prefix):
         require(parsed.scheme == "https", "repository document link must use HTTPS")
         require(not parsed.query, "repository document link must not have a query")
-        reference, separator, path = parsed.path[len(prefix):].partition("/")
+        suffix = parsed.path[len(prefix):]
+        branch = "feature/pi-bolt-message-id"
+        if suffix.startswith(branch + "/"):
+            reference, separator, path = branch, "/", suffix[len(branch) + 1:]
+        else:
+            reference, separator, path = suffix.partition("/")
         version = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
-        require(reference == "main" or re.fullmatch(r"v?" + version, reference) is not None
+        require(reference in {"main", branch} or re.fullmatch(r"v?" + version, reference) is not None
                 or re.fullmatch(r"[0-9a-f]{40}", reference) is not None,
                 "unsupported repository document reference")
         path = unquote(path)
@@ -337,6 +345,9 @@ def check_package_contents(prefix, files, source_root=None, expected_commit=None
     require(hashlib.sha256(files["LICENSE"]).hexdigest() == APACHE_SHA256, "LICENSE is not exact official Apache-2.0 text")
     notice = files["THIRD_PARTY_NOTICES.md"].partition(b"```text\n")[2].partition(b"\n```")[0]
     require(hashlib.sha256(notice).hexdigest() == PI_MIT_SHA256, "missing or changed pinned Pi MIT notice")
+    require(any(hashlib.sha256(block).hexdigest() == BOLT_MIT_SHA256
+                for block in re.findall(rb"```text\n(.*?)\n```", files["THIRD_PARTY_NOTICES.md"], re.S)),
+            "missing or changed pinned Pi-Bolt MIT notice")
     check_ignore_policy(files[".gitignore"])
     require(not any(unwanted_package_file(n) for n in files), "unexpected sensitive/build file in package")
     # GitHub configuration stays tracked in Git, but is not distributed by Cargo.

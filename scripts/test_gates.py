@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
-FEATURES = ("pi_1_3", "pi_1_4", "pi_1_5", "subprocess", "session_file")
+FEATURES = ("pi_1_3", "pi_1_4", "pi_1_5", "subprocess", "session_file", "bolt_message_id")
 
 
 def verification_bash(environment=None):
@@ -83,8 +83,8 @@ source "$0" "$@"
                 self.assertEqual(call[-3:], ["--", "-D", "warnings"])
             if kind == "test":
                 targets = [call[index + 1] for index, value in enumerate(call) if value == "--test"]
-                self.assertEqual(targets, ["protocol", "public_paths", "versioned"]
-                                 if features.intersection(FEATURES[:3]) else [])
+                self.assertEqual(targets, ["protocol", "public_paths", "versioned", "bolt_message_id"]
+                                 if features.intersection(FEATURES[:3]) or "bolt_message_id" in features else [])
         for kind in ("check", "test", "clippy") if clippy else ("check", "test"):
             self.assertEqual(len(selected[kind]), len(expected), kind)
             self.assertEqual(set(selected[kind]), expected, kind)
@@ -117,14 +117,14 @@ source "$0" "$@"
             positive, complete = self.run_matrix(*arguments)
             self.assertEqual(positive.returncode, 0, positive.stderr)
             self.assert_matrix(complete, clippy=clippy)
-            for kind in ("check", "test", "clippy") if clippy else ("check", "test"):
-                with self.subTest(clippy=clippy, kind=kind):
+            for selection, kind in itertools.product(("pi_1_3", "bolt_message_id"), ("check", "test", "clippy") if clippy else ("check", "test")):
+                with self.subTest(clippy=clippy, selection=selection, kind=kind):
                     stop = next(index for index, call in enumerate(complete)
                                 if call[:2] == ["cargo", kind] and "--features" in call
-                                and call[call.index("--features") + 1] == "pi_1_3")
+                                and call[call.index("--features") + 1] == selection)
                     self.assertGreater(stop, 0)
                     self.assertTrue(all("--features" not in call for call in complete[:2 + clippy]))
-                    result, calls = self.run_matrix(*arguments, fail_kind=kind, fail_features="pi_1_3")
+                    result, calls = self.run_matrix(*arguments, fail_kind=kind, fail_features=selection)
                     self.assertEqual(result.returncode, 23, result.stderr)
                     self.assertEqual(calls, complete[:stop + 1], "commands continued or preceding successes changed")
                     self.assertFalse(any(call[0] == "python3" for call in calls))
@@ -201,6 +201,7 @@ source "$0"
 
     def assert_entrypoint(self, calls, clippy):
         self.assertIn(["python3", "scripts/test_readme.py"], calls)
+        self.assertIn(["python3", "scripts/test_bolt.py"], calls)
         cargo = ["cargo", *([] if clippy else ["+1.88.0"])]
         for features in ["subprocess,pi_1_4", "pi_1_5"]:
             flags = ["--locked", "--no-default-features", "--features", features]

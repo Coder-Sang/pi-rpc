@@ -32,6 +32,9 @@ mod response;
 mod session;
 mod ui;
 
+#[cfg(feature = "bolt_message_id")]
+pub mod bolt_message_id_v1;
+
 pub use command::{
     Command, PromptDisposition, QueueMode, QueuedInputDisposition, StreamingBehavior, ThinkingLevel,
 };

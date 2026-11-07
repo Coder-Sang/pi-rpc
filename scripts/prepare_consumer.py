@@ -84,6 +84,7 @@ session_file = ["pi-rpc/session_file"]
 pi_1_3 = ["pi-rpc/pi_1_3"]
 pi_1_4 = ["pi-rpc/pi_1_4"]
 pi_1_5 = ["pi-rpc/pi_1_5"]
+bolt_message_id = ["pi-rpc/bolt_message_id", "pi_1_5"]
 
 [dependencies]
 pi-rpc = {{ path = {json.dumps(extracted.as_posix(), ensure_ascii=False)}, version = "={package['version']}", default-features = false }}
@@ -94,11 +95,21 @@ tokio = {{ version = "1", features = ["rt", "macros", "io-util"] }}
 [[example]]
 name = "native_session"
 required-features = ["session_file"]
+
+[[example]]
+name = "bolt_message_id"
+required-features = ["bolt_message_id"]
+
+[[bin]]
+name = "pi-rpc-independent-consumer"
+path = "src/main.rs"
+required-features = ["pi_1_4"]
 '''
     (consumer / "Cargo.toml").write_text(text, encoding="utf-8")
     for name, source in [("src/main.rs", "examples/injected.rs"),
                          ("tests/public_paths.rs", "tests/public_paths.rs"),
-                         ("examples/native_session.rs", "examples/native_session.rs")]:
+                         ("examples/native_session.rs", "examples/native_session.rs"),
+                         ("examples/bolt_message_id.rs", "examples/bolt_message_id.rs")]:
         path = consumer / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(files[source])

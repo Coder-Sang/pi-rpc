@@ -1,6 +1,6 @@
 //! Async, bounded Pi 1.3.0–1.5.0 RPC with statically versioned events.
 //!
-//! See the [README](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/README.md)
+//! See the [README](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/README.md)
 //! for the default-feature local-process example. It is included below when
 //! `subprocess` and `pi_1_5` are enabled; other builds document their enabled APIs.
 #![cfg_attr(
@@ -28,6 +28,8 @@ pub use protocol::Pi14;
 #[cfg(feature = "pi_1_5")]
 pub use protocol::Pi15;
 pub use protocol::PiProtocol;
+#[cfg(feature = "bolt_message_id")]
+pub use protocol::bolt_message_id_v1::BoltMessageIdV1;
 #[cfg(feature = "subprocess")]
 pub use subprocess::{AutoProcess, PiProcess, ProcessOptions};
 pub use transport::{ConnectionInfo, Transport, VersionSource};

@@ -8,18 +8,19 @@ A bounded, asynchronous Tokio JSONL client with versioned protocol types for Pi.
 
 | Version | Pi support | Minimum Rust |
 |---|---|---|
-| **0.3.1** | **>=1.3.0, <=1.5.0**, versioned API below | **1.88**, edition 2024 |
+| **0.3.2-bolt.1 (unpublished branch)** | **>=1.3.0, <=1.5.0**, opt-in fork extension | **1.88**, edition 2024 |
+| **0.3.1 (published)** | **>=1.3.0, <=1.5.0**, versioned API below | **1.88**, edition 2024 |
 | **0.2.2** | **>=1.1.0, <=1.4.0**, previous API | **1.88**, edition 2024 |
 
-Version 0.3 introduces explicit protocol types and a source-breaking migration from 0.2. The badges describe registry packages, hosted API documentation and committed main. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/migration-0.3.md), [changelog](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/CHANGELOG.md) and [verification](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/verification.md).
+Version 0.3 introduces explicit protocol types and a source-breaking migration from 0.2. The badges describe registry packages, hosted API documentation and committed main. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/migration-0.3.md), [changelog](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/CHANGELOG.md) and [verification](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/verification.md).
 
 ## Installation and features
 
-Use Rust **1.88+** and install a supported Pi release separately:
+This branch is the unpublished **0.3.2-bolt.1** special build (`publish=false`). Use Rust **1.88+**, check out `feature/pi-bolt-message-id` locally, and adjust the path below. The published official package remains `pi-rpc = "0.3.1"`. Install Pi/Bolt separately:
 
 ```toml
 [dependencies]
-pi-rpc = "0.3.1"
+pi-rpc = { path = "../pi-rpc", version = "=0.3.2-bolt.1" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -31,6 +32,7 @@ Applications retaining the 0.2 API or Pi 1.1/1.2 support can use `pi-rpc = "0.2.
 | `pi_1_3` | No | `Pi13` and `protocol::v1_3` for Pi 1.3.x |
 | `pi_1_4` | Yes | `Pi14` and `protocol::v1_4` for Pi 1.4.x |
 | `pi_1_5` | Yes | `Pi15` and `protocol::v1_5`, currently Pi 1.5.0 |
+| `bolt_message_id` | No | `BoltMessageIdV1` and input-ID/queue-tracking types; enables `pi_1_5` |
 | `session_file` | No | Native v3 parsing, encoding and `SessionFileBuilder` |
 
 Protocol features are additive. All connections must also satisfy the global 1.3.0–1.5.0 range. For Transport-only Pi 1.4, use `default-features = false, features = ["pi_1_4"]`. Native sessions and JSONL codec utilities work without a protocol feature; connecting requires one. No protocol feature changes another version's event type.
@@ -68,13 +70,17 @@ async fn inspect_session() -> pi_rpc::Result<()> {
 
 `spawn` runs the bounded `--version` probe, then checks the actual version against `Pi15` and `expected_version` before starting RPC. The default expectation is `">=1.3.0, <=1.5.0"`. Previous ranges ending in 1.3.0 or 1.4.0 retain their upper bounds and intersect the new supported range; the former range ending in 1.2.0 is rejected. A concrete expectation remains an exact lock.
 
-Since **0.3.1**, probe-based startup also recognizes complete official Pi-Bolt output, such as `1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)`. Admission, protocol selection and `info().version()` use the underlying Pi version (`1.5.0`), independently of the Bolt version (`1.1.1`). Version 0.3.0 retains its original probe rules. No fork-specific message tracking is added. See [Pi-Bolt startup](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/connections.md#pi-bolt-version-output).
+Since **0.3.1**, probe-based startup also recognizes complete official Pi-Bolt output, such as `1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)`. Admission, protocol selection and `info().version()` use the underlying Pi version (`1.5.0`), independently of the Bolt version (`1.1.1`). Version 0.3.0 retains its original probe rules. Published 0.3.1 adds no fork-specific tracking. This branch separately provides the opt-in [message ID extension](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md), pinned to the Coder-Sang fork; the version decoration does not detect that capability. See [Pi-Bolt startup](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/connections.md#pi-bolt-version-output).
 
 When the host already knows the installed release, `PiProcess::<Pi15>::spawn_with_version(options, "1.5.0")` skips the probe. The caller guarantees the declaration is accurate; all admission checks still apply. `startup_timeout` controls only probing. Neither entrypoint sends initialization RPCs or waits for application readiness.
 
 For automatic selection, `subprocess::spawn_auto(options)` probes and returns an `AutoProcess` variant containing the corresponding typed client, event stream and process owner. `spawn_auto_with_version(options, version)` selects from a trusted declaration. Match the variant once to obtain static types; unavailable protocol features cause an explicit error, never fallback. Every handle exposes immutable `info()` with the concrete version and `Probed`/`Declared` source.
 
-Pi inherits the process environment. The host owns installation, credentials, isolation and access policy. Pi can persist settings or refresh authentication. See [connections](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/connections.md) for lifecycle, diagnostics and Manual UI configuration.
+Pi inherits the process environment. The host owns installation, credentials, isolation and access policy. Pi can persist settings or refresh authentication. See [connections](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/connections.md) for lifecycle, diagnostics and Manual UI configuration.
+
+## Opt-in input message IDs
+
+Enable `bolt_message_id` and explicitly select `BoltMessageIdV1` for the reviewed Coder-Sang/Pi-Bolt fork. Identified prompt/steer/follow-up methods return typed acceptance echoes; queue events carry runtime-only input IDs and batch handoffs. Automatic dispatch and official Pi13/Pi14/Pi15 APIs stay unchanged. A batch does not identify an assistant response. See the [extension guide](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md) and run `cargo run --example bolt_message_id --no-default-features --features bolt_message_id` without Pi or a model.
 
 ## Injected transport
 
@@ -85,7 +91,7 @@ Run `cargo run --example injected --no-default-features --features pi_1_4` for a
 ## Events, ownership and limits
 
 - `PiEvents<P>` returns only `P::Event`. Each supported minor has distinct `Event`, `KnownEvent` and `AssistantEvent` types. Provider, tool and extension payloads remain open JSON; the SDK does not infer provider semantics.
-- All 33 commands have typed methods. Prompt acceptance means started, queued or handled; it does not mean completion. Events form one ordered session stream, generally without originating command IDs. See [event consumption](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/events.md).
+- All 33 commands have typed methods. Prompt acceptance means started, queued or handled; it does not mean completion. Events form one ordered session stream, generally without originating command IDs. See [event consumption](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/events.md).
 - Choose `UiPolicy::Manual` before connecting to answer dialogs. The default cancels dialogs and still delivers their events. One-way UI notifications receive no reply.
 - Keep the connection/process owner alive. Dropping a client clone is inert; dropping an owner stops I/O and a local process owner also signals child termination. Explicit close/termination waits for cleanup while the runtime lives.
 - `clear_queue`, `abort`, orderly `close` and forced `terminate` have separate meanings. Cancelled or timed-out commands can have uncertain outcomes; the SDK does not automatically retry them.
@@ -96,14 +102,14 @@ Run `cargo run --example injected --no-default-features --features pi_1_4` for a
 
 With `session_file`, build native v3 JSONL with `SessionFileBuilder`, or parse caller-supplied bytes with `SessionFile::parse`. Native roles, Usage, images, custom fields and branches are preserved. Session files are format-based and do not select a Pi protocol type.
 
-`encode()` returns a complete `Vec<u8>`; it does not stream to `Write`. `SessionLimits` adjusts record/file bytes and entry count during parsing/encoding. Builder appends do not enforce cumulative byte/count budgets. File delivery, permissions and atomic replacement belong to the host. See [native sessions](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/native-sessions.md).
+`encode()` returns a complete `Vec<u8>`; it does not stream to `Write`. `SessionLimits` adjusts record/file bytes and entry count during parsing/encoding. Builder appends do not enforce cumulative byte/count budgets. File delivery, permissions and atomic replacement belong to the host. See [native sessions](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/native-sessions.md).
 
 ## Stability and development
 
-The 0.3 minor introduces the versioned API and defaults described above; migrate explicitly from 0.2. Rust 1.88 remains the minimum. `PI_VERSION = "1.5.0"` and `SOURCE_COMMIT` identify the latest reviewed source. In-range future patch releases pass admission but still require source review and verification; admission does not establish live acceptance. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/compatibility.md) and [release policy](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/publishing.md#version-and-release-policy).
+The 0.3 minor introduces the versioned API and defaults described above; migrate explicitly from 0.2. Rust 1.88 remains the minimum. `PI_VERSION = "1.5.0"` and `SOURCE_COMMIT` identify the latest reviewed source. In-range future patch releases pass admission but still require source review and verification; admission does not establish live acceptance. See [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/compatibility.md) and [release policy](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/publishing.md#version-and-release-policy).
 
 Development uses current stable Rust with rustfmt/Clippy and exact Rust 1.88.0, Bash, Git, Python 3.11+ and a native C/assembly compiler. Windows requires Git Bash, MSVC and the Windows SDK. Normal verification uses only in-memory transports and compiled fake processes.
 
-Read [CONTRIBUTING](https://github.com/Coder-Sang/pi-rpc/blob/main/CONTRIBUTING.md), [verification](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/verification.md) and [publishing](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/publishing.md). [Real acceptance](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/acceptance.md) is separately opt-in and may persist settings or incur charges. Synthetic verification does not establish real-Pi or paid-model acceptance; candidate evidence is recorded separately.
+Read [CONTRIBUTING](https://github.com/Coder-Sang/pi-rpc/blob/main/CONTRIBUTING.md), [verification](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/verification.md) and [publishing](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/publishing.md). [Real acceptance](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/acceptance.md) is separately opt-in and may persist settings or incur charges. Synthetic verification does not establish real-Pi or paid-model acceptance; candidate evidence is recorded separately.
 
-Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/LICENSE), with [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/THIRD_PARTY_NOTICES.md). See [provenance](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/provenance.md) and [security reporting](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/SECURITY.md).
+Project code and documentation use [Apache-2.0](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/LICENSE), with [third-party notices](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/THIRD_PARTY_NOTICES.md). See [provenance](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/provenance.md) and [security reporting](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/SECURITY.md).

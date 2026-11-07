@@ -110,3 +110,7 @@ Recovery can append separate `context_edit` records with `replacement: null` for
 The reviewed 1.5.0 RPC types, event declarations, JSON event transformation and native-v3 schema match 1.4.0. They have distinct Rust protocol types in 0.3, while sharing audited implementation templates. This separates version contracts without promising identical provider outputs, retry sequences or tool-error text.
 
 Optional `Usage.cost.totalFromProvider` is retained in `Cost.extra`, including absent/false/true distinctions. `Message.fields["responseModel"]` remains open and may equal the requested model. Provider total cost is preserved independently of component estimates; the SDK does not recompute it or infer its origin. Tool argument diagnostics from Pi's pi-schema validation remain opaque strings/data. See the [1.5 source review](compatibility.md#pi-150-source-review-2026-11-04).
+
+## Optional fork input tracking
+
+On the unpublished special branch, `PiEvents<BoltMessageIdV1>` yields a separate queue-update type with optional tracking v1 and wraps other Pi15 events unchanged. Official profiles and automatic selection never infer this extension. Register input IDs and start consuming before submission; tracking may arrive before acceptance. Enqueue, consumption, initial handoff and clearing are distinct operations; batches do not identify provider responses. See the [extension contract](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md).

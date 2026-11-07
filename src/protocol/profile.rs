@@ -26,6 +26,9 @@ pub trait PiProtocol:
 }
 
 pub(crate) trait Sealed {
+    fn validate_response(_response: &Response) -> Result<()> {
+        Ok(())
+    }
     fn known(value: &Value) -> Result<<Self as PiProtocol>::Event>
     where
         Self: PiProtocol;

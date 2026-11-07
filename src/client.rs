@@ -21,6 +21,8 @@ use tokio::{
 
 mod auto;
 pub use auto::{AutoConnection, connect_auto};
+#[cfg(feature = "bolt_message_id")]
+mod bolt_message_id;
 mod commands;
 mod outbound;
 mod runtime;
@@ -293,6 +295,14 @@ impl<P: PiProtocol> PiClient<P> {
         command: Command,
         timeout: Duration,
     ) -> impl std::future::Future<Output = Result<Response>> + Send {
+        self.command_record(command, None, timeout)
+    }
+    fn command_record(
+        &self,
+        command: Command,
+        message_id: Option<Arc<String>>,
+        timeout: Duration,
+    ) -> impl std::future::Future<Output = Result<Response>> + Send {
         let command = crate::owned::Owned::new(command);
         async move {
             let id = format!("pi-rpc-{}", self.ids.fetch_add(1, Ordering::Relaxed));
@@ -309,14 +319,18 @@ impl<P: PiProtocol> PiClient<P> {
                 id: &'a str,
                 #[serde(flatten)]
                 command: &'a Command,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                message_id: Option<&'a str>,
             }
             let prepared = self.prepare_record(&CommandRecord {
                 id: &id,
                 command: &command,
+                message_id: message_id.as_deref().map(String::as_str),
             })?;
             // The owned input (including Base64) is no longer needed once the
             // budgeted output exists; do not retain it while awaiting a reply.
             drop(command);
+            drop(message_id);
             let (response, rx) = oneshot::channel();
             let sent = self
                 .shared

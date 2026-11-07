@@ -67,6 +67,7 @@ pub fn decode_record<P: PiProtocol>(v: Value) -> Result<Record<P>> {
         }
         let r: Response = json::decode(&v).map_err(|_| invalid())?;
         r.validate()?;
+        <P as Sealed>::validate_response(&r)?;
         return Ok(Record::Response(r));
     }
     if kind == "extension_ui_request" {

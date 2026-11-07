@@ -254,6 +254,40 @@ profile_test!(pi14_public_paths, v1_4, Pi14);
 #[cfg(feature = "pi_1_5")]
 profile_test!(pi15_public_paths, v1_5, Pi15);
 
+#[cfg(feature = "bolt_message_id")]
+#[test]
+fn bolt_extension_public_paths_and_send_futures() {
+    use pi_rpc::{BoltMessageIdV1, protocol::bolt_message_id_v1::*};
+    same_type(
+        None::<BoltMessageIdV1>,
+        None::<pi_rpc::protocol::bolt_message_id_v1::BoltMessageIdV1>,
+    );
+    same_type(
+        None::<Event>,
+        None::<pi_rpc::protocol::Event<BoltMessageIdV1>>,
+    );
+    wire::<MessageId>();
+    wire::<InputAcceptance<pi_rpc::protocol::PromptDisposition>>();
+    wire::<TrackingVersion>();
+    wire::<InputSource>();
+    wire::<ClearedInputs>();
+    wire::<QueueChange>();
+    wire::<QueueTrackingV1>();
+    wire::<QueueUpdate>();
+    profile_paths::<BoltMessageIdV1>();
+    fn methods(client: &pi_rpc::PiClient<BoltMessageIdV1>) {
+        fn future<T>(
+            _: impl std::future::Future<Output = pi_rpc::Result<InputAcceptance<T>>> + Send,
+        ) {
+        }
+        future(client.prompt_with_message_id("input", None, None, MessageId::new("A").unwrap()));
+        future(client.steer_with_message_id("input", None, MessageId::new("B").unwrap()));
+        future(client.follow_up_with_message_id("input", None, MessageId::new("C").unwrap()));
+    }
+    let _ = methods;
+    assert_eq!(SOURCE_COMMIT, "7193587994d2fee4b62a213c1f14d82acb832d5c");
+}
+
 #[test]
 fn ui_timeouts_keep_the_u64_public_fields() {
     use pi_rpc::protocol::UiMethod;

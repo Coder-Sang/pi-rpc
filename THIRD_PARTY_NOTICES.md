@@ -30,6 +30,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Pi-Bolt input-tracking reference
+
+The unpublished opt-in extension follows the Coder-Sang/Pi-Bolt bolt-v1.1.1 [fixed wire contract](https://github.com/Coder-Sang/Pi-Bolt/tree/7193587994d2fee4b62a213c1f14d82acb832d5c), based on Pi 1.5.0. The Rust implementation and tests are project-authored; no fork executable or implementation source is vendored. The fork adds OpenSec's copyright notice; its fixed [LICENSE](https://github.com/Coder-Sang/Pi-Bolt/blob/7193587994d2fee4b62a213c1f14d82acb832d5c/LICENSE) is retained below. Version-output recognition in 0.3.1 remains a separate official Pi-Bolt formatter reference.
+
+```text
+MIT License
+
+Copyright (c) 2025 Mario Zechner
+Copyright (c) 2026 OpenSec (Pi-Bolt)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Cargo dependencies
 
 Dependencies retain their own licenses; this project's Apache-2.0 declaration does not relicense them. Their sources and binaries are not included in the pi-rpc source crate. Cargo resolves them separately using the shipped manifest and lockfile. The [review record](docs/provenance.md#dependency-metadata) lists the license-expression scope checked for this release candidate.
