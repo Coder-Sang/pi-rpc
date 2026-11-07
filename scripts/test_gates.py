@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for feature selection, fail-fast checks and include! formatting."""
-from contextlib import redirect_stdout
+import ast
+from contextlib import ExitStack, redirect_stdout
 import io
 import itertools
 import os
@@ -242,15 +243,56 @@ source "$0"
                 self.assertEqual(calls, complete[:stop + 1], "verification continued after the README failure")
 
 
+class FetchOrderViolation(AssertionError):
+    """Only an observed command before the locked fetch raises this failure."""
+
+
 class BoltControls(unittest.TestCase):
-    def run_controls(self, fail_fetch=False, omit_fetch=False):
-        module = runpy.run_path(str(ROOT / "scripts/test_bolt.py"))
-        if omit_fetch:
-            source = (ROOT / "scripts/test_bolt.py").read_text(encoding="utf-8")
-            fetch = '    subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True)\n'
-            self.assertEqual(source.count(fetch), 1)
-            exec(compile(source.replace(fetch, ""), str(ROOT / "scripts/test_bolt.py"), "exec"), module)
-        calls, test_count = [], 0
+    @staticmethod
+    def locate_fetch(tree):
+        mains = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"]
+        matches = []
+        if len(mains) == 1:
+            for node in ast.walk(mains[0]):
+                if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+                    continue
+                call = node.value
+                if not (isinstance(call.func, ast.Attribute) and call.func.attr == "run"
+                        and isinstance(call.func.value, ast.Name) and call.func.value.id == "subprocess"
+                        and call.args):
+                    continue
+                try:
+                    command = ast.literal_eval(call.args[0])
+                except (ValueError, TypeError):
+                    continue
+                if command == ["cargo", "fetch", "--locked"]:
+                    matches.append(node)
+        if len(matches) != 1 or matches[0] not in mains[0].body:
+            raise ValueError("expected one unconditional locked cargo fetch")
+        return mains[0], matches[0]
+
+    def prepare_omission(self, source):
+        filename = str(ROOT / "scripts/test_bolt.py")
+        tree = ast.parse(source, filename=filename)
+        main, fetch = self.locate_fetch(tree)
+        baseline = compile(tree, filename, "exec")
+        main.body.remove(fetch)
+        if not main.body:
+            main.body.append(ast.Pass())
+        return baseline, compile(ast.fix_missing_locations(tree), filename, "exec")
+
+    def require_fetch_first(self, calls, stage):
+        if calls[0][0] != ["cargo", "fetch", "--locked"]:
+            raise FetchOrderViolation(f"{stage} before locked fetch")
+
+    def run_controls(self, code=None, fail_fetch=False, calls=None):
+        filename = str(ROOT / "scripts/test_bolt.py")
+        if code is None:
+            code = compile(Path(filename).read_text(encoding="utf-8"), filename, "exec")
+        module = {"__file__": filename, "__name__": "bolt_control_probe"}
+        exec(code, module)
+        calls = [] if calls is None else calls
+        test_count = 0
         with tempfile.TemporaryDirectory() as work:
             fixture = Path(work)
             names = ["src/client.rs", "src/client/bolt_message_id.rs", "src/protocol/bolt_message_id_v1.rs"]
@@ -269,10 +311,10 @@ class BoltControls(unittest.TestCase):
                         raise subprocess.CalledProcessError(23, command)
                     return subprocess.CompletedProcess(command, 23 if fail_fetch else 0)
                 if command[:2] == ["git", "ls-files"]:
-                    self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
+                    self.require_fetch_first(calls, "source discovery")
                     return subprocess.CompletedProcess(command, 0, stdout="\0".join(names).encode() + b"\0")
                 self.assertEqual(command[:2], ["cargo", "test"])
-                self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
+                self.require_fetch_first(calls, "offline control")
                 self.assertIn("--offline", command)
                 self.assertIn("--locked", command)
                 test = command[command.index("--test") + 2]
@@ -283,28 +325,129 @@ class BoltControls(unittest.TestCase):
 
             with patch.dict(module["main"].__globals__, ROOT=fixture), \
                     patch.object(subprocess, "run", observe), redirect_stdout(io.StringIO()):
-                if fail_fetch:
-                    with self.assertRaises(subprocess.CalledProcessError):
-                        module["main"]()
-                else:
-                    module["main"]()
+                module["main"]()
         return calls, test_count
 
-    def test_locked_fetch_precedes_all_offline_controls_on_a_cold_cache(self):
-        calls, count = self.run_controls()
+    def assert_successful_controls(self, calls, count):
         self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
         self.assertTrue(calls[0][1]["check"])
         self.assertEqual(sum(command[:2] == ["cargo", "fetch"] for command, _ in calls), 1)
         self.assertEqual(count, 20, "all ten positive/negative pairs must remain offline")
 
+    def assert_omitted_fetch_detected(self, source):
+        # Preparation and the successful baseline must finish outside the
+        # variant's expected failure. Neither can satisfy that assertion.
+        baseline, omitted = self.prepare_omission(source)
+        self.assert_successful_controls(*self.run_controls(baseline))
+        calls = []
+        with self.assertRaisesRegex(FetchOrderViolation, "^source discovery before locked fetch$"):
+            self.run_controls(omitted, calls=calls)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0][:2], ["git", "ls-files"])
+
+    def test_locked_fetch_precedes_all_offline_controls_on_a_cold_cache(self):
+        self.assert_successful_controls(*self.run_controls())
+
     def test_failed_fetch_stops_before_source_copy_or_offline_controls(self):
-        calls, count = self.run_controls(fail_fetch=True)
+        calls = []
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            self.run_controls(fail_fetch=True, calls=calls)
+        self.assertEqual(failure.exception.returncode, 23)
+        self.assertEqual(failure.exception.cmd, ["cargo", "fetch", "--locked"])
         self.assertEqual([command for command, _ in calls], [["cargo", "fetch", "--locked"]])
-        self.assertEqual(count, 0)
 
     def test_cold_cache_regression_detects_an_omitted_fetch(self):
-        with self.assertRaises(AssertionError):
-            self.run_controls(omit_fetch=True)
+        self.assert_omitted_fetch_detected((ROOT / "scripts/test_bolt.py").read_text(encoding="utf-8"))
+
+    def test_omitted_fetch_control_accepts_equivalent_formatting(self):
+        source = (ROOT / "scripts/test_bolt.py").read_text(encoding="utf-8")
+        _, fetch = self.locate_fetch(ast.parse(source))
+        lines = source.splitlines(keepends=True)
+        before, after = "".join(lines[:fetch.lineno - 1]), "".join(lines[fetch.end_lineno:])
+        variants = {
+            "reordered": '    subprocess.run(["cargo", "fetch", "--locked"], env=environment, check=True, cwd=ROOT)\n',
+            "single_quotes": "    subprocess.run(['cargo', 'fetch', '--locked'], cwd=ROOT, env=environment, check=True)\n",
+            "multiline": '    subprocess.run(\n        ["cargo", "fetch", "--locked"],\n        check=True,\n        env=environment,\n        cwd=ROOT,\n    )\n',
+            "parenthesized": '    (subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True))\n',
+            "comments": '    # Equivalent fetch 🦀\n    subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True)  # locked\n',
+            "semicolon": '    format_marker = True; subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True)\n',
+        }
+        sources = {name: before + fetch + after for name, fetch in variants.items()}
+        sources["crlf"] = source.replace("\n", "\r\n")
+        sources["tabs"] = re.sub(r"^( +)", lambda match: "\t" * (len(match[1]) // 4) + " " * (len(match[1]) % 4),
+                                 source, flags=re.MULTILINE)
+        for name, variant in sources.items():
+            with self.subTest(format=name):
+                self.assert_omitted_fetch_detected(variant)
+
+    def test_omission_locator_rejects_missing_duplicate_unlocked_and_conditional_fetches(self):
+        source = (ROOT / "scripts/test_bolt.py").read_text(encoding="utf-8")
+        # Prove the source is usable before constructing invalid targets.
+        self.assert_omitted_fetch_detected(source)
+        for kind in ["missing", "duplicate", "unlocked", "conditional"]:
+            tree = ast.parse(source)
+            main, fetch = self.locate_fetch(tree)
+            index = main.body.index(fetch)
+            if kind == "missing":
+                main.body.remove(fetch)
+            elif kind == "duplicate":
+                main.body.insert(index, fetch)
+            elif kind == "unlocked":
+                fetch.value.args[0] = ast.parse('["cargo", "fetch"]', mode="eval").body
+            else:
+                main.body[index] = ast.If(test=ast.Constant(True), body=[fetch], orelse=[])
+            with self.subTest(target=kind), self.assertRaisesRegex(
+                    ValueError, "^expected one unconditional locked cargo fetch$"):
+                self.prepare_omission(ast.unparse(tree))
+
+    def omission_case_result(self, case):
+        result = unittest.TestResult()
+        case.run(result)
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(result.errors, [])
+        return result.failures
+
+    def test_omitted_fetch_control_propagates_locator_baseline_and_unrelated_variant_failures(self):
+        self.assertEqual(self.omission_case_result(type(self)("test_cold_cache_regression_detects_an_omitted_fetch")), [])
+        for phase, expected_calls in [("locator", 0), ("baseline", 1), ("baseline_validation", 1), ("variant", 2)]:
+            case = type(self)("test_cold_cache_regression_detects_an_omitted_fetch")
+            marker = f"unrelated {phase} assertion"
+            original = case.run_controls
+            calls = []
+
+            def run(*arguments, **options):
+                calls.append(arguments)
+                if phase in {"baseline", "variant"} and len(calls) == expected_calls:
+                    raise AssertionError(marker)
+                return original(*arguments, **options)
+
+            with self.subTest(phase=phase), ExitStack() as stack:
+                stack.enter_context(patch.object(case, "run_controls", side_effect=run))
+                if phase == "locator":
+                    stack.enter_context(patch.object(case, "prepare_omission", side_effect=AssertionError(marker)))
+                elif phase == "baseline_validation":
+                    stack.enter_context(patch.object(case, "assert_successful_controls", side_effect=AssertionError(marker)))
+                failures = self.omission_case_result(case)
+                self.assertEqual(len(failures), 1)
+                self.assertIn(marker, failures[0][1])
+                self.assertEqual(len(calls), expected_calls)
+
+    def test_omitted_fetch_control_rejects_ineffective_mutation_and_disabled_order_check(self):
+        source = (ROOT / "scripts/test_bolt.py").read_text(encoding="utf-8")
+        baseline, _ = self.prepare_omission(source)
+        self.assertEqual(self.omission_case_result(type(self)("test_cold_cache_regression_detects_an_omitted_fetch")), [])
+        for kind in ["unchanged_variant", "disabled_order_check"]:
+            case = type(self)("test_cold_cache_regression_detects_an_omitted_fetch")
+            with self.subTest(control=kind), ExitStack() as stack:
+                run = stack.enter_context(patch.object(case, "run_controls", wraps=case.run_controls))
+                if kind == "unchanged_variant":
+                    stack.enter_context(patch.object(case, "prepare_omission", return_value=(baseline, baseline)))
+                else:
+                    stack.enter_context(patch.object(case, "require_fetch_first", return_value=None))
+                failures = self.omission_case_result(case)
+                self.assertEqual(len(failures), 1)
+                self.assertIn("FetchOrderViolation not raised", failures[0][1])
+                self.assertEqual(run.call_count, 2, "the successful baseline must precede the ineffective variant")
 
 
 class ShellSelection(unittest.TestCase):
