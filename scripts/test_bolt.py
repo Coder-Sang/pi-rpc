@@ -13,6 +13,10 @@ def main():
     environment = os.environ.copy()
     target = Path(environment.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
     environment["CARGO_TARGET_DIR"] = str(target / "bolt-negative-controls")
+    # README consumers fetch normal dependencies, but do not populate SDK
+    # dev-dependencies on a cold runner. Honor CARGO_NET_OFFLINE when set;
+    # otherwise fetch the locked test graph once before the offline controls.
+    subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True)
     cases = [
         ("omitted-input-id", "src/client.rs", "message_id: message_id.as_deref().map(String::as_str),", "message_id: None,",
          "identified_inputs_use_separate_rpc_ids_and_preserve_existing_payloads"),

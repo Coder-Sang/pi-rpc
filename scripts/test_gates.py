@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for feature selection, fail-fast checks and include! formatting."""
+from contextlib import redirect_stdout
+import io
 import itertools
 import os
 from pathlib import Path
@@ -219,7 +221,7 @@ source "$0"
                            "FeatureGates.test_windows_observer_follows_enabled_protocols",
                            "FeatureGates.test_later_pi13_failures_stop_after_successful_prefix",
                            "FeatureGates.test_readme_failure_stops_both_entrypoints",
-                           "ShellSelection"], calls)
+                           "ShellSelection", "BoltControls"], calls)
 
     def test_stable_and_msrv_entrypoints_keep_the_required_checks(self):
         for name, clippy in [("verify.sh", True), ("verify-msrv.sh", False)]:
@@ -238,6 +240,71 @@ source "$0"
                 result, calls = self.run_entrypoint(name, fail_readme=True)
                 self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
                 self.assertEqual(calls, complete[:stop + 1], "verification continued after the README failure")
+
+
+class BoltControls(unittest.TestCase):
+    def run_controls(self, fail_fetch=False, omit_fetch=False):
+        module = runpy.run_path(str(ROOT / "scripts/test_bolt.py"))
+        if omit_fetch:
+            source = (ROOT / "scripts/test_bolt.py").read_text(encoding="utf-8")
+            fetch = '    subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True)\n'
+            self.assertEqual(source.count(fetch), 1)
+            exec(compile(source.replace(fetch, ""), str(ROOT / "scripts/test_bolt.py"), "exec"), module)
+        calls, test_count = [], 0
+        with tempfile.TemporaryDirectory() as work:
+            fixture = Path(work)
+            names = ["src/client.rs", "src/client/bolt_message_id.rs", "src/protocol/bolt_message_id_v1.rs"]
+            for name in names:
+                path = fixture / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((ROOT / name).read_bytes())
+
+            def observe(command, **options):
+                nonlocal test_count
+                calls.append((command, options))
+                if command[:2] == ["cargo", "fetch"]:
+                    self.assertEqual(command, ["cargo", "fetch", "--locked"])
+                    self.assertEqual(options["cwd"], fixture)
+                    if fail_fetch and options.get("check"):
+                        raise subprocess.CalledProcessError(23, command)
+                    return subprocess.CompletedProcess(command, 23 if fail_fetch else 0)
+                if command[:2] == ["git", "ls-files"]:
+                    self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
+                    return subprocess.CompletedProcess(command, 0, stdout="\0".join(names).encode() + b"\0")
+                self.assertEqual(command[:2], ["cargo", "test"])
+                self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
+                self.assertIn("--offline", command)
+                self.assertIn("--locked", command)
+                test = command[command.index("--test") + 2]
+                rejected = test_count % 2 != 0
+                test_count += 1
+                return subprocess.CompletedProcess(command, 101 if rejected else 0,
+                    stdout=f"test {test} ... {'FAILED' if rejected else 'ok'}\n", stderr="")
+
+            with patch.dict(module["main"].__globals__, ROOT=fixture), \
+                    patch.object(subprocess, "run", observe), redirect_stdout(io.StringIO()):
+                if fail_fetch:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        module["main"]()
+                else:
+                    module["main"]()
+        return calls, test_count
+
+    def test_locked_fetch_precedes_all_offline_controls_on_a_cold_cache(self):
+        calls, count = self.run_controls()
+        self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
+        self.assertTrue(calls[0][1]["check"])
+        self.assertEqual(sum(command[:2] == ["cargo", "fetch"] for command, _ in calls), 1)
+        self.assertEqual(count, 20, "all ten positive/negative pairs must remain offline")
+
+    def test_failed_fetch_stops_before_source_copy_or_offline_controls(self):
+        calls, count = self.run_controls(fail_fetch=True)
+        self.assertEqual([command for command, _ in calls], [["cargo", "fetch", "--locked"]])
+        self.assertEqual(count, 0)
+
+    def test_cold_cache_regression_detects_an_omitted_fetch(self):
+        with self.assertRaises(AssertionError):
+            self.run_controls(omit_fetch=True)
 
 
 class ShellSelection(unittest.TestCase):
