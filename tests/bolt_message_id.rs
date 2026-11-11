@@ -50,6 +50,33 @@ async fn bounded<F: std::future::Future>(future: F) -> F::Output {
 }
 
 #[test]
+fn extension_base_stays_exact_when_official_pi15_support_expands() {
+    use pi_rpc::PiProtocol;
+    assert!(BoltMessageIdV1::matches_version("1.5.0"));
+    for version in ["1.5.0", "1.5.1", "1.5.2"] {
+        assert!(pi_rpc::Pi15::matches_version(version));
+        assert_eq!(
+            BoltMessageIdV1::matches_version(version),
+            version == "1.5.0"
+        );
+    }
+    for version in [
+        "1.3.0",
+        "1.4.0",
+        "1.5.3",
+        "1.5.10",
+        "1.6.0",
+        "01.5.0",
+        "1.5.0 ",
+        "1.5.0-rc.1",
+        "1.5.0+build",
+        "1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)",
+    ] {
+        assert!(!BoltMessageIdV1::matches_version(version), "{version}");
+    }
+}
+
+#[test]
 fn ids_preserve_bytes_and_clones_share_the_allocation() {
     assert!(MessageId::new("").is_err());
     for text in [

@@ -33,7 +33,8 @@ pub struct ProcessOptions {
     /// Child working directory. None inherits the caller's working directory.
     pub cwd: Option<PathBuf>,
     /// Either [`PI_VERSION_REQUIREMENT`] (the default), a previous fixed
-    /// `">=1.1.0, <=1.3.0"` or `">=1.1.0, <=1.4.0"` expression,
+    /// `">=1.1.0, <=1.3.0"`, `">=1.1.0, <=1.4.0"` or
+    /// `">=1.3.0, <=1.5.0"` expression,
     /// or an exact supported release. Each previous expression retains its
     /// original upper bound, intersected with the current supported range.
     /// Both startup methods enforce this expectation;

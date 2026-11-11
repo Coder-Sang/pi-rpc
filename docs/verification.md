@@ -2,13 +2,15 @@
 
 ## Unpublished message ID branch
 
-The `0.3.2-bolt.1` special build uses `publish=false` and adds the opt-in `bolt_message_id` profile. Its local selection matrix contains **64** combinations; official default features and Rust 1.88 remain unchanged. Stable strict validation, exact 1.88.0 checks, three-round stress and Debug/Release boundaries exercise the new regression target and shared lifecycle. Independent consumption runs the in-memory extension example with only `bolt_message_id`, without subprocess or a local protocol feature table requirement. Package checks retain strict clean VCS and source-byte equality using a temporary snapshot when source is uncommitted. No publishing dry-run is run through the guard.
+The 0.3.3-bolt.1 synchronization inherits official 0.3.2/Pi 1.5.2 checks while independently pinning the extension to base Pi 1.5.0. Synthetic tests reject 1.5.1/1.5.2 before Transport I/O and declared/plain/decorated RPC startup, including exact expectations. An independent mutation control proves that substituting ordinary minor-version admission makes the extension regression fail. Existing message-ID schema, exact-echo, tracking and lifecycle controls remain intact.
+
+The `0.3.3-bolt.1` special build uses `publish=false` and adds the opt-in `bolt_message_id` profile. Its local selection matrix contains **64** combinations; official default features and Rust 1.88 remain unchanged. Stable strict validation, exact 1.88.0 checks, three-round stress and Debug/Release boundaries exercise the new regression target and shared lifecycle. Independent consumption runs the in-memory extension example with only `bolt_message_id`, without subprocess or a local protocol feature table requirement. Package checks retain strict clean VCS and source-byte equality using a temporary snapshot when source is uncommitted. No publishing dry-run is run through the guard.
 
 Local logs, source hashes and candidate evidence are kept under ignored `target/verification/`, excluded from the crate. Every committed special-branch candidate requires its own local gates and six Linux/macOS/Windows CI jobs with matching source/archive artifacts before claiming cross-platform acceptance. Record the actual commit, run and archive identities outside packaged source using the [candidate procedure](#candidate-evidence). Synthetic verification does not establish real fork/provider acceptance. Published release evidence below remains historical. See the [extension guide](bolt-message-id.md) for the fixed reference and tested wire semantics.
 
 ## Current status summary
 
-**pi-rpc 0.3.1** supports **Pi >=1.3.0, <=1.5.0 / Rust 1.88** with versioned protocol types. Published 0.2.2 retains its historical API and compatibility range. Latest reviewed source is Pi 1.5.0 commit `f9a26365568127461c47a07a37dcb42c140a3ac5`. Admission, source review, synthetic verification and live execution are distinct evidence.
+**pi-rpc 0.3.2** supports **Pi >=1.3.0, <=1.5.2 / Rust 1.88** with versioned protocol types. Published 0.2.2 retains its historical API and compatibility range. Latest reviewed source is Pi 1.5.2 commit `b4afdddf44e059c67ccf5097e5317d913521b470`. Admission, source review, synthetic verification and live execution are distinct evidence.
 
 Each release candidate requires local gates and six successful native CI jobs for the same commit before claiming cross-platform acceptance; the actual commit, run, logs and archive identities remain outside packaged source. Registry/docs.rs publication is checked after upload, separately from real-Pi/model acceptance. Local gates use installed stable Rust (recording the actual compiler in evidence) and exact 1.88.0, all four main configurations, the complete protocol/feature matrix (32 combinations for the official release baseline, 64 on this special branch), type-isolation positive/negative controls, pressure/boundary tests and fresh packaged consumers. Stable applies strict Clippy to every combination and explicitly checks formatting of all Rust sources, including macro include! files and standalone fixtures; temporary-crate negative controls cover the Cargo formatting blind spot. Preserve actual results, first failures and before/after hashes outside the archive. Strict candidate packaging uses the clean commit being verified. Earlier local uncommitted checks used byte-identical temporary clean snapshots; those snapshot identities must never be presented as main or as candidates verified by hosted CI.
 
@@ -26,7 +28,13 @@ The optional `protocol_bench` Release example measures fixed synthetic event par
 
 ## Hosted CI
 
-The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the main/protocol feature matrices and type-isolation checks, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, is explicitly pinned to Pi 1.5.0 and is skipped on ordinary pushes.
+The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the main/protocol feature matrices and type-isolation checks, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, is explicitly pinned to Pi 1.5.2 and is skipped on ordinary pushes.
+
+## 0.3.2 candidate scope
+
+Version 0.3.2 admits Pi 1.5.1 and 1.5.2 through the existing Pi15 profile. Exact expectations and the prior default range retain their caps. The complete upstream Git-tree comparison and changed implementation review are recorded in [compatibility](compatibility.md#pi-151-and-152-source-review-2026-11-11). Fake tests cover plain/decorated probes, declarations, feature selection, acceptance entrypoint locks, idle exit, handled-prompt response draining and cleanup output after stdin EOF. Synthetic protocol tests preserve open provider compatibility fields and cache-usage events after settlement; existing protocol/native-v3 regressions cover the unchanged wire schemas. These checks do not establish live Pi 1.5.2, model, provider-thread, image-resize or cache-warming acceptance.
+
+The final clean candidate still requires the full local and six-job CI gates below. Actual source, archive, run and publication observations are retained separately from the immutable release source.
 
 ## 0.3.1 candidate scope
 

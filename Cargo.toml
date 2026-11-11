@@ -1,9 +1,9 @@
 [package]
 name = "pi-rpc"
-version = "0.3.2-bolt.1"
+version = "0.3.3-bolt.1"
 edition = "2024"
 rust-version = "1.88"
-description = "Bounded asynchronous Tokio JSONL client with typed protocols for Pi 1.3.0 through 1.5.0"
+description = "Bounded asynchronous Tokio JSONL client with typed protocols for Pi 1.3.0 through 1.5.2"
 readme = "README.md"
 publish = false
 license = "Apache-2.0"

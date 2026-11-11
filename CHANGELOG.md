@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.3-bolt.1 — Unreleased special branch
+
+- Sync the official 0.3.2 baseline and Pi15 support through Pi 1.5.2. Preserve the official source review, old expectation caps and all message-ID tracking/echo behavior.
+- Keep `BoltMessageIdV1` pinned to exact base Pi 1.5.0 independently of the global official range. Reject 1.5.1/1.5.2 before Transport I/O or RPC startup, including decorated probes and exact expectations; add an independent negative control against accidental widening.
+- Retain `publish=false`, the opt-in feature and Rust 1.88. This is an unpublished development build, not a new registry release or evidence of Message ID support on a newer fork base.
+
+## 0.3.2 — 2026-11-11
+
+### Changed
+
+- Extend canonical Pi admission through **1.5.2**, using the existing Pi15 profile for 1.5.0, 1.5.1 and 1.5.2. Set `PI_VERSION` to 1.5.2 and pin reviewed source `b4afdddf44e059c67ccf5097e5317d913521b470`; public types, features, dependencies and Rust 1.88 remain unchanged.
+- Preserve the previous `>=1.3.0, <=1.5.0` expectation and older fixed ranges with their original upper bounds. Concrete locks remain exact; unreviewed releases above 1.5.2 are rejected.
+- Extend Transport, typed/automatic plain and decorated startup, and acceptance-entrypoint regressions to both patches. Cover idle process exit, handled-prompt responses before exit and post-EOF cleanup output with compiled fake processes; retain open provider compatibility fields and cache-usage events after settlement in synthetic protocol tests.
+- Record unchanged RPC/event/native-v3 schemas and Pi-owned shutdown, queued-image, busy-operation, provider-thread and idle-cache-warming changes. Refresh the optional manual release-smoke recipe with verified 1.5.2 assets; ordinary verification invokes no real Pi or model.
+
 ## 0.3.2-bolt.1 — Unreleased special branch
 
 - Add the opt-in `bolt_message_id` feature and dedicated `BoltMessageIdV1` protocol for Coder-Sang/Pi-Bolt bolt-v1.1.1 at `7193587994d2fee4b62a213c1f14d82acb832d5c`, based on Pi 1.5.0. Add validated nonempty IDs, identified input methods with exact acceptance echoes and typed queue tracking v1.

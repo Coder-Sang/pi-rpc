@@ -18,6 +18,9 @@ def main():
     # otherwise fetch the locked test graph once before the offline controls.
     subprocess.run(["cargo", "fetch", "--locked"], cwd=ROOT, env=environment, check=True)
     cases = [
+        ("widened-fork-base", "src/protocol/bolt_message_id_v1.rs", 'version == "1.5.0" && crate::version::is_supported(version)',
+         'crate::version::minor(version) == Some(Self::MINOR)',
+         "extension_base_stays_exact_when_official_pi15_support_expands"),
         ("omitted-input-id", "src/client.rs", "message_id: message_id.as_deref().map(String::as_str),", "message_id: None,",
          "identified_inputs_use_separate_rpc_ids_and_preserve_existing_payloads"),
         ("unchecked-echo", "src/client/bolt_message_id.rs", "!= Some(expected.as_str())", "!= response.data.as_ref().and_then(|data| data.get(\"message_id\")).and_then(|id| id.as_str())",

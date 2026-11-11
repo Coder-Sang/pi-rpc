@@ -198,7 +198,7 @@ async fn finish_auto(
             events,
             process,
         } => {
-            assert_eq!(version, "1.5.0");
+            assert!(matches!(version, "1.5.0" | "1.5.1" | "1.5.2"));
             finish(client, events, process, version, source, _executable).await;
         }
         _ => panic!("unexpected protocol variant"),
@@ -213,6 +213,8 @@ async fn auto_probed_and_declared_versions_respect_enabled_features() {
         ("1.4.0", cfg!(feature = "pi_1_4"), "pi_1_4"),
         ("1.4.10", cfg!(feature = "pi_1_4"), "pi_1_4"),
         ("1.5.0", cfg!(feature = "pi_1_5"), "pi_1_5"),
+        ("1.5.1", cfg!(feature = "pi_1_5"), "pi_1_5"),
+        ("1.5.2", cfg!(feature = "pi_1_5"), "pi_1_5"),
     ] {
         for probed in [false, true] {
             let (_root, options) = prepare(version, !probed, "normal");
@@ -259,7 +261,7 @@ async fn auto_skip_validates_declarations_and_expectations_before_children() {
         "",
         "1.3",
         "1.2.10",
-        "1.5.1",
+        "1.5.3",
         " 1.5.0",
         "1.5.0\n",
         "01.5.0",
@@ -308,7 +310,7 @@ async fn auto_invalid_expectations_reject_before_probing() {
         ">=1.1.0, <=1.2.0",
         "1.2.0",
         ">=1.3.0,<=1.5.0",
-        "1.5.1",
+        "1.5.3",
     ] {
         let (_root, mut options) = prepare("1.5.0", false, "normal");
         let path = options.executable.clone();
@@ -538,7 +540,7 @@ process_cases!(pi13, Pi13, "1.3.0", "1.3.10", "1.4.0", ">=1.1.0, <=1.3.0");
 #[cfg(feature = "pi_1_4")]
 process_cases!(pi14, Pi14, "1.4.0", "1.4.10", "1.5.0", ">=1.1.0, <=1.4.0");
 #[cfg(feature = "pi_1_5")]
-process_cases!(pi15, Pi15, "1.5.0", "1.5.0", "1.4.0", ">=1.3.0, <=1.5.0");
+process_cases!(pi15, Pi15, "1.5.0", "1.5.2", "1.4.0", ">=1.3.0, <=1.5.0");
 #[cfg(feature = "bolt_message_id")]
 process_cases!(
     identified_bolt,
@@ -606,6 +608,8 @@ async fn auto_legacy_upper_bounds_reject_patches_and_later_minors() {
         ("1.4.1", ">=1.1.0, <=1.4.0"),
         ("1.4.10", ">=1.1.0, <=1.4.0"),
         ("1.5.0", ">=1.1.0, <=1.4.0"),
+        ("1.5.1", ">=1.3.0, <=1.5.0"),
+        ("1.5.2", ">=1.3.0, <=1.5.0"),
     ] {
         for probed in [false, true] {
             let (_root, mut options) = prepare(actual, !probed, "normal");
@@ -625,6 +629,139 @@ async fn auto_legacy_upper_bounds_reject_patches_and_later_minors() {
             assert_eq!(result.err(), Some(reason));
             markers(&path, probed && !none_enabled(), false);
         }
+    }
+}
+
+#[cfg(feature = "pi_1_5")]
+#[tokio::test]
+async fn pi15_patch_exact_locks_apply_to_declared_plain_and_decorated_startup() {
+    for actual in ["1.5.1", "1.5.2"] {
+        for expected in ["1.5.0", "1.5.1", "1.5.2", ">=1.3.0, <=1.5.0"] {
+            for mode in ["declared", "plain", "decorated"] {
+                let probed = mode != "declared";
+                let output = if mode == "decorated" {
+                    format!("{actual} (Pi-Bolt 9.10.11, linux-x64, JIT off)")
+                } else {
+                    actual.into()
+                };
+                let (_root, mut options) = prepare(&output, !probed, "normal");
+                let path = options.executable.clone();
+                options.expected_version = expected.into();
+                let result = if probed {
+                    PiProcess::<pi_rpc::Pi15>::spawn(options).await
+                } else {
+                    PiProcess::<pi_rpc::Pi15>::spawn_with_version(options, actual).await
+                };
+                if expected == actual {
+                    let (client, events, process) = result.unwrap();
+                    finish(
+                        client,
+                        events,
+                        process,
+                        actual,
+                        if probed {
+                            VersionSource::Probed
+                        } else {
+                            VersionSource::Declared
+                        },
+                        &path,
+                    )
+                    .await;
+                } else {
+                    assert_eq!(result.err(), Some(Error::Version));
+                }
+                markers(&path, probed, expected == actual);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "bolt_message_id")]
+#[tokio::test]
+async fn identified_profile_rejects_unreviewed_patch_bases_before_rpc_startup() {
+    for actual in ["1.5.1", "1.5.2"] {
+        for expected in [pi_rpc::PI_VERSION_REQUIREMENT, actual] {
+            for mode in ["declared", "plain", "decorated"] {
+                let probed = mode != "declared";
+                let output = if mode == "decorated" {
+                    format!("{actual} (Pi-Bolt 9.10.11, linux-x64, JIT off)")
+                } else {
+                    actual.into()
+                };
+                let (_root, mut options) = prepare(&output, !probed, "normal");
+                let path = options.executable.clone();
+                options.expected_version = expected.into();
+                let result = if probed {
+                    PiProcess::<pi_rpc::BoltMessageIdV1>::spawn(options).await
+                } else {
+                    PiProcess::<pi_rpc::BoltMessageIdV1>::spawn_with_version(options, actual).await
+                };
+                assert_eq!(
+                    result.err(),
+                    Some(Error::Version),
+                    "{actual}, {expected}, {mode}"
+                );
+                markers(&path, probed, false);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "pi_1_5")]
+#[tokio::test]
+async fn pi15_idle_and_handled_prompt_shutdown_drain_before_one_terminal() {
+    use pi_rpc::protocol::PromptDisposition;
+    for version in ["1.5.1", "1.5.2"] {
+        for mode in ["idle-exit", "prompt-shutdown"] {
+            let (_root, options) = prepare(version, true, mode);
+            let path = options.executable.clone();
+            let (client, mut events, mut process) =
+                PiProcess::<pi_rpc::Pi15>::spawn_with_version(options, version)
+                    .await
+                    .unwrap();
+            ready(&mut events, &path).await;
+            if mode == "prompt-shutdown" {
+                assert_eq!(
+                    client.prompt("/synthetic-shutdown").await.unwrap(),
+                    PromptDisposition::Handled
+                );
+            }
+            let terminal = tokio::time::timeout(Duration::from_secs(3), process.wait_terminal())
+                .await
+                .unwrap();
+            assert_eq!(terminal, Error::ProcessExit(Some(0)));
+            assert_eq!(events.recv().await, Some(Err(terminal.clone())));
+            assert_eq!(events.recv().await, None);
+            assert_eq!(client.abort().await, Err(terminal.clone()));
+            assert_eq!(process.close().await, terminal);
+            assert_eq!(process.process_exit(), Some(Error::ProcessExit(Some(0))));
+        }
+    }
+}
+
+#[cfg(feature = "pi_1_5")]
+#[tokio::test]
+async fn pi15_orderly_close_drains_cleanup_output_after_stdin_eof() {
+    for version in ["1.5.1", "1.5.2"] {
+        let (_root, options) = prepare(version, true, "close-cleanup");
+        let path = options.executable.clone();
+        let (client, mut events, mut process) =
+            PiProcess::<pi_rpc::Pi15>::spawn_with_version(options, version)
+                .await
+                .unwrap();
+        ready(&mut events, &path).await;
+        assert_eq!(client.get_state().await.unwrap().session_id, "fake");
+        let terminal = process.close().await;
+        assert_eq!(terminal, Error::ProcessExit(Some(0)));
+        assert_eq!(
+            events.recv().await,
+            Some(Ok(pi_rpc::protocol::v1_5::Event::Unknown(
+                serde_json::json!({"type":"synthetic_cleanup_complete"})
+            )))
+        );
+        assert_eq!(events.recv().await, Some(Err(terminal.clone())));
+        assert_eq!(events.recv().await, None);
+        assert_eq!(client.abort().await, Err(terminal));
     }
 }
 

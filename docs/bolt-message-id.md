@@ -1,6 +1,6 @@
 # Pi-Bolt message ID extension
 
-This **unpublished `0.3.2-bolt.1` special branch** adds the opt-in `bolt_message_id` feature and `BoltMessageIdV1` profile. Cargo has `publish=false`. Published 0.3.1, official Pi13/Pi14/Pi15 types, default features and the Pi 1.3.0–1.5.0 range retain their contracts. Rust 1.88 remains the minimum.
+This **unpublished `0.3.3-bolt.1` special branch** builds on official 0.3.2 with the opt-in `bolt_message_id` feature and `BoltMessageIdV1` profile. Cargo has `publish=false`. Official Pi13/Pi14/Pi15 types support Pi 1.3.0–1.5.2; the extension profile independently admits **base Pi 1.5.0 only**. Default features and the Rust 1.88 minimum are unchanged.
 
 ## Source and capability
 
@@ -10,7 +10,7 @@ Official Pi-Bolt's version formatter and this fork can report the same underlyin
 
 ## Build and submit
 
-Check out `feature/pi-bolt-message-id` and use a local path dependency with version `=0.3.2-bolt.1` and `features = ["bolt_message_id"]`. This feature enables `pi_1_5`; subprocess ownership remains separately controlled by `subprocess`. For a transport-only caller, disable defaults and enable only `bolt_message_id`.
+Check out `feature/pi-bolt-message-id` and use a local path dependency with version `=0.3.3-bolt.1` and `features = ["bolt_message_id"]`. This feature enables `pi_1_5`; subprocess ownership remains separately controlled by `subprocess`. For a transport-only caller, disable defaults and enable only `bolt_message_id`.
 
 ```rust,no_run
 use pi_rpc::{BoltMessageIdV1, PiClient};
@@ -29,7 +29,7 @@ async fn submit(client: &PiClient<BoltMessageIdV1>) -> pi_rpc::Result<()> {
 
 `steer_with_message_id(message, images, id)` and `follow_up_with_message_id(message, images, id)` return `InputAcceptance<QueuedInputDisposition>`. Ordinary prompt/steer/follow_up methods remain available and omit the ID, including on the extension profile. Nonempty IDs preserve whitespace and Unicode verbatim. Clones share their string allocation. Each ID is a top-level `message_id`, independent of the SDK-generated RPC `id`; existing message, images and streaming behavior are unchanged. IDs count toward the existing escaped-JSON record and writer budgets, including framing. Wire budgets do not bound total memory.
 
-Use `PiConnection::<BoltMessageIdV1>::connect` for a trusted injected transport. With `subprocess`, use `PiProcess::<BoltMessageIdV1>::spawn` or `spawn_with_version`. Probe-based startup recognizes the existing strict official Pi-Bolt decoration and checks the underlying Pi version. Declared startup still requires a canonical base version such as `"1.5.0"`, skips probing and trusts the caller. `expected_version` retains its default range, old upper bounds and exact locks. No capability handshake or model request is added.
+Use `PiConnection::<BoltMessageIdV1>::connect` for a trusted injected transport. With `subprocess`, use `PiProcess::<BoltMessageIdV1>::spawn` or `spawn_with_version`. Probe-based startup recognizes the existing strict official Pi-Bolt decoration and checks the underlying Pi version. Declared startup requires `"1.5.0"`, skips probing and trusts the caller. The shared `expected_version` defaults to `>=1.3.0, <=1.5.2`, and old upper bounds and exact locks remain effective, but the extension's independent exact-base check always applies. Pi 1.5.1/1.5.2 declarations or probes fail before Transport I/O or RPC startup even if an expectation permits them. Supporting a newer fork base requires a separate source/capability review. No capability handshake or model request is added.
 
 Run `cargo run --example bolt_message_id --no-default-features --features bolt_message_id` for a complete in-memory submission, concurrent event consumption and orderly close, without an installed Pi/Bolt or model.
 

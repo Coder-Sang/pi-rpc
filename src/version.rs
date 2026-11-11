@@ -50,7 +50,7 @@ pub(crate) fn probe_version(output: &str) -> Option<&str> {
 }
 
 pub(crate) fn is_supported(value: &str) -> bool {
-    parse(value).is_some_and(|version| ([1, 3, 0]..=[1, 5, 0]).contains(&version))
+    parse(value).is_some_and(|version| ([1, 3, 0]..=[1, 5, 2]).contains(&version))
 }
 
 pub(crate) fn minor(value: &str) -> Option<u64> {
@@ -98,6 +98,8 @@ impl<'a> Expectation<'a> {
             Ok(Self::Through([1, 3, 0]))
         } else if value == ">=1.1.0, <=1.4.0" {
             Ok(Self::Through([1, 4, 0]))
+        } else if value == ">=1.3.0, <=1.5.0" {
+            Ok(Self::Through([1, 5, 0]))
         } else if is_supported(value) {
             Ok(Self::Exact(value))
         } else {
@@ -122,7 +124,9 @@ mod tests {
     #[cfg(feature = "subprocess")]
     #[test]
     fn probe_version_accepts_complete_official_output_and_returns_pi() {
-        for version in ["1.3.0", "1.3.10", "1.4.0", "1.4.10", "1.5.0", "2.0.0"] {
+        for version in [
+            "1.3.0", "1.3.10", "1.4.0", "1.4.10", "1.5.0", "1.5.1", "1.5.2", "2.0.0",
+        ] {
             assert_eq!(probe_version(version), Some(version));
             assert_eq!(probe_version(&format!(" \t{version}\r\n ")), Some(version));
             for target in [
@@ -242,10 +246,14 @@ mod tests {
             "1.4.10",
             "1.4.18446744073709551615",
             "1.5.0",
+            "1.5.1",
+            "1.5.2",
         ] {
             assert!(is_supported(value), "{value}");
         }
-        for value in ["0.99.2", "1.1.0", "1.2.999", "1.5.1", "1.10.0", "2.0.0"] {
+        for value in [
+            "0.99.2", "1.1.0", "1.2.999", "1.5.3", "1.5.10", "1.6.0", "1.10.0", "2.0.0",
+        ] {
             assert!(!is_supported(value), "{value}");
         }
     }
@@ -286,14 +294,14 @@ mod tests {
     fn default_range_and_exact_locks_admit_supported_releases() {
         let range = Expectation::new(crate::PI_VERSION_REQUIREMENT).unwrap();
         for version in [
-            "1.3.0", "1.3.1", "1.3.10", "1.4.0", "1.4.1", "1.4.10", "1.5.0",
+            "1.3.0", "1.3.1", "1.3.10", "1.4.0", "1.4.1", "1.4.10", "1.5.0", "1.5.1", "1.5.2",
         ] {
             assert!(range.matches(version));
             let exact = Expectation::new(version).unwrap();
             assert!(exact.matches(version));
             assert!(!exact.matches("1.3.9"));
         }
-        for version in ["1.2.10", "1.5.1", "1.5.0-rc.1", "1.5.0+build"] {
+        for version in ["1.2.10", "1.5.3", "1.5.0-rc.1", "1.5.0+build"] {
             assert!(!range.matches(version));
             assert!(Expectation::new(version).is_err());
         }
@@ -360,6 +368,24 @@ mod tests {
             "",
         ] {
             assert!(Expectation::new(expression).is_err(), "{expression}");
+        }
+    }
+
+    #[cfg(feature = "subprocess")]
+    #[test]
+    fn pi15_previous_range_and_exact_patch_locks_remain_bounded() {
+        let previous = Expectation::new(">=1.3.0, <=1.5.0").unwrap();
+        for version in ["1.3.0", "1.3.10", "1.4.0", "1.4.10", "1.5.0"] {
+            assert!(previous.matches(version), "{version}");
+        }
+        for version in ["1.2.0", "1.5.1", "1.5.2", "1.5.3", "1.5.10"] {
+            assert!(!previous.matches(version), "{version}");
+        }
+        for expected in ["1.5.0", "1.5.1", "1.5.2"] {
+            let exact = Expectation::new(expected).unwrap();
+            for actual in ["1.5.0", "1.5.1", "1.5.2", "1.5.3", "1.5.10"] {
+                assert_eq!(exact.matches(actual), expected == actual);
+            }
         }
     }
 }

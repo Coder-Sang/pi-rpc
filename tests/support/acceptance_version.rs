@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 pub(super) const VERSIONS: [&str;
     3 * cfg!(feature = "pi_1_3") as usize
         + 3 * cfg!(feature = "pi_1_4") as usize
-        + cfg!(feature = "pi_1_5") as usize] = [
+        + 3 * cfg!(feature = "pi_1_5") as usize] = [
     #[cfg(feature = "pi_1_3")]
     "1.3.0",
     #[cfg(feature = "pi_1_3")]
@@ -18,6 +18,10 @@ pub(super) const VERSIONS: [&str;
     "1.4.10",
     #[cfg(feature = "pi_1_5")]
     "1.5.0",
+    #[cfg(feature = "pi_1_5")]
+    "1.5.1",
+    #[cfg(feature = "pi_1_5")]
+    "1.5.2",
 ];
 
 pub(super) struct Fixture {

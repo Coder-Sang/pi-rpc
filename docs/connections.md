@@ -1,6 +1,6 @@
 # Connections, capacity and lifecycle
 
-The 0.3 SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/events.md) for streamed content.
+The 0.3 SDK binds each connection to a PiProtocol type and manages transport admission and lifecycle. The host application owns conversation correlation, business policy and remote process control. Start with the [README](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/README.md) and use the [event guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/events.md) for streamed content.
 
 ## Modules and ownership
 
@@ -24,7 +24,7 @@ use pi_rpc::{Config, Pi15, PiConnection, Transport};
 # async fn example<R, W>(reader: R, writer: W, declared_version: &str) -> pi_rpc::Result<()>
 # where R: tokio::io::AsyncRead + Unpin + Send + 'static,
 # W: tokio::io::AsyncWrite + Unpin + Send + 'static {
-// The host supplies the actual concrete Pi version, "1.5.0" for this Pi15 connection.
+// The host supplies the actual concrete Pi version, "1.5.2" for this Pi15 connection.
 let transport = Transport::new(reader, writer, declared_version)?;
 let (client, mut events, mut owner) = PiConnection::<Pi15>::connect(transport, Config::default())?;
 // The event channel is already installed, and reading has started.
@@ -47,9 +47,9 @@ Use `cargo run --example injected --no-default-features --features pi_1_4` for a
 
 ## Protocol selection and version information
 
-`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/migration-0.3.md).
+`PiClient<P>`, `PiEvents<P>`, `PiConnection<P>` and `PiProcess<P>` bind their event type to P. Use Pi13, Pi14 or Pi15; each requires its additive protocol feature. The defaults enable Pi14/Pi15. `client::connect_auto` and subprocess `spawn_auto`/`spawn_auto_with_version` return non-exhaustive enums whose variants contain typed handles. Match once; no event contents are used to guess the version. All handles expose immutable `info()` with the concrete version and Probed/Declared source. See [migration](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/migration-0.3.md).
 
-The global supported range is >=1.3.0, <=1.5.0. Pi13 accepts 1.3.x, Pi14 accepts 1.4.x, Pi15 currently accepts 1.5.0. Missing features produce an explicit error before I/O/RPC startup and never select a different protocol. Transport itself validates a canonical global version and records a declaration; connection admission selects the enabled profile.
+The global supported range is >=1.3.0, <=1.5.2. Pi13 accepts 1.3.x, Pi14 accepts 1.4.x, Pi15 accepts 1.5.0–1.5.2. The previous `>=1.3.0, <=1.5.0` expectation keeps its original cap, as do the older fixed ranges. Missing features produce an explicit error before I/O/RPC startup and never select a different protocol. Transport itself validates a canonical global version and records a declaration; connection admission selects the enabled profile.
 
 ## Local process and diagnostics
 
@@ -71,7 +71,7 @@ The underlying Pi version is `1.5.0`; Bolt's separate version is `1.1.1`. Both v
 
 The existing Pi range, legacy caps, exact expectations and enabled protocol features still apply to the underlying Pi release. For the example above, use `expected_version: "1.5.0".into()` for an exact lock and Pi15 for static selection. `info().version()` returns `1.5.0` and `info().source()` is `Probed`. No Bolt build metadata is exposed. The five-second default probe deadline and separate 4 KiB stdout/stderr bounds are unchanged.
 
-The caller-declared `spawn_with_version`, `spawn_auto_with_version` and `Transport::new` APIs still require a canonical underlying Pi version such as `1.5.0`; they reject decorated output. A decorated string is also invalid as `expected_version`. Declaration-based startup skips probing and trusts the caller. This change recognizes the official output format and adds no message-ID/tracking extension. See [source review and scope](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/compatibility.md#pi-bolt-probe-output-031).
+The caller-declared `spawn_with_version`, `spawn_auto_with_version` and `Transport::new` APIs still require a canonical underlying Pi version such as `1.5.0`; they reject decorated output. A decorated string is also invalid as `expected_version`. Declaration-based startup skips probing and trusts the caller. This change recognizes the official output format and adds no message-ID/tracking extension. See [source review and scope](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/compatibility.md#pi-bolt-probe-output-031).
 
 ## Commands, acceptance and errors
 
@@ -114,7 +114,7 @@ async fn consume(mut events: PiEvents<Pi15>) -> pi_rpc::Result<()> {
 # }
 ```
 
-See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
+See the [event consumption guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/events.md) for all event families, content-block reconstruction, custom-message display policy and the integer millisecond compatibility rules.
 
 Cancellation of an awaiting future **does not withdraw or retry its command**. The record may already be queued or sent. Its pending-map entry is removed, and later matching-ID responses are ignored. A timeout starts after local enqueue and includes the write/flush wait, so even a stalled write has an uncertain outcome. Never automatically retry input. A local `Capacity` error occurs before enqueue and means that call was not submitted.
 
@@ -122,7 +122,7 @@ Cancellation of an awaiting future **does not withdraw or retry its command**. T
 
 JSON objects and arrays have an explicit maximum nesting depth of **512 containers** (`codec::MAX_JSON_DEPTH`); the root container counts as one. Strings, including escaped quotes and brackets, do not add nesting. This supports ordinary session trees of at least 200 entries along a branch, within the record byte limit; deeply nested entry metadata also counts toward the limit. Wire depth is checked iteratively before parsing, and Serde conversions use `serde_stacker` rather than the default 128-container parser limit. Over-depth inbound records fail the connection with a `Protocol` error. Native session parsing and direct `Value` decoding use the same limit. Encoding checks depth incrementally as bytes are written, stopping at the first excess container; native construction counts the complete entry/message envelope. Cloning, serialization and cleanup at the boundary are exercised on a 2 MiB thread stack in an isolated test process. This is a bounded-depth contract, not arbitrary-depth JSON support.
 
-Default RPC limits are **32 MiB per JSON record**, **64 MiB of writer bytes**, **128 MiB of queued event wire bytes**, 128 pending commands, 128 queued writer records and 1,024 events. Explicit caller limits remain authoritative. The reviewed Pi 1.5.0 image path normally resizes each prompt image to at most 2000×2000 and below 4.5 MiB of Base64, with model overrides and an option to disable resizing. That processing happens after RPC input is received; these transport limits cover the original input too. Four images near Pi's default processed limit occupy about 18 MiB before text and JSON overhead. The SDK does not resize images or enforce an image count. Hosts must bound original image sizes and request concurrency.
+Default RPC limits are **32 MiB per JSON record**, **64 MiB of writer bytes**, **128 MiB of queued event wire bytes**, 128 pending commands, 128 queued writer records and 1,024 events. Explicit caller limits remain authoritative. The reviewed Pi 1.5.0 image path normally resizes each prompt image to at most 2000×2000 and below 4.5 MiB of Base64, with model overrides and an option to disable resizing. That processing happens after RPC input is received; these transport limits cover the original input too. Four images near Pi's default processed limit occupy about 18 MiB before text and JSON overhead. The SDK does not resize images or enforce an image count. Hosts must bound original image sizes and request concurrency. Since Pi 1.5.1, queued steering/follow-up images are normalized at delivery before their events and session entries are emitted; the SDK preserves those resulting messages without resizing input or rewriting history.
 
 Image-bearing message_start/message_end events retain their complete payload and are charged separately. Complete get_messages/get_entries/get_tree responses must fit the same record limit; accumulated history can exceed it and then terminates the connection with Protocol. Hosts should maintain history from events rather than repeatedly fetch unbounded image history. Native sessions default to 32 MiB per record and 64 MiB per file. These are wire budgets, not RSS limits: caller-owned images, decoded objects and command responses awaiting collection use additional memory.
 
@@ -143,7 +143,7 @@ use pi_rpc::protocol::{v1_5::Event, UiAnswer};
 # where R: tokio::io::AsyncRead + Unpin + Send + 'static,
 # W: tokio::io::AsyncWrite + Unpin + Send + 'static {
 let config = Config { ui_policy: UiPolicy::Manual, ..Config::default() };
-// The host supplies the actual concrete Pi version, "1.5.0" for this Pi15 connection.
+// The host supplies the actual concrete Pi version, "1.5.2" for this Pi15 connection.
 let transport = Transport::new(reader, writer, declared_version)?;
 let (client, mut events, mut owner) = PiConnection::<Pi15>::connect(transport, config)?;
 let responder = client.clone();
@@ -178,6 +178,8 @@ Once orderly close starts, automatic dialog replies are skipped atomically with 
 
 ## Stop, close and terminate are different
 
+Pi 1.5.1/1.5.2 can exit after an idle extension requests shutdown without waiting for another command. An extension command requesting shutdown writes its prompt response before exiting. Pi also completes shutdown cleanup when stdin EOF and one SIGTERM/SIGHUP overlap; a repeated signal forces exit. SDK process-exit observation, response/event draining and the caller-configured close deadline still apply. Synthetic tests exercise idle exit, handled-response delivery before exit and cleanup output after stdin EOF; they do not execute Pi extensions or credential refresh.
+
 - `clear_queue`: RPC removes queued texts and returns them.
 - `abort`: RPC interrupts current work and awaits Pi's handling response. Does not implicitly clear queues.
 - `PiConnection::close` / `PiProcess::close`: exclude all submissions, drain locally queued writes, close stdin, keep reading until peer EOF/process exit or close deadline. Does not send abort/clear_queue. On close timeout I/O is stopped and a local child is killed by supervision. Remote close cannot terminate a remote process.
@@ -187,4 +189,4 @@ The host application owns conversation/SSE correlation, input versus resume vers
 
 ## Explicit fork message ID profile
 
-The unpublished `0.3.2-bolt.1` branch provides optional `bolt_message_id` and `BoltMessageIdV1` for the reviewed Coder-Sang/Pi-Bolt fork, based on Pi 1.5.0. Select it explicitly with typed Transport or subprocess startup; auto dispatch remains official Pi15. Version decoration is not capability detection. Identified inputs use existing admission, escaped-record budgets, command IDs, writer and cleanup. Declared startup uses the base version `"1.5.0"`; expectations and probe rules are unchanged. See the [extension guide](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md) for API, handoff semantics and echo failures.
+The unpublished `0.3.3-bolt.1` branch provides optional `bolt_message_id` and `BoltMessageIdV1` for the reviewed Coder-Sang/Pi-Bolt fork, based on exact Pi **1.5.0**. Select it explicitly with typed Transport or subprocess startup; auto dispatch remains official Pi15 and supports 1.5.0–1.5.2. Version decoration is not capability detection. Identified inputs use existing admission, escaped-record budgets, command IDs, writer and cleanup. The extension rejects 1.5.1/1.5.2 before I/O or RPC startup, even when the shared default range or an exact expectation permits them. See the [extension guide](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md) for API, handoff semantics and echo failures.

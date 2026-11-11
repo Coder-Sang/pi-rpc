@@ -289,7 +289,7 @@ class RustdocChecks(unittest.TestCase):
 class PackageChecks(unittest.TestCase):
     def test_repository_metadata_matches_the_0_3_release_policy(self):
         package = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]
-        self.assertEqual(package["version"], "0.3.2-bolt.1")
+        self.assertEqual(package["version"], "0.3.3-bolt.1")
         self.assertEqual(package["rust-version"], "1.88")
         check_protocol_features(tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8")), "Cargo.toml")
         for name, value in PACKAGE_METADATA.items():

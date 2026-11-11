@@ -232,11 +232,16 @@ pub enum Event {
 
 /// Explicitly selects the audited fork extension on the Pi 1.5.0 protocol.
 /// Version probing checks the base Pi release, not this capability.
+/// Official Pi15 patch support does not extend this fork's reviewed base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoltMessageIdV1;
 impl PiProtocol for BoltMessageIdV1 {
     type Event = Event;
     const MINOR: u64 = 5;
+
+    fn matches_version(version: &str) -> bool {
+        version == "1.5.0" && crate::version::is_supported(version)
+    }
 }
 impl Sealed for BoltMessageIdV1 {
     fn validate_response(response: &Response) -> Result<()> {

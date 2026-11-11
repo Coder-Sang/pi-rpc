@@ -1,4 +1,4 @@
-//! Async, bounded Pi 1.3.0–1.5.0 RPC with statically versioned events.
+//! Async, bounded Pi 1.3.0–1.5.2 RPC with statically versioned events.
 //!
 //! See the [README](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/README.md)
 //! for the default-feature local-process example. It is included below when
@@ -35,11 +35,11 @@ pub use subprocess::{AutoProcess, PiProcess, ProcessOptions};
 pub use transport::{ConnectionInfo, Transport, VersionSource};
 
 /// Latest reviewed Pi release; not the entire supported version range.
-pub const PI_VERSION: &str = "1.5.0";
+pub const PI_VERSION: &str = "1.5.2";
 /// Inclusive supported range of canonical three-component Pi releases.
-pub const PI_VERSION_REQUIREMENT: &str = ">=1.3.0, <=1.5.0";
+pub const PI_VERSION_REQUIREMENT: &str = ">=1.3.0, <=1.5.2";
 /// Upstream commit of the latest reviewed release, [`PI_VERSION`].
-pub const SOURCE_COMMIT: &str = "f9a26365568127461c47a07a37dcb42c140a3ac5";
+pub const SOURCE_COMMIT: &str = "b4afdddf44e059c67ccf5097e5317d913521b470";
 
 /// Terminal errors are also delivered to every outstanding command and the owner.
 /// Error messages never include inbound records or submitted prompts.

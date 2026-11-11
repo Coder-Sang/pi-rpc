@@ -270,7 +270,9 @@ fn pi_1_4_compat_fields_remain_open_and_lossless_across_model_responses() {
         for opt_in in [false, true] {
             let model = json!({"id":"synthetic","provider":"synthetic",
                 "compat":{"imageInput":image_input,"sendImageOptInHeader":opt_in,
-                    "supportsMidConvoEffort":true,"futureCompat":{"preserve":[null,false,1]}}});
+                    "supportsMidConvoEffort":true,"supportsMessageThreads":opt_in,
+                    "requiresToolsWithToolHistory":opt_in,"requiresNonNullAssistantContent":opt_in,
+                    "promptCacheKeyMode":"disabled","futureCompat":{"preserve":[null,false,1]}}});
             let mut state = success_fixtures()
                 .into_iter()
                 .find(|(command, _)| *command == "get_state")

@@ -36,6 +36,8 @@ async fn auto_selection_obeys_each_compiled_protocol_without_fallback() {
         ("1.4.0", "pi_1_4", cfg!(feature = "pi_1_4")),
         ("1.4.10", "pi_1_4", cfg!(feature = "pi_1_4")),
         ("1.5.0", "pi_1_5", cfg!(feature = "pi_1_5")),
+        ("1.5.1", "pi_1_5", cfg!(feature = "pi_1_5")),
+        ("1.5.2", "pi_1_5", cfg!(feature = "pi_1_5")),
     ] {
         let polls = Arc::new(AtomicUsize::new(0));
         let drops = Arc::new(AtomicUsize::new(0));
@@ -203,8 +205,99 @@ profile_cases!(pi13, v1_3, Pi13, "1.3.0", "1.3.10", "1.4.0");
 #[cfg(feature = "pi_1_4")]
 profile_cases!(pi14, v1_4, Pi14, "1.4.0", "1.4.10", "1.5.0");
 #[cfg(feature = "pi_1_5")]
-profile_cases!(pi15, v1_5, Pi15, "1.5.0", "1.5.0", "1.4.0");
+profile_cases!(pi15, v1_5, Pi15, "1.5.0", "1.5.2", "1.4.0");
 
 #[cfg(feature = "subprocess")]
 #[path = "versioned/process.rs"]
 mod process;
+
+#[cfg(feature = "bolt_message_id")]
+#[tokio::test]
+async fn identified_profile_rejects_unreviewed_bases_before_transport_io() {
+    for version in ["1.3.0", "1.4.0", "1.5.1", "1.5.2"] {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let drops = Arc::new(AtomicUsize::new(0));
+        let transport = Transport::new(
+            ObservedReader(polls.clone(), drops.clone()),
+            tokio::io::sink(),
+            version,
+        )
+        .unwrap();
+        let result =
+            pi_rpc::PiConnection::<pi_rpc::BoltMessageIdV1>::connect(transport, Config::default());
+        assert_eq!(result.err(), Some(Error::Version), "{version}");
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[cfg(feature = "pi_1_5")]
+#[tokio::test]
+async fn pi15_cache_usage_after_settlement_keeps_the_session_stream_open() {
+    use pi_rpc::protocol::{
+        EntryData,
+        v1_5::{Event, KnownEvent},
+    };
+    use tokio::io::AsyncWriteExt;
+    for version in ["1.5.1", "1.5.2"] {
+        let (local, remote) = tokio::io::duplex(128);
+        let (read, write) = tokio::io::split(local);
+        let (_, mut events, mut owner) = pi_rpc::PiConnection::<pi_rpc::Pi15>::connect(
+            Transport::new(read, write, version).unwrap(),
+            Config::default(),
+        )
+        .unwrap();
+        let peer = tokio::spawn(async move {
+            let (read, mut write) = tokio::io::split(remote);
+            let records = [
+                serde_json::json!({"type":"agent_settled","aborted":false}),
+                serde_json::json!({"type":"entry_appended","entry":{
+                    "id":"warm-entry","parentId":null,"timestamp":"2026-11-11T00:00:00Z",
+                    "type":"usage","kind":"cache_warm","provider":"synthetic","model":"synthetic",
+                    "usage":{"input":0,"output":1,"cacheRead":1000,"cacheWrite":0,"totalTokens":1001,
+                        "cost":{"input":0,"output":0.25,"cacheRead":0.5,"cacheWrite":0,"total":0.75}},
+                    "futureUsage":{"opaque":true}}}),
+                serde_json::json!({"type":"queue_update","steering":[],"followUp":["next input"]}),
+            ];
+            for record in records {
+                let bytes = pi_rpc::codec::encode(&record, 4096).unwrap();
+                for fragment in bytes.chunks(3) {
+                    write.write_all(fragment).await.unwrap();
+                }
+            }
+            let mut reader = pi_rpc::codec::JsonlReader::new(read, 4096);
+            assert!(reader.next().await.unwrap().is_none());
+        });
+        assert_eq!(
+            events.recv().await,
+            Some(Ok(Event::Known(KnownEvent::AgentSettled {
+                aborted: false
+            })))
+        );
+        let Some(Ok(Event::Known(KnownEvent::EntryAppended { entry }))) = events.recv().await
+        else {
+            panic!("idle cache usage must remain observable after settlement");
+        };
+        let EntryData::Usage {
+            kind, usage, extra, ..
+        } = entry.data
+        else {
+            panic!("expected a native usage entry");
+        };
+        assert_eq!(kind, "cache_warm");
+        assert_eq!(usage.total_tokens, 1001.0);
+        assert_eq!(usage.cost.total, 0.75);
+        assert_eq!(extra["futureUsage"], serde_json::json!({"opaque":true}));
+        assert_eq!(
+            events.recv().await,
+            Some(Ok(Event::Known(KnownEvent::QueueUpdate {
+                steering: vec![],
+                follow_up: vec!["next input".into()]
+            })))
+        );
+        assert_eq!(owner.close().await, Error::Closed);
+        peer.await.unwrap();
+        assert_eq!(events.recv().await, Some(Err(Error::Closed)));
+        assert_eq!(events.recv().await, None);
+    }
+}
