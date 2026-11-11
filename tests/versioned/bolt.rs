@@ -58,14 +58,14 @@ async fn auto_bolt_probe_selects_the_base_pi_protocol() {
             "pi_1_5",
         ),
         (
-            "1.5.0",
+            "1.5.1",
             "win32-x64",
             "off",
             cfg!(feature = "pi_1_5"),
             "pi_1_5",
         ),
         (
-            "1.5.0",
+            "1.5.2",
             "win32-x64-jit",
             "on",
             cfg!(feature = "pi_1_5"),
@@ -103,7 +103,7 @@ async fn auto_bolt_probe_selects_the_base_pi_protocol() {
 async fn auto_bolt_probe_rejects_malformed_output_and_outside_versions() {
     for decorated in [
         output("1.2.999"),
-        output("1.5.1"),
+        output("1.5.3"),
         output("1.10.0"),
         output("01.5.0"),
         output("1.5.0-rc.1"),
@@ -166,6 +166,8 @@ async fn auto_bolt_probe_keeps_legacy_upper_bounds() {
         ("1.4.1", ">=1.1.0, <=1.4.0"),
         ("1.4.10", ">=1.1.0, <=1.4.0"),
         ("1.5.0", ">=1.1.0, <=1.4.0"),
+        ("1.5.1", ">=1.3.0, <=1.5.0"),
+        ("1.5.2", ">=1.3.0, <=1.5.0"),
     ] {
         let (_root, mut options) = prepare(&output(actual), false, "normal");
         let path = options.executable.clone();
@@ -289,7 +291,7 @@ typed_bolt_cases!(pi13, Pi13, "1.3.0", "1.3.10", "1.4.0", ">=1.1.0, <=1.3.0");
 #[cfg(feature = "pi_1_4")]
 typed_bolt_cases!(pi14, Pi14, "1.4.0", "1.4.10", "1.5.0", ">=1.1.0, <=1.4.0");
 #[cfg(feature = "pi_1_5")]
-typed_bolt_cases!(pi15, Pi15, "1.5.0", "1.5.0", "1.4.0", ">=1.3.0, <=1.5.0");
+typed_bolt_cases!(pi15, Pi15, "1.5.0", "1.5.2", "1.4.0", ">=1.3.0, <=1.5.0");
 
 #[cfg(any(feature = "pi_1_3", feature = "pi_1_4"))]
 async fn prefix_collisions<P: PiProtocol>(short: &str, long: &str)

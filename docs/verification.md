@@ -2,7 +2,7 @@
 
 ## Current status summary
 
-**pi-rpc 0.3.1** supports **Pi >=1.3.0, <=1.5.0 / Rust 1.88** with versioned protocol types. Published 0.2.2 retains its historical API and compatibility range. Latest reviewed source is Pi 1.5.0 commit `f9a26365568127461c47a07a37dcb42c140a3ac5`. Admission, source review, synthetic verification and live execution are distinct evidence.
+**pi-rpc 0.3.2** supports **Pi >=1.3.0, <=1.5.2 / Rust 1.88** with versioned protocol types. Published 0.2.2 retains its historical API and compatibility range. Latest reviewed source is Pi 1.5.2 commit `b4afdddf44e059c67ccf5097e5317d913521b470`. Admission, source review, synthetic verification and live execution are distinct evidence.
 
 Each release candidate requires local gates and six successful native CI jobs for the same commit before claiming cross-platform acceptance; the actual commit, run, logs and archive identities remain outside packaged source. Registry/docs.rs publication is checked after upload, separately from real-Pi/model acceptance. Local gates use installed stable Rust (recording the actual compiler in evidence) and exact 1.88.0, all four main configurations, all 32 protocol/subprocess/session_file combinations, type-isolation positive/negative controls, pressure/boundary tests and fresh packaged consumers. Stable applies strict Clippy to every combination and explicitly checks formatting of all Rust sources, including macro include! files and standalone fixtures; temporary-crate negative controls cover the Cargo formatting blind spot. Preserve actual results, first failures and before/after hashes outside the archive. Strict candidate packaging uses the clean commit being verified. Earlier local uncommitted checks used byte-identical temporary clean snapshots; those snapshot identities must never be presented as main or as candidates verified by hosted CI.
 
@@ -20,7 +20,13 @@ The optional `protocol_bench` Release example measures fixed synthetic event par
 
 ## Hosted CI
 
-The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the main/protocol feature matrices and type-isolation checks, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, is explicitly pinned to Pi 1.5.0 and is skipped on ordinary pushes.
+The [Verify workflow](https://github.com/Coder-Sang/pi-rpc/actions/workflows/verify.yml) runs **Linux/macOS/Windows × stable/exact 1.88.0**, six native jobs. Each runs the main/protocol feature matrices and type-isolation checks, three stress rounds, Debug/Release boundaries, archive checks and a packaged independent consumer. The manual real-Pi smoke is opt-in, is explicitly pinned to Pi 1.5.2 and is skipped on ordinary pushes.
+
+## 0.3.2 candidate scope
+
+Version 0.3.2 admits Pi 1.5.1 and 1.5.2 through the existing Pi15 profile. Exact expectations and the prior default range retain their caps. The complete upstream Git-tree comparison and changed implementation review are recorded in [compatibility](compatibility.md#pi-151-and-152-source-review-2026-11-11). Fake tests cover plain/decorated probes, declarations, feature selection, acceptance entrypoint locks, idle exit, handled-prompt response draining and cleanup output after stdin EOF. Synthetic protocol tests preserve open provider compatibility fields and cache-usage events after settlement; existing protocol/native-v3 regressions cover the unchanged wire schemas. These checks do not establish live Pi 1.5.2, model, provider-thread, image-resize or cache-warming acceptance.
+
+The final clean candidate still requires the full local and six-job CI gates below. Actual source, archive, run and publication observations are retained separately from the immutable release source.
 
 ## 0.3.1 candidate scope
 

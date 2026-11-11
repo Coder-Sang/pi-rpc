@@ -119,7 +119,7 @@ async fn invalid_declared_versions_fail_before_any_child() {
         "1.4",
         "1.4.0.0",
         "1.0.4",
-        "1.5.1",
+        "1.5.3",
         "2.0.0",
         " 1.4.0",
         "1.4.0 ",
@@ -170,7 +170,7 @@ async fn invalid_or_mismatched_expectations_fail_before_any_child() {
         ">=1.1.0,<=1.4.0",
         " 1.4.0",
         "1.0.4",
-        "1.5.1",
+        "1.5.3",
         "1.4.0-rc.1",
         "1.4.0+build",
         "1.04.0",
@@ -196,7 +196,7 @@ async fn declared_version_validates_before_reporting_a_launch_failure() {
         executable: executable.clone(),
         ..Default::default()
     };
-    version_rejected(PiProcess::spawn_with_version(options(), "1.5.1").await).await;
+    version_rejected(PiProcess::spawn_with_version(options(), "1.5.3").await).await;
     let invalid_expected = ProcessOptions {
         expected_version: "*".into(),
         ..options()

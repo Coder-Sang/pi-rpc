@@ -44,7 +44,7 @@ pub enum UiPolicy {
 ///
 /// Capacity limits must be positive and fit Tokio permit counts. They bound serialized
 /// records and queues, not total process memory. See the
-/// [connection guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/connections.md#bounds-and-backpressure).
+/// [connection guide](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/connections.md#bounds-and-backpressure).
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Maximum JSON bytes per inbound or outbound record, excluding LF/CR. Default: 32 MiB.

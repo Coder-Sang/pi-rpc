@@ -76,7 +76,7 @@ fn main() {
             } else if name.contains("numeric-version") {
                 "1.1.10"
             } else if name.contains("future-version") {
-                "1.5.1"
+                "1.5.3"
             } else if name.contains("prerelease-version") {
                 "1.4.0-rc.1"
             } else if name.contains("metadata-version") {
@@ -166,6 +166,7 @@ fn main() {
         }
     }
     match mode {
+        "idle-exit" => return,
         "exit" => std::process::exit(7),
         "partial" => {
             write!(out, "{{\"type\":").unwrap();
@@ -221,6 +222,13 @@ fn main() {
             }
             out.flush().unwrap();
         }
+        if mode == "prompt-shutdown" && kind == "prompt" {
+            return;
+        }
+    }
+    if mode == "close-cleanup" {
+        writeln!(out, "{{\"type\":\"synthetic_cleanup_complete\"}}").unwrap();
+        out.flush().unwrap();
     }
 }
 

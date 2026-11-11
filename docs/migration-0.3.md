@@ -12,7 +12,7 @@
 use pi_rpc::{Pi15, PiEvents, PiProcess, ProcessOptions};
 use pi_rpc::protocol::v1_5::Event;
 let (_client, mut events, mut process): (_, PiEvents<Pi15>, _) =
-    PiProcess::<Pi15>::spawn_with_version(ProcessOptions::default(), "1.5.0").await?;
+    PiProcess::<Pi15>::spawn_with_version(ProcessOptions::default(), "1.5.2").await?;
 // The caller guarantees the installed version. No --version process is started.
 let consumer = tokio::spawn(async move {
     while let Some(event) = events.recv().await {
@@ -40,12 +40,12 @@ Static profile mismatch returns `Error::Version` before RPC starts. Trait implem
 
 Defaults are `subprocess`, `pi_1_4`, `pi_1_5`. Add `pi_1_3` to enable older supported connections. Protocol features are additive and may coexist. Without any protocol feature, codec and optional session-file utilities still work; auto connection/startup reports `NoProtocolEnabled`. A globally supported but disabled version reports `VersionNotEnabled { version, feature }`, with no fallback.
 
-The global range is **>=1.3.0, <=1.5.0**. Pi13 matches 1.3.x, Pi14 matches 1.4.x, and Pi15 currently matches only 1.5.0. Canonical three-part release syntax is required; whitespace, prereleases, metadata, leading zeros and overflowing fields are rejected. Probed output retains existing whitespace trimming.
+As of 0.3.2, the global range is **>=1.3.0, <=1.5.2**. Pi13 matches 1.3.x, Pi14 matches 1.4.x, and Pi15 matches 1.5.0–1.5.2. Canonical three-part release syntax is required; whitespace, prereleases, metadata, leading zeros and overflowing fields are rejected. Probed output retains existing whitespace trimming.
 
-`expected_version` remains a String and exact versions remain exact locks. The recognized previous `>=1.1.0, <=1.3.0` range now admits only 1.3.0; `>=1.1.0, <=1.4.0` admits 1.3.0–1.4.0. Their upper bounds never widen. The old range ending in 1.2.0 has no intersection and is rejected before probing. Other range syntax is not accepted. Pi 1.1/1.2 callers can retain published 0.2.2.
+`expected_version` remains a String and exact versions remain exact locks. The recognized previous `>=1.1.0, <=1.3.0` range now admits only 1.3.0; `>=1.1.0, <=1.4.0` admits 1.3.0–1.4.0. Their upper bounds never widen. The previous 0.3.0/0.3.1 default `>=1.3.0, <=1.5.0` remains recognized and still stops at 1.5.0. The old range ending in 1.2.0 has no intersection and is rejected before probing. Other range syntax is not accepted. Pi 1.1/1.2 callers can retain published 0.2.2.
 
 ## Lifecycle and data contracts
 
 The SDK retains one continuous reader, one serialized writer, the existing command correlation/state machine, bounded exit draining, close deadlines, stack/depth protection, float round trips and admission budgets. Events drain before one terminal error and then None. `terminate()` returns the OS process-exit result; connection/event termination remains `Terminated`.
 
-Native v3 session files remain independent of protocol profiles. Pi 1.5 `Usage.cost.totalFromProvider` stays in `Cost.extra`; `responseModel` stays in `Message.fields`. These values are forwarded unchanged, without calculating or inferring provider cost semantics. See [events](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/events.md), [connections](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/connections.md) and [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.1/docs/compatibility.md).
+Native v3 session files remain independent of protocol profiles. Pi 1.5 `Usage.cost.totalFromProvider` stays in `Cost.extra`; `responseModel` stays in `Message.fields`. These values are forwarded unchanged, without calculating or inferring provider cost semantics. See [events](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/events.md), [connections](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/connections.md) and [compatibility](https://github.com/Coder-Sang/pi-rpc/blob/v0.3.2/docs/compatibility.md).
