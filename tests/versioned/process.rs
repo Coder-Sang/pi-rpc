@@ -546,7 +546,7 @@ process_cases!(
     identified_bolt,
     BoltMessageIdV1,
     "1.5.0",
-    "1.5.0",
+    "1.5.2",
     "1.4.0",
     ">=1.3.0, <=1.5.0"
 );
@@ -679,7 +679,7 @@ async fn pi15_patch_exact_locks_apply_to_declared_plain_and_decorated_startup() 
 #[cfg(feature = "bolt_message_id")]
 #[tokio::test]
 async fn identified_profile_rejects_unreviewed_patch_bases_before_rpc_startup() {
-    for actual in ["1.5.1", "1.5.2"] {
+    for actual in ["1.5.1", "1.5.3"] {
         for expected in [pi_rpc::PI_VERSION_REQUIREMENT, actual] {
             for mode in ["declared", "plain", "decorated"] {
                 let probed = mode != "declared";
@@ -701,8 +701,76 @@ async fn identified_profile_rejects_unreviewed_patch_bases_before_rpc_startup() 
                     Some(Error::Version),
                     "{actual}, {expected}, {mode}"
                 );
-                markers(&path, probed, false);
+                // An unsupported exact expectation rejects before the probe.
+                markers(&path, probed && expected != "1.5.3", false);
             }
+        }
+    }
+}
+
+#[cfg(feature = "bolt_message_id")]
+#[tokio::test]
+async fn identified_pi152_startup_preserves_exact_caps_and_drains_shutdown_echo() {
+    use pi_rpc::protocol::{PromptDisposition, bolt_message_id_v1::MessageId};
+    for expected in [
+        pi_rpc::PI_VERSION_REQUIREMENT,
+        "1.5.2",
+        "1.5.0",
+        ">=1.3.0, <=1.5.0",
+    ] {
+        for mode in ["declared", "plain", "decorated"] {
+            let probed = mode != "declared";
+            let output = if mode == "decorated" {
+                "1.5.2 (Pi-Bolt 1.2.1, linux-x64, JIT off)"
+            } else {
+                "1.5.2"
+            };
+            let (_root, mut options) = prepare(output, !probed, "identified-shutdown");
+            let path = options.executable.clone();
+            options.expected_version = expected.into();
+            let result = if probed {
+                PiProcess::<pi_rpc::BoltMessageIdV1>::spawn(options).await
+            } else {
+                PiProcess::<pi_rpc::BoltMessageIdV1>::spawn_with_version(options, "1.5.2").await
+            };
+            let admitted =
+                matches!(expected, "1.5.2") || expected == pi_rpc::PI_VERSION_REQUIREMENT;
+            if admitted {
+                let (client, mut events, mut process) = result.unwrap();
+                ready(&mut events, &path).await;
+                assert_eq!(client.info().version(), "1.5.2");
+                assert_eq!(
+                    client.info().source(),
+                    if probed {
+                        VersionSource::Probed
+                    } else {
+                        VersionSource::Declared
+                    }
+                );
+                let accepted = client
+                    .prompt_with_message_id(
+                        "/synthetic-shutdown",
+                        None,
+                        None,
+                        MessageId::new("input-1.5.2").unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(accepted.disposition, PromptDisposition::Handled);
+                assert_eq!(accepted.message_id.as_str(), "input-1.5.2");
+                let terminal =
+                    tokio::time::timeout(Duration::from_secs(3), process.wait_terminal())
+                        .await
+                        .unwrap();
+                assert_eq!(terminal, Error::ProcessExit(Some(0)));
+                assert_eq!(events.recv().await, Some(Err(terminal.clone())));
+                assert_eq!(events.recv().await, None);
+                assert_eq!(client.abort().await, Err(terminal.clone()));
+                assert_eq!(process.close().await, terminal);
+            } else {
+                assert_eq!(result.err(), Some(Error::Version), "{expected}, {mode}");
+            }
+            markers(&path, probed, admitted);
         }
     }
 }

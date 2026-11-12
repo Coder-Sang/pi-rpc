@@ -37,10 +37,14 @@ type Client = PiClient<BoltMessageIdV1>;
 type Events = PiEvents<BoltMessageIdV1>;
 type Owner = PiConnection<BoltMessageIdV1>;
 fn connection(config: Config) -> (Client, Events, Owner, DuplexStream) {
+    connection_for_version(config, "1.5.2")
+}
+fn connection_for_version(config: Config, version: &str) -> (Client, Events, Owner, DuplexStream) {
     let (local, peer) = tokio::io::duplex(4096);
     let (read, write) = tokio::io::split(local);
     let (client, events, owner) =
-        Owner::connect(Transport::new(read, write, "1.5.0").unwrap(), config).unwrap();
+        Owner::connect(Transport::new(read, write, version).unwrap(), config).unwrap();
+    assert_eq!(client.info().version(), version);
     (client, events, owner, peer)
 }
 async fn bounded<F: std::future::Future>(future: F) -> F::Output {
@@ -50,14 +54,14 @@ async fn bounded<F: std::future::Future>(future: F) -> F::Output {
 }
 
 #[test]
-fn extension_base_stays_exact_when_official_pi15_support_expands() {
+fn extension_bases_require_individually_reviewed_forks() {
     use pi_rpc::PiProtocol;
     assert!(BoltMessageIdV1::matches_version("1.5.0"));
     for version in ["1.5.0", "1.5.1", "1.5.2"] {
         assert!(pi_rpc::Pi15::matches_version(version));
         assert_eq!(
             BoltMessageIdV1::matches_version(version),
-            version == "1.5.0"
+            matches!(version, "1.5.0" | "1.5.2")
         );
     }
     for version in [
@@ -71,6 +75,7 @@ fn extension_base_stays_exact_when_official_pi15_support_expands() {
         "1.5.0-rc.1",
         "1.5.0+build",
         "1.5.0 (Pi-Bolt 1.1.1, linux-x64, JIT off)",
+        "1.5.2 (Pi-Bolt 1.2.1, linux-x64, JIT off)",
     ] {
         assert!(!BoltMessageIdV1::matches_version(version), "{version}");
     }
@@ -199,8 +204,9 @@ fn malformed_tracking_is_never_downgraded_to_unknown_or_untracked() {
 
 #[tokio::test]
 async fn identified_inputs_use_separate_rpc_ids_and_preserve_existing_payloads() {
-    bounded(async {
-        let (client, mut events, mut owner, peer) = connection(Config::default());
+    for version in ["1.5.0", "1.5.2"] {
+        bounded(async {
+        let (client, mut events, mut owner, peer) = connection_for_version(Config::default(), version);
         let peer = tokio::spawn(async move {
             let (read, mut write) = tokio::io::split(peer);
             let mut reader = pi_rpc::codec::JsonlReader::new(read,4096);
@@ -242,6 +248,7 @@ async fn identified_inputs_use_separate_rpc_ids_and_preserve_existing_payloads()
         assert_eq!(events.recv().await,Some(Err(Error::Closed)));
         assert_eq!(events.recv().await,None);
     }).await;
+    }
 }
 
 #[tokio::test]

@@ -332,7 +332,7 @@ class BoltControls(unittest.TestCase):
         self.assertEqual(calls[0][0], ["cargo", "fetch", "--locked"])
         self.assertTrue(calls[0][1]["check"])
         self.assertEqual(sum(command[:2] == ["cargo", "fetch"] for command, _ in calls), 1)
-        self.assertEqual(count, 22, "all eleven positive/negative pairs must remain offline")
+        self.assertEqual(count, 24, "all twelve positive/negative pairs must remain offline")
 
     def assert_omitted_fetch_detected(self, source):
         # Preparation and the successful baseline must finish outside the

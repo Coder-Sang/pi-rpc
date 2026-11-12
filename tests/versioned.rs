@@ -214,7 +214,7 @@ mod process;
 #[cfg(feature = "bolt_message_id")]
 #[tokio::test]
 async fn identified_profile_rejects_unreviewed_bases_before_transport_io() {
-    for version in ["1.3.0", "1.4.0", "1.5.1", "1.5.2"] {
+    for version in ["1.3.0", "1.4.0", "1.5.1"] {
         let polls = Arc::new(AtomicUsize::new(0));
         let drops = Arc::new(AtomicUsize::new(0));
         let transport = Transport::new(

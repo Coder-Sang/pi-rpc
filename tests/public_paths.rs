@@ -288,7 +288,7 @@ fn bolt_extension_public_paths_and_send_futures() {
         future(client.follow_up_with_message_id("input", None, MessageId::new("C").unwrap()));
     }
     let _ = methods;
-    assert_eq!(SOURCE_COMMIT, "7193587994d2fee4b62a213c1f14d82acb832d5c");
+    assert_eq!(SOURCE_COMMIT, "23d01fa7449729b47bde039f0095f5f6732fb55e");
 }
 
 #[test]

@@ -32,7 +32,7 @@ SOFTWARE.
 
 ## Pi-Bolt input-tracking reference
 
-The unpublished opt-in extension follows the Coder-Sang/Pi-Bolt bolt-v1.1.1 [fixed wire contract](https://github.com/Coder-Sang/Pi-Bolt/tree/7193587994d2fee4b62a213c1f14d82acb832d5c), based on Pi 1.5.0. The Rust implementation and tests are project-authored; no fork executable or implementation source is vendored. The fork adds OpenSec's copyright notice; its fixed [LICENSE](https://github.com/Coder-Sang/Pi-Bolt/blob/7193587994d2fee4b62a213c1f14d82acb832d5c/LICENSE) is retained below. Version-output recognition in 0.3.1 remains a separate official Pi-Bolt formatter reference.
+The unpublished opt-in extension follows the Coder-Sang/Pi-Bolt bolt-v1.2.1 [fixed wire contract](https://github.com/Coder-Sang/Pi-Bolt/tree/23d01fa7449729b47bde039f0095f5f6732fb55e), based on Pi 1.5.2, and retains the reviewed [bolt-v1.1.1 contract](https://github.com/Coder-Sang/Pi-Bolt/tree/7193587994d2fee4b62a213c1f14d82acb832d5c), based on Pi 1.5.0. The Rust implementation and tests are project-authored; no fork executable or implementation source is vendored. The fork adds OpenSec's copyright notice; its fixed [LICENSE](https://github.com/Coder-Sang/Pi-Bolt/blob/23d01fa7449729b47bde039f0095f5f6732fb55e/LICENSE) is byte-identical at both references and retained below. Version-output recognition in 0.3.1 remains a separate official Pi-Bolt formatter reference.
 
 ```text
 MIT License

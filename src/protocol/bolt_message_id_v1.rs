@@ -1,6 +1,7 @@
 //! Opt-in input tracking from Coder-Sang/Pi-Bolt, not official Pi/Bolt capability detection.
 //!
-//! The reviewed fork is bolt-v1.1.1 at SOURCE_COMMIT, based on Pi 1.5.0.
+//! The latest reviewed fork is bolt-v1.2.1 at SOURCE_COMMIT, based on Pi 1.5.2.
+//! The previously reviewed bolt-v1.1.1 on Pi 1.5.0 remains supported.
 //! Select BoltMessageIdV1 explicitly for a trusted extension-capable executable
 //! or Transport. Automatic dispatch continues to select official Pi profiles.
 //! IDs and batches describe input handoff, not assistant completion or idempotency.
@@ -12,7 +13,7 @@ use serde_json::Value;
 use std::{fmt, sync::Arc};
 
 /// Fixed source defining this extension, independently of the base Pi baseline.
-pub const SOURCE_COMMIT: &str = "7193587994d2fee4b62a213c1f14d82acb832d5c";
+pub const SOURCE_COMMIT: &str = "23d01fa7449729b47bde039f0095f5f6732fb55e";
 
 /// A nonempty opaque input ID. Whitespace is preserved; clones share the string.
 /// It is independent of the SDK-generated RPC command ID.
@@ -230,7 +231,7 @@ pub enum Event {
     Pi(v1_5::Event),
 }
 
-/// Explicitly selects the audited fork extension on the Pi 1.5.0 protocol.
+/// Explicitly selects the audited fork extension on Pi 1.5.0 or Pi 1.5.2.
 /// Version probing checks the base Pi release, not this capability.
 /// Official Pi15 patch support does not extend this fork's reviewed base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,7 +241,7 @@ impl PiProtocol for BoltMessageIdV1 {
     const MINOR: u64 = 5;
 
     fn matches_version(version: &str) -> bool {
-        version == "1.5.0" && crate::version::is_supported(version)
+        matches!(version, "1.5.0" | "1.5.2") && crate::version::is_supported(version)
     }
 }
 impl Sealed for BoltMessageIdV1 {

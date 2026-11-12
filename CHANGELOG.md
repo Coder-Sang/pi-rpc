@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3-bolt.2 — Unreleased special branch
+
+- Keep the official 0.3.2 baseline and add Message ID support for Coder-Sang/Pi-Bolt `bolt-v1.2.1` at `23d01fa7449729b47bde039f0095f5f6732fb55e`, based on Pi 1.5.2. Retain the reviewed Pi 1.5.0 fork; unreviewed Pi 1.5.1 and later bases remain rejected.
+- Preserve the same tracking v1 schema, exact acceptance echoes and input-handoff semantics through the fork's prompt preflight and queued-image changes. Version output still does not prove fork capability; hosts must select a trusted build explicitly.
+- Exercise identified inputs on both reviewed bases, Pi 1.5.2 declared/plain/decorated startup, old expectation caps and response draining before shutdown. Independent mutation controls reject both stale 1.5.0-only admission and a blanket 1.5.x range. Update the in-memory example and source/license review; keep `publish=false`, the public API and Rust 1.88 unchanged.
+
 ## 0.3.3-bolt.1 — Unreleased special branch
 
 - Sync the official 0.3.2 baseline and Pi15 support through Pi 1.5.2. Preserve the official source review, old expectation caps and all message-ID tracking/echo behavior.

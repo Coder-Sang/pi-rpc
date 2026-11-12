@@ -203,14 +203,21 @@ fn main() {
         }
         let id = field(&line, "id").unwrap();
         let kind = field(&line, "type").unwrap();
-        let data = match kind {
-            "get_state" => {
-                ",\"data\":{\"thinkingLevel\":\"off\",\"isStreaming\":false,\"isCompacting\":false,\"steeringMode\":\"all\",\"followUpMode\":\"all\",\"sessionId\":\"fake\",\"autoCompactionEnabled\":true,\"messageCount\":0,\"pendingMessageCount\":0}"
+        let data = if mode == "identified-shutdown" {
+            // A fixed synthetic response; this std-only fake does not parse general JSON IDs.
+            assert_eq!(kind, "prompt");
+            assert_eq!(field(&line, "message_id"), Some("input-1.5.2"));
+            ",\"data\":{\"disposition\":\"handled\",\"message_id\":\"input-1.5.2\"}"
+        } else {
+            match kind {
+                "get_state" => {
+                    ",\"data\":{\"thinkingLevel\":\"off\",\"isStreaming\":false,\"isCompacting\":false,\"steeringMode\":\"all\",\"followUpMode\":\"all\",\"sessionId\":\"fake\",\"autoCompactionEnabled\":true,\"messageCount\":0,\"pendingMessageCount\":0}"
+                }
+                "get_messages" => ",\"data\":{\"messages\":[]}",
+                "prompt" => ",\"data\":{\"disposition\":\"handled\"}",
+                "clear_queue" => ",\"data\":{\"steering\":[],\"followUp\":[]}",
+                _ => "",
             }
-            "get_messages" => ",\"data\":{\"messages\":[]}",
-            "prompt" => ",\"data\":{\"disposition\":\"handled\"}",
-            "clear_queue" => ",\"data\":{\"steering\":[],\"followUp\":[]}",
-            _ => "",
         };
         // Small fragmented writes deliberately exercise the byte reader.
         let response = format!(
@@ -222,7 +229,7 @@ fn main() {
             }
             out.flush().unwrap();
         }
-        if mode == "prompt-shutdown" && kind == "prompt" {
+        if matches!(mode, "prompt-shutdown" | "identified-shutdown") && kind == "prompt" {
             return;
         }
     }

@@ -9,7 +9,7 @@ async fn main() -> pi_rpc::Result<()> {
     let (local, remote) = tokio::io::duplex(4096);
     let (read, write) = tokio::io::split(local);
     let (client, mut events, mut connection) = PiConnection::<BoltMessageIdV1>::connect(
-        Transport::new(read, write, "1.5.0")?,
+        Transport::new(read, write, "1.5.2")?,
         Config::default(),
     )?;
     let peer = tokio::spawn(async move {

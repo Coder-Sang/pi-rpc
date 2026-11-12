@@ -8,7 +8,7 @@ A bounded, asynchronous Tokio JSONL client with versioned protocol types for Pi.
 
 | Version | Pi support | Minimum Rust |
 |---|---|---|
-| **0.3.3-bolt.1 (unpublished branch)** | **>=1.3.0, <=1.5.2**; Message ID: **1.5.0 only** | **1.88**, edition 2024 |
+| **0.3.3-bolt.2 (unpublished branch)** | **>=1.3.0, <=1.5.2**; Message ID: reviewed **1.5.0 / 1.5.2** forks | **1.88**, edition 2024 |
 | **0.3.2 (published)** | **>=1.3.0, <=1.5.2**, versioned API below | **1.88**, edition 2024 |
 | **0.2.2** | **>=1.1.0, <=1.4.0**, previous API | **1.88**, edition 2024 |
 
@@ -16,11 +16,11 @@ Version 0.3 introduces explicit protocol types and a source-breaking migration f
 
 ## Installation and features
 
-This branch is the unpublished **0.3.3-bolt.1** special build (`publish=false`). Use Rust **1.88+**, check out `feature/pi-bolt-message-id` locally, and adjust the path below. The published official package is `pi-rpc = "0.3.2"`. Install Pi/Bolt separately:
+This branch is the unpublished **0.3.3-bolt.2** special build (`publish=false`), built on the published **0.3.2** baseline. The special-build version is independent of that baseline; no official 0.3.3 release is required. Use Rust **1.88+**, check out `feature/pi-bolt-message-id` locally, and adjust the path below. The published official package is `pi-rpc = "0.3.2"`. Install Pi/Bolt separately:
 
 ```toml
 [dependencies]
-pi-rpc = { path = "../pi-rpc", version = "=0.3.3-bolt.1" }
+pi-rpc = { path = "../pi-rpc", version = "=0.3.3-bolt.2" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -80,7 +80,7 @@ Pi inherits the process environment. The host owns installation, credentials, is
 
 ## Opt-in input message IDs
 
-Enable `bolt_message_id` and explicitly select `BoltMessageIdV1` for the reviewed Coder-Sang/Pi-Bolt fork on base Pi **1.5.0 only**. Official Pi15 support through 1.5.2 does not widen this extension profile; later fork bases require a separate capability review. Identified prompt/steer/follow-up methods return typed acceptance echoes; queue events carry runtime-only input IDs and batch handoffs. Automatic dispatch and official Pi13/Pi14/Pi15 APIs stay unchanged. A batch does not identify an assistant response. See the [extension guide](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md) and run `cargo run --example bolt_message_id --no-default-features --features bolt_message_id` without Pi or a model.
+Enable `bolt_message_id` and explicitly select `BoltMessageIdV1` for the reviewed Coder-Sang/Pi-Bolt Message ID builds: **bolt-v1.2.1 on Pi 1.5.2**, or the retained **bolt-v1.1.1 on Pi 1.5.0**. The extension admits those exact bases; Pi 1.5.1 and unreviewed later fork bases remain rejected. Identified prompt/steer/follow-up methods return typed acceptance echoes; queue events carry runtime-only input IDs and batch handoffs. Automatic dispatch and official Pi13/Pi14/Pi15 APIs stay unchanged. A batch does not identify an assistant response. See the [extension guide](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/bolt-message-id.md) and run `cargo run --example bolt_message_id --no-default-features --features bolt_message_id` without Pi or a model.
 
 ## Injected transport
 
