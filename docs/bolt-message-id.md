@@ -8,7 +8,7 @@ The latest reference is **Coder-Sang/Pi-Bolt bolt-v1.2.1**, fixed commit [`23d01
 
 Official Pi-Bolt's version formatter and this fork can report the same underlying Pi/Bolt releases. Recognition of a version string does not establish tracking support. Select the extension profile only for an executable or transport you trust to implement this contract. Automatic dispatch always returns official Pi13/Pi14/Pi15, including when this feature is enabled. The extension admits only the individually reviewed bases **1.5.0** and **1.5.2**; it does not widen global admission or old range limits.
 
-The newer fork's preflight path retains input IDs through handled/queued/started responses, and queued-image normalization preserves the existing tracking identity and wire order. Its additional provider, subagent, page and mobile-view commands are outside this extension's typed API. The SDK sends no capability negotiation or subscription during startup; mobile views are not enabled. Existing official commands and UI handling remain available. See the [source review](compatibility.md#pi-bolt-121-message-id-source-review-2026-11-13).
+The newer fork's preflight path retains input IDs through handled/queued/started responses, and queued-image normalization preserves the existing tracking identity and wire order. Its additional provider, subagent, page and mobile-view commands are outside this extension's typed API. The SDK sends no capability negotiation or subscription during startup; mobile views are not enabled. Existing official commands and UI handling remain available. See the [source review](https://github.com/Coder-Sang/pi-rpc/blob/feature/pi-bolt-message-id/docs/compatibility.md#pi-bolt-121-message-id-source-review-2026-11-13).
 
 ## Build and submit
 
